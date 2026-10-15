@@ -52,7 +52,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
 from . import domaine
-from .comptes.models import Acheteur, CodeConnexion
+from .comptes.models import Acheteur, CodeConnexion, SessionAcheteur
 from .comptes.sessions import (
     AucunMotDePasse,
     AuthentificationSession,
@@ -182,6 +182,9 @@ class ProfilSerializer(serializers.ModelSerializer):
             "quartier",
             "repere",
             "a_un_mot_de_passe",
+            # Deja en base depuis le debut, jamais servi : c'est le
+            # « membre depuis » de la page Profil.
+            "cree_le",
         )
 
     def get_a_un_mot_de_passe(self, acheteur: Acheteur) -> bool:
@@ -367,14 +370,22 @@ class CompteViewSet(viewsets.GenericViewSet):
             status=status.HTTP_201_CREATED,
         )
 
-    @action(detail=False, methods=["get"], url_path="moi")
+    @action(detail=False, methods=["get", "delete"], url_path="moi")
     def moi(self, request):
-        """Le profil, au lancement. **C'est la reconnexion automatique.**
+        """Le profil (`GET`), ou la suppression du compte (`DELETE`).
 
-        L'application appelle cette route au démarrage avec le jeton retenu :
-        si elle répond, l'acheteur est connecté sans rien faire ; si elle
-        répond 401, le jeton est périmé et on l'oublie.
+        L'application appelle `GET` au démarrage avec le jeton retenu : si
+        elle répond, l'acheteur est connecté sans rien faire ; si elle répond
+        401, le jeton est périmé et on l'oublie.
+
+        ⚠️ **Les deux méthodes vivent dans la même action, et c'est imposé par
+        DRF.** Deux `@action` partageant un `url_path` produisent deux motifs
+        d'URL identiques : Django résout le premier, et le second n'est jamais
+        atteint. Mesuré — `DELETE /moi/` répondait **405** tant que la
+        suppression était une action séparée. L'aiguillage se fait donc ici.
         """
+        if request.method == "DELETE":
+            return self._supprimer_mon_compte(request)
         return Response(ProfilSerializer(acheteur_de_la_requete(request)).data)
 
     @action(detail=False, methods=["patch"], url_path="moi/profil")
@@ -627,6 +638,91 @@ class CompteViewSet(viewsets.GenericViewSet):
             raise ValidationError({"mot_de_passe": str(erreur)}) from erreur
 
         return Response(ProfilSerializer(acheteur).data)
+
+    @action(
+        detail=False, methods=["post"], url_path="moi/deconnexion-globale"
+    )
+    def deconnexion_globale(self, request):
+        """Revoque **toutes** les sessions de l'acheteur, celle-ci comprise.
+
+        ⚠️ **Ce n'est pas un doublon de `deconnexion/`**, et le commentaire
+        de cette derniere annoncait deja ce manque : *« Une revocation globale
+        aurait sa place dans un ecran « mes appareils », qui n'existe pas
+        encore. »* Il existe maintenant.
+
+        Les deux repondent a deux situations differentes :
+
+        | | Ce qu'on veut |
+        |---|---|
+        | `deconnexion/` | Quitter **cet** appareil — celui d'un ami, un cyber |
+        | ici | Fermer **partout**, parce qu'on a perdu son telephone |
+
+        Confondre les deux ferait, dans un sens, deconnecter son propre
+        telephone en quittant celui d'un ami ; dans l'autre, laisser une
+        session ouverte sur un appareil perdu.
+
+        ⚠️ **Le jeton courant meurt aussi**, et c'est voulu : l'ecran
+        renvoie donc vers la connexion. Epargner la session courante
+        laisserait croire que « tout » a ete ferme alors que la plus proche
+        reste ouverte.
+        """
+        acheteur = acheteur_de_la_requete(request)
+        nombre, _ = SessionAcheteur.objects.filter(acheteur=acheteur).delete()
+        return Response({"sessions_fermees": nombre})
+
+    def _supprimer_mon_compte(self, request):
+        """Supprime le compte — **par anonymisation, pas par effacement.**
+
+        Appelee par `moi` sur un `DELETE`. Le tiret bas la sort du jeu de
+        routes : sans lui, DRF en ferait une action et on retomberait sur la
+        collision d'URL decrite ci-dessus.
+
+        ## ⚠️ Pourquoi on n'efface pas la ligne
+
+        Parce qu'on ne peut pas, et parce qu'il ne faudrait pas.
+
+        **On ne peut pas** : `Commande.acheteur` est en `on_delete=PROTECT`.
+        Django refuserait la suppression des qu'une commande existe. Ce n'est
+        pas un obstacle a contourner, c'est la protection qui empeche de
+        trouer la comptabilite — les montants collectes, les frais retenus et
+        les retraits doivent continuer de tomber juste.
+
+        **Il ne faudrait pas** non plus : `Question` est en `CASCADE`.
+        Effacer le compte emporterait ses **questions publiques**, auxquelles
+        un groupeur a repondu et que d'autres acheteurs lisent pour decider
+        d'acheter. On detruirait le contenu d'autrui en supprimant le sien.
+
+        ## Ce qui est reellement efface
+
+        Tout ce qui identifie une personne : prenom, courriel, quartier,
+        repere, mot de passe. Le numero est remplace par une marque inerte
+        — il doit rester `unique`, et le liberer permettrait a quelqu'un
+        d'autre de s'inscrire avec et de recuperer l'historique.
+
+        Les commandes restent, rattachees a un compte qui ne designe plus
+        personne. C'est exactement ce qu'on attend d'une suppression : la
+        personne disparait, les ecritures restent.
+
+        ⚠️ **Irreversible, et sans confirmation cote serveur.** La
+        confirmation est a l'ecran — c'est la qu'on peut demander de taper
+        quelque chose. Ici on execute.
+        """
+        acheteur = acheteur_de_la_requete(request)
+
+        acheteur.nom = ""
+        acheteur.courriel = ""
+        acheteur.quartier = ""
+        acheteur.repere = ""
+        acheteur.mot_de_passe = ""
+        acheteur.echecs_connexion = 0
+        acheteur.bloque_jusqu_a = None
+        # `unique=True` sur le telephone : une marque par identifiant, jamais
+        # une valeur commune qui ferait echouer la deuxieme suppression.
+        acheteur.telephone = f"supprime-{acheteur.pk}"
+        acheteur.save()
+
+        SessionAcheteur.objects.filter(acheteur=acheteur).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=False, methods=["post"], url_path="deconnexion")
     def deconnexion(self, request):

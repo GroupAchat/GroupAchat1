@@ -99,6 +99,12 @@ export interface Profil {
    * « Modifier ».
    */
   a_un_mot_de_passe: boolean;
+  /**
+   * La date de création du compte, au format ISO — le « membre depuis » de la
+   * page Profil. Elle était en base depuis le début et n'avait jamais été
+   * servie.
+   */
+  cree_le: string;
 }
 
 /** Ce que `preparerLaConnexion` apprend sur un numéro. */
@@ -286,6 +292,57 @@ export function definirLeMotDePasse(
  */
 export function lireMonProfil(signal?: AbortSignal): Promise<Profil> {
   return appeler("/comptes/moi/", { signal });
+}
+
+/**
+ * Ferme **toutes** les sessions, sur tous les appareils.
+ *
+ * ⚠️ **À ne pas confondre avec `seDeconnecter`**, et les deux doivent exister :
+ *
+ * | | Ce qu'on veut |
+ * |---|---|
+ * | `seDeconnecter` | Quitter **cet** appareil — celui d'un ami, un cyber |
+ * | ici | Fermer **partout**, parce qu'on a perdu son téléphone |
+ *
+ * Les confondre ferait, dans un sens, déconnecter son propre téléphone en
+ * quittant celui d'un ami ; dans l'autre, laisser une session ouverte sur un
+ * appareil perdu.
+ *
+ * **Le jeton courant meurt aussi**, donc l'écran appelant doit traiter ce
+ * retour comme une déconnexion : épargner la session courante laisserait
+ * croire que « tout » a été fermé alors que la plus proche reste ouverte.
+ */
+export async function deconnecterTousLesAppareils(
+  signal?: AbortSignal,
+): Promise<{ sessions_fermees: number }> {
+  const resultat = await appeler<{ sessions_fermees: number }>(
+    "/comptes/moi/deconnexion-globale/",
+    { methode: "POST", corps: {}, signal },
+  );
+  oublierLeJeton();
+  return resultat;
+}
+
+/**
+ * Supprime le compte. **Irréversible.**
+ *
+ * ⚠️ **Le serveur anonymise, il n'efface pas la ligne**, et c'est le bon
+ * comportement pour deux raisons. Les **commandes sont protégées**
+ * (`on_delete=PROTECT`) : les effacer trouerait la comptabilité, dont les
+ * montants doivent continuer de tomber juste. Et les **questions publiques**
+ * seraient emportées en cascade — on détruirait le fil qu'un groupeur a
+ * alimenté et que d'autres acheteurs lisent pour décider d'acheter.
+ *
+ * Ce qui disparaît vraiment : prénom, courriel, adresse, mot de passe, et
+ * toutes les sessions. Le numéro est remplacé par une marque inerte — le
+ * libérer permettrait à quelqu'un d'autre de s'inscrire avec et de récupérer
+ * l'historique.
+ */
+export async function supprimerMonCompte(
+  signal?: AbortSignal,
+): Promise<void> {
+  await appeler("/comptes/moi/", { methode: "DELETE", signal });
+  oublierLeJeton();
 }
 
 /** Révoque **cette** session côté serveur, et oublie le jeton ici. */

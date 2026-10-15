@@ -6,7 +6,9 @@ import {
 } from "../../domaine/profil";
 import {
   completerMonProfil,
+  deconnecterTousLesAppareils,
   definirLeMotDePasse,
+  supprimerMonCompte,
   type Profil as ProfilCompte,
 } from "../../api/session";
 import { ErreurApi } from "../../api/client";
@@ -19,8 +21,10 @@ import EtatVide from "../../ui/EtatVide";
 import {
   IconeBouclier,
   IconeCarton,
-  IconeDemander,
   IconeProfil,
+  IconeAlerte,
+  IconeChevronDroit,
+  IconeCommandes,
   IconeTelephone,
   IconeVerrou,
 } from "../../ui/Icones";
@@ -72,6 +76,7 @@ export default function Profil({
   connecte,
   profil,
   onCreerUnCompte,
+  onMesCommandes,
   onMesDemandes,
   onDemanderProduit,
   onSeConnecter,
@@ -83,6 +88,7 @@ export default function Profil({
   /** Absent tant que la reconnexion automatique n'a pas repondu (§ `api/session`). */
   profil?: ProfilCompte;
   onCreerUnCompte: () => void;
+  onMesCommandes: () => void;
   onMesDemandes: () => void;
   onDemanderProduit: () => void;
   onSeConnecter: () => void;
@@ -120,7 +126,11 @@ export default function Profil({
       {/* Juste après les informations, et avant les demandes : c'est le compte
           lui-même, pas un réglage d'affichage. */}
       <BlocMotDePasse profil={profil} onProfilMisAJour={onProfilMisAJour} />
-      <BlocMesDemandes onMesDemandes={onMesDemandes} />
+      <BlocActivite
+        onMesCommandes={onMesCommandes}
+        onMesDemandes={onMesDemandes}
+        onDemanderProduit={onDemanderProduit}
+      />
     </>
   );
 
@@ -128,6 +138,7 @@ export default function Profil({
     <>
       <BlocEconomieDonnees actif={economie} onBasculer={basculerEconomie} />
       <BlocAide />
+      <BlocAppareils onSeDeconnecter={onSeDeconnecter} />
     </>
   );
 
@@ -171,7 +182,10 @@ export default function Profil({
           {connecte ? blocsCompte : null}
           {blocsReglages}
           {connecte ? (
-            <BlocDeconnexion onSeDeconnecter={onSeDeconnecter} />
+            <>
+              <BlocDeconnexion onSeDeconnecter={onSeDeconnecter} />
+              <BlocSupprimerCompte onSeDeconnecter={onSeDeconnecter} />
+            </>
           ) : (
             /* \u26a0\ufe0f **Apres la bascule, et c'est delibere** : l'economie de
                donnees est une preference d'appareil qui ne demande aucun
@@ -237,6 +251,7 @@ export default function Profil({
               <aside className="space-y-6 xl:sticky xl:top-24">
                 {blocsReglages}
                 <BlocDeconnexion onSeDeconnecter={onSeDeconnecter} />
+                <BlocSupprimerCompte onSeDeconnecter={onSeDeconnecter} />
               </aside>
             </div>
           </>
@@ -285,6 +300,26 @@ const CADRE = "mx-auto w-full max-w-2xl xl:max-w-6xl";
 /* \u2500\u2500 La carte d'identite \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
 
 /**
+ * « mars 2026 » a partir d'une date ISO.
+ *
+ * `Intl` plutôt qu'un tableau de mois écrit à la main : la locale `fr-FR`
+ * connait deja les noms, les accents et les elisions, et un tableau maison
+ * serait une seconde liste a tenir a jour pour rien.
+ *
+ * ⚠️ **Une date invalide ne doit pas casser la carte.** Le serveur la
+ * fournit toujours, mais un profil lu depuis un cache ancien pourrait ne pas
+ * l'avoir : on rend alors une chaine vide plutot qu'un « Invalid Date ».
+ */
+function moisEtAnnee(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("fr-FR", {
+    month: "long",
+    year: "numeric",
+  }).format(date);
+}
+
+/**
  * Qui je suis, en un coup d'oeil : une initiale, un nom, un numero.
  *
  * \u26a0\ufe0f **Ce n'est pas une photo de profil, et il n'en faut pas.** Le \u00a71.7
@@ -331,6 +366,14 @@ function CarteIdentite({ profil }: { profil?: ProfilCompte }) {
         <p className="mt-0.5 flex items-center gap-1.5 text-sm text-texte-secondaire">
           <IconeTelephone taille={16} />
           {profil.telephone}
+        </p>
+        {/* « Membre depuis » : la date était en base depuis le début et
+            n'avait jamais été servie. Elle dit à l'acheteur que son compte a
+            une histoire — c'est peu, et c'est ce qui distingue un compte d'un
+            formulaire. En `texte-mention`, 4,86:1 sur blanc : une mention,
+            pas une information dont dépend une décision. */}
+        <p className="mt-0.5 text-xs text-texte-mention">
+          Membre depuis {moisEtAnnee(profil.cree_le)}
         </p>
       </div>
     </section>
@@ -742,24 +785,6 @@ function BlocMotDePasse({
   );
 }
 
-/* ── Mes demandes ────────────────────────────────────────────────────────── */
-
-function BlocMesDemandes({ onMesDemandes }: { onMesDemandes: () => void }) {
-  return (
-    <Bloc titre="Mes demandes" Icone={IconeDemander}>
-      <p className="text-texte-secondaire">
-        Les produits que vous avez demandés, et ceux qu'un groupeur a repris en
-        campagne.
-      </p>
-      <div className="mt-4 max-w-xs">
-        <Bouton style="secondaire" onClick={onMesDemandes}>
-          Voir mes demandes
-        </Bouton>
-      </div>
-    </Bloc>
-  );
-}
-
 /* ── Economie de donnees ─────────────────────────────────────────────────── */
 
 /**
@@ -821,6 +846,296 @@ function BlocEconomieDonnees({
   );
 }
 
+/* ── Mon activite ────────────────────────────────────────────────────────── */
+
+/**
+ * Les raccourcis vers ce que l'acheteur a fait sur la plateforme.
+ *
+ * ⚠️ **Ce bloc remplace « Mes demandes », qui était seul.** Les commandes
+ * n'étaient atteignables que par la barre de navigation du bas — qui
+ * **n'existe pas sur ordinateur**. Un visiteur de bureau n'avait donc aucun
+ * chemin vers ses commandes depuis son profil, alors que c'est exactement là
+ * qu'on les cherche.
+ */
+function BlocActivite({
+  onMesCommandes,
+  onMesDemandes,
+  onDemanderProduit,
+}: {
+  onMesCommandes: () => void;
+  onMesDemandes: () => void;
+  onDemanderProduit: () => void;
+}) {
+  const liens: { libelle: string; description: string; onClick: () => void }[] =
+    [
+      {
+        libelle: "Mes commandes",
+        description: "Leur suivi, et vos codes de livraison",
+        onClick: onMesCommandes,
+      },
+      {
+        libelle: "Mes demandes",
+        description: "Les produits demandés, et ceux repris en campagne",
+        onClick: onMesDemandes,
+      },
+      {
+        libelle: "Demander un produit",
+        description: "Proposer un produit qu'aucun groupeur ne propose encore",
+        onClick: onDemanderProduit,
+      },
+    ];
+
+  return (
+    <Bloc titre="Mon activité" Icone={IconeCommandes}>
+      <ul className="divide-y divide-bordure">
+        {liens.map(({ libelle, description, onClick }) => (
+          <li key={libelle}>
+            {/* `min-h-12` : la cible tactile de 48 px du §2.7. Une ligne de
+                liste est le premier endroit où on l'oublie. */}
+            <button
+              type="button"
+              onClick={onClick}
+              className="flex min-h-12 w-full items-center gap-3 py-3 text-left first:pt-0 active:bg-surface-douce"
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block font-medium text-texte">{libelle}</span>
+                <span className="mt-0.5 block text-sm text-texte-secondaire">
+                  {description}
+                </span>
+              </span>
+              <span aria-hidden="true" className="shrink-0 text-primaire">
+                <IconeChevronDroit taille={18} />
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </Bloc>
+  );
+}
+
+/* ── Mes appareils ───────────────────────────────────────────────────────── */
+
+/**
+ * Fermer les sessions ouvertes **partout**.
+ *
+ * ⚠️ **Ce n'est pas un doublon du bouton « Me déconnecter »**, et le
+ * commentaire de ce dernier annonçait déjà ce manque : *« Une révocation
+ * globale aurait sa place dans un écran mes appareils, qui n'existe pas
+ * encore. »* Il existe maintenant, sous forme d'un bloc plutôt que d'un
+ * écran — il n'y a qu'une action, et une page pour un bouton serait un
+ * détour.
+ *
+ * | | Ce qu'on veut |
+ * |---|---|
+ * | « Me déconnecter » | Quitter **cet** appareil — celui d'un ami, un cyber |
+ * | ici | Fermer **partout**, parce qu'on a perdu son téléphone |
+ *
+ * Les confondre ferait, dans un sens, déconnecter son propre téléphone en
+ * quittant celui d'un ami ; dans l'autre, laisser une session ouverte sur un
+ * appareil perdu.
+ *
+ * ⚠️ **La session courante meurt aussi**, donc l'écran traite ce retour comme
+ * une déconnexion ordinaire. Épargner la session d'ici laisserait croire que
+ * « tout » a été fermé alors que la plus proche reste ouverte.
+ */
+function BlocAppareils({ onSeDeconnecter }: { onSeDeconnecter: () => void }) {
+  const [envoi, setEnvoi] = useState(false);
+  const [erreur, setErreur] = useState<string>();
+
+  const fermerPartout = () => {
+    setEnvoi(true);
+    setErreur(undefined);
+    deconnecterTousLesAppareils()
+      .then(() => onSeDeconnecter())
+      .catch((e: unknown) => {
+        setErreur(
+          e instanceof ErreurApi
+            ? e.messageLisible
+            : "Les sessions n'ont pas pu être fermées. Vérifiez votre connexion et réessayez.",
+        );
+        setEnvoi(false);
+      });
+  };
+
+  return (
+    <Bloc titre="Mes appareils" Icone={IconeBouclier}>
+      <p className="text-texte-secondaire">
+        Vous restez connecté sur chaque appareil où vous vous êtes identifié.
+        Si vous avez perdu votre téléphone, fermez-les tous.
+      </p>
+
+      {erreur ? (
+        <div className="mt-3">
+          <Encart variante="danger">{erreur}</Encart>
+        </div>
+      ) : null}
+
+      <div className="mt-4 max-w-xs">
+        <Bouton style="secondaire" chargement={envoi} onClick={fermerPartout}>
+          Fermer toutes mes sessions
+        </Bouton>
+      </div>
+      <p className="mt-2 text-sm text-texte-secondaire">
+        Celle-ci comprise : vous devrez vous reconnecter.
+      </p>
+    </Bloc>
+  );
+}
+
+/* ── Supprimer mon compte ────────────────────────────────────────────────── */
+
+/**
+ * La zone sensible, et la seule action irréversible de l'écran.
+ *
+ * ## ⚠️ Ce que « supprimer » veut dire ici, exactement
+ *
+ * Le serveur **anonymise**, il n'efface pas la ligne, et ce n'est ni un
+ * raccourci ni une demi-mesure :
+ *
+ * - les **commandes sont protégées** (`on_delete=PROTECT`). Les effacer
+ *   trouerait la comptabilité — montants collectés, frais retenus, retraits —
+ *   dont les additions doivent continuer de tomber juste ;
+ * - les **questions publiques** seraient emportées en cascade. On détruirait
+ *   le fil qu'un groupeur a alimenté et que d'autres acheteurs lisent pour
+ *   décider d'acheter : supprimer son compte ne doit pas effacer le contenu
+ *   d'autrui.
+ *
+ * Ce qui disparaît vraiment : prénom, courriel, adresse, mot de passe, et
+ * toutes les sessions. Le numéro est remplacé par une marque inerte — le
+ * libérer permettrait à quelqu'un d'autre de s'inscrire avec et de récupérer
+ * l'historique.
+ *
+ * **L'écran le dit**, et ne promet pas un effacement total qui n'aurait pas
+ * lieu.
+ *
+ * ## La confirmation
+ *
+ * ⚠️ **Elle est ici et nulle part ailleurs** : le serveur exécute sans
+ * redemander. C'est le bon partage — une confirmation est une affaire
+ * d'interface, et un second appel « êtes-vous sûr » côté serveur ne
+ * protégerait de rien puisqu'il suffirait de l'envoyer deux fois.
+ *
+ * Deux gestes, et le second n'est pas un simple « oui » : il faut **écrire le
+ * mot**. Un bouton de confirmation se clique par réflexe ; une saisie oblige
+ * à lire.
+ */
+const MOT_DE_CONFIRMATION = "SUPPRIMER";
+
+function BlocSupprimerCompte({
+  onSeDeconnecter,
+}: {
+  onSeDeconnecter: () => void;
+}) {
+  const [ouvert, setOuvert] = useState(false);
+  const [saisie, setSaisie] = useState("");
+  const [envoi, setEnvoi] = useState(false);
+  const [erreur, setErreur] = useState<string>();
+
+  const supprimer = () => {
+    setEnvoi(true);
+    setErreur(undefined);
+    supprimerMonCompte()
+      .then(() => onSeDeconnecter())
+      .catch((e: unknown) => {
+        setErreur(
+          e instanceof ErreurApi
+            ? e.messageLisible
+            : "Votre compte n'a pas pu être supprimé. Vérifiez votre connexion et réessayez.",
+        );
+        setEnvoi(false);
+      });
+  };
+
+  if (!ouvert) {
+    return (
+      <div className="pb-4">
+        {/* En lien `danger` et non en bouton : c'est une sortie, pas une
+            action qu'on propose. Un bouton plein rouge au bas d'un écran de
+            réglages attire l'œil vers la seule chose irréversible. */}
+        <button
+          type="button"
+          onClick={() => setOuvert(true)}
+          className="min-h-12 text-sm font-medium text-danger"
+        >
+          Supprimer mon compte
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <section className="rounded-xl border border-danger p-4">
+      <h2 className="flex items-center gap-2 font-semibold text-texte">
+        <span className="text-danger">
+          <IconeAlerte taille={20} />
+        </span>
+        Supprimer mon compte
+      </h2>
+
+      <div className="mt-3 space-y-3 text-sm text-texte-secondaire">
+        <p>
+          Vos informations personnelles sont effacées : prénom, courriel,
+          adresse, et toutes vos sessions. Vous ne pourrez plus vous
+          reconnecter avec ce numéro.
+        </p>
+        {/* ⚠️ On le dit plutôt que de laisser croire à un effacement total.
+            Promettre plus que ce qu'on fait est pire que d'en faire moins. */}
+        <p>
+          <strong className="font-semibold text-texte">
+            Vos commandes passées sont conservées
+          </strong>{" "}
+          sans votre nom : elles portent des montants déjà encaissés et des
+          livraisons déjà faites. Vos questions publiques restent en ligne, car
+          des groupeurs y ont répondu.
+        </p>
+        <p>Cette action est irréversible.</p>
+      </div>
+
+      <div className="mt-4">
+        <Champ
+          libelle={`Écrivez « ${MOT_DE_CONFIRMATION} » pour confirmer`}
+          valeur={saisie}
+          onChanger={setSaisie}
+          exemple={MOT_DE_CONFIRMATION}
+        />
+      </div>
+
+      {erreur ? (
+        <div className="mt-3">
+          <Encart variante="danger">{erreur}</Encart>
+        </div>
+      ) : null}
+
+      <div className="mt-4 flex flex-wrap gap-3">
+        <div className="min-w-40 flex-1">
+          <Bouton
+            style="danger-texte"
+            chargement={envoi}
+            desactive={saisie.trim().toUpperCase() !== MOT_DE_CONFIRMATION}
+            onClick={supprimer}
+          >
+            Supprimer définitivement
+          </Bouton>
+        </div>
+        <div className="min-w-32 flex-1">
+          <Bouton
+            style="secondaire"
+            desactive={envoi}
+            onClick={() => {
+              setOuvert(false);
+              setSaisie("");
+              setErreur(undefined);
+            }}
+          >
+            Annuler
+          </Bouton>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /* ── Aide ────────────────────────────────────────────────────────────────── */
 
 /**
@@ -847,6 +1162,26 @@ const AIDE: { question: string; reponse: string }[] = [
     question: "Pourquoi je ne vois qu'un pseudonyme de groupeur ?",
     reponse:
       "Les groupeurs sont sélectionnés un par un par Group Achat, et c'est à Group Achat que vous faites confiance, pas à eux. C'est aussi ce qui vous évite d'être démarché en privé.",
+  },
+  {
+    question: "Que se passe-t-il si la campagne n'aboutit pas ?",
+    reponse:
+      "Vous êtes remboursé intégralement, frais de livraison compris. Une campagne se termine à sa date : elle peut aboutir même si l'objectif de participants n'est pas atteint.",
+  },
+  {
+    question: "Combien coûte la livraison ?",
+    reponse:
+      "1 000 F, calculés selon votre quartier et affichés avant le paiement. Ils apparaissent toujours sur une ligne distincte du prix de la part — jamais fondus dedans.",
+  },
+  {
+    question: "Puis-je refuser le colis à la livraison ?",
+    reponse:
+      "Oui. Vous vérifiez la marchandise devant le livreur avant de lui donner votre code. Si ce n'est pas ce que vous avez commandé, vous refusez, et vous êtes remboursé.",
+  },
+  {
+    question: "Mon numéro est-il communiqué au groupeur ?",
+    reponse:
+      "Jamais. Le groupeur ne voit qu'un code de livraison et un quartier — pas votre nom, pas votre numéro, pas votre adresse. Seul le livreur les connaît, le jour de la remise.",
   },
 ];
 

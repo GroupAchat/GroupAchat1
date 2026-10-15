@@ -955,6 +955,13 @@ function RouteurAcheteur({
           onCreerUnCompte={() =>
             setPorte({ operation: "compte", etape: "inscription" })
           }
+          /* Les commandes n'etaient atteignables que par la barre du bas,
+             qui n'existe pas sur ordinateur : depuis son profil, un visiteur
+             de bureau n'avait aucun chemin vers elles. */
+          onMesCommandes={() => {
+            setOnglet("commandes");
+            setEcran({ nom: "mes-commandes" });
+          }}
           onMesDemandes={() => setEcran({ nom: "mes-demandes" })}
           onDemanderProduit={ouvrirDemande}
           onSeConnecter={() => setConnexionDemandee(true)}

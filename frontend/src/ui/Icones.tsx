@@ -338,6 +338,22 @@ export function IconeVerifie(proprietes: ProprietesIcone) {
   );
 }
 
+/**
+ * Un chevron vers la droite : « cette ligne mene ailleurs ».
+ *
+ * Meme trace que `IconeChevronBas`, pivote d'un quart de tour. Il est
+ * **decoratif** et doublé par le libellé de la ligne : son contraste n'a donc
+ * pas de seuil a tenir, contrairement a une icone qui porterait seule
+ * l'information.
+ */
+export function IconeChevronDroit(proprietes: ProprietesIcone) {
+  return (
+    <Svg {...proprietes}>
+      <path d="M9.5 6.5L15 12l-5.5 5.5" />
+    </Svg>
+  );
+}
+
 export function IconeChevronBas(proprietes: ProprietesIcone) {
   return (
     <Svg {...proprietes}>

@@ -303,15 +303,20 @@ export default function TableauDeBord({
             Où en sont vos groupages
           </h2>
           {/*
-            ⚠️ **Deux barres par groupage, et pas une jauge de remplissage.**
+            ⚠️ **Trois barres par groupage, et chacune a un dénominateur réel.**
 
-            Le §2.5 interdit la jauge de progression vers un objectif, et pour
-            une raison de fond : il n'y a **ni minimum ni plafond de
-            participants**, donc aucun dénominateur honnête. « 12 sur 20 »
-            serait inventé.
+            Il y en avait deux, et ce commentaire expliquait pourquoi la
+            troisième — l'avancement vers un objectif de participants — était
+            interdite : il n'existait ni minimum ni plafond, donc « 12 sur
+            20 » aurait été inventé. **Le groupeur déclare maintenant ce
+            nombre lui-même**, donc le dénominateur existe et la barre est
+            honnête.
 
-            Ce qui est tracé ici a un dénominateur réel :
+            Les trois :
 
+            - **les acheteurs**, rapportés à l'objectif qu'il a fixé. ⚠️ Ni
+              plafond ni minimum : dépasser est permis, et à la clôture c'est
+              lui qui décide (§7 du cahier des charges) ;
             - **le temps**, dont la date de clôture est connue d'avance ;
             - **la collecte**, rapportée au meilleur de ses groupages en cours
               — c'est une comparaison entre ses propres chiffres, pas un
@@ -334,12 +339,22 @@ export default function TableauDeBord({
                   <p className="truncate font-medium text-texte">
                     {campagne.produit}
                   </p>
-                  <p className="mt-0.5 text-xs text-texte-secondaire">
-                    {campagne.commandes} commande
-                    {campagne.commandes > 1 ? "s" : ""}
-                  </p>
-
                   <div className="mt-3 space-y-3">
+                    {/* L'avancement vers son objectif, en premier : c'est la
+                        question qu'il se pose en ouvrant l'application.
+                        `marque` est l'orange de la marque, et c'est son seul
+                        metier de ce cote-ci — attirer l'oeil sur le bleu. */}
+                    <Barre
+                      libelle="Acheteurs"
+                      valeur={campagne.commandes}
+                      maximum={campagne.objectifParticipants}
+                      couleur="var(--color-marque)"
+                      chiffre={
+                        campagne.commandes >= campagne.objectifParticipants
+                          ? `${campagne.commandes} — objectif atteint`
+                          : `${campagne.commandes} sur ${campagne.objectifParticipants}`
+                      }
+                    />
                     <Barre
                       libelle="Temps écoulé"
                       valeur={DUREE_TYPE_HEURES - campagne.heuresRestantes}
@@ -410,7 +425,7 @@ export default function TableauDeBord({
           {espace.campagnes.map((campagne) => (
             <li
               key={campagne.id}
-              className="border-b border-bordure last:border-b-0 lg:rounded-xl lg:border lg:border-bordure"
+              className="border-b border-filet last:border-b-0 lg:rounded-xl lg:border lg:border-bordure"
             >
               <button
                 type="button"

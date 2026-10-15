@@ -30,9 +30,10 @@ sa première ligne.
     (il voit la décision et son motif)
 
 **Aucune transition n'est automatique.** Le §10.5 confie la décision à un
-humain, et c'est le produit lui-même : « groupeurs sélectionnés par Group
-Achat », affiché à l'acheteur sur presque chaque écran, ne vaut que si
-quelqu'un a réellement regardé le dossier.
+humain, et c'est le produit lui-même : « vous êtes livré, ou remboursé »
+s'affiche à l'acheteur sur presque chaque écran, et c'est **nous** qui
+remboursons. Le jour d'un litige, notre seul recours contre le groupeur est le
+dossier — il ne vaut donc que si quelqu'un l'a réellement regardé.
 """
 
 from __future__ import annotations
@@ -407,9 +408,10 @@ class GroupeurViewSet(viewsets.GenericViewSet):
 
         # ⚠️ **Mode démonstration : le dossier est validé sur-le-champ.**
         #
-        # L'examen par un humain est le cœur du §10.5, et c'est lui qui donne
-        # son sens à « groupeurs sélectionnés par Group Achat ». On ne le
-        # saute que pour montrer le produit, jamais en ligne : le réglage suit
+        # L'examen par un humain est le cœur du §10.5 : c'est lui qui rend
+        # opposable le dossier sur lequel repose « vous êtes livré, ou
+        # remboursé ». On ne le saute que pour montrer le produit, jamais en
+        # ligne : le réglage suit
         # ``DEBUG`` et s'éteint seul en production (voir ``settings.py``).
         #
         # La décision est **tracée comme les autres**, avec son auteur écrit en

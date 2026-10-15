@@ -1,11 +1,14 @@
 # -*- coding: utf-8 -*-
 """Le recrutement d'un groupeur : dépôt, examen humain, décision, annonce.
 
-**Ce parcours est le produit.** « Groupeurs sélectionnés par Group Achat »
-s'affiche à l'acheteur sur presque chaque écran, et c'est cette phrase qui le
-décide à payer d'avance quelqu'un qu'il ne connaît pas. Elle ne vaut rien
-comme formule marketing : elle vaut comme **dossier constitué, examiné par un
-humain, et opposable le jour d'un litige** (§10.5).
+**Ce parcours est le produit.** « Vous êtes livré, ou remboursé » s'affiche à
+l'acheteur sur presque chaque écran, et c'est cette phrase qui le décide à
+payer d'avance quelqu'un qu'il ne connaît pas.
+
+⚠️ **C'est nous qui remboursons**, et le groupeur a déjà retiré l'argent à la
+clôture. Notre seul recours ce jour-là est un **dossier constitué, examiné par
+un humain, et opposable** (§10.5). Sans ce parcours, la garantie est une
+phrase que personne ne peut honorer.
 
 Chaque test porte le nom de la règle qu'il protège, pas celui de la fonction
 qu'il appelle — pour qu'un échec dise ce qui est cassé dans le produit, et pas
@@ -306,6 +309,7 @@ class CycleDuDossier(TestCase):
                 contenu_part="Une paire",
                 categorie=Campagne.Categorie.ELECTRONIQUE,
                 prix_part=Decimal("4000"),
+                objectif_participants=40,
                 date_fin=timezone.now() + timedelta(days=3),
             )
 

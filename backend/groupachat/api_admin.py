@@ -134,6 +134,8 @@ class CampagneAdminSerializer(serializers.ModelSerializer):
         source="groupeur.pseudonyme", read_only=True
     )
     acheteurs_confirmes = serializers.IntegerField(read_only=True)
+    objectif_participants = serializers.IntegerField(read_only=True)
+    progression = serializers.IntegerField(read_only=True)
     collecte = serializers.DecimalField(
         source="collecte_sur_les_parts",
         max_digits=12,
@@ -154,6 +156,8 @@ class CampagneAdminSerializer(serializers.ModelSerializer):
             "statut",
             "groupeur",
             "acheteurs_confirmes",
+            "objectif_participants",
+            "progression",
             "collecte",
             "heures_restantes",
             "date_fin",

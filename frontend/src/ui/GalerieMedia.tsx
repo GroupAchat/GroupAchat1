@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { MediaProduit } from "../domaine/groupage";
-import { IconeLecture } from "./Icones";
+import { IconeFermer, IconeLecture } from "./Icones";
 
 /**
  * La galerie de la fiche produit — jusqu'a 4 images et 2 videos.
@@ -31,6 +31,28 @@ import { IconeLecture } from "./Icones";
  * chaque image retombe sur le nom du produit quand le groupeur ne l'a pas
  * renseigne : un `alt` vide sur la photo principale d'une fiche d'achat laisse
  * un lecteur d'ecran annoncer « image », ce qui n'aide personne a decider.
+ *
+ * ## ⚠️ Deux proportions, et c'est une correction de fond
+ *
+ * Le cadre etait en `4/5` **partout**. Sur bureau, la colonne fait 576 px :
+ * l'image occupait donc **720 px de haut**, plus que la fenetre utile d'un
+ * portable. Trois choses tombaient sous la ligne de flottaison du meme coup —
+ * les vignettes des autres photos, qui ne se voyaient donc jamais ; le bouton
+ * « Commander » de la colonne d'a cote ; et toute idee de comparer l'image au
+ * prix.
+ *
+ * | | Telephone | Bureau |
+ * |---|---|---|
+ * | Proportion | `4/5` | **`4/3`** |
+ * | Hauteur rendue | 487 px sur 390 | **432 px** sur 576 |
+ *
+ * Le portrait reste juste sur un telephone, qu'on tient en hauteur. Sur un
+ * ecran large, c'est le paysage qui laisse la place au reste.
+ *
+ * ⚠️ Ce que coute ce choix, et il faut le dire : en `object-cover`, un cadre
+ * plus large **recadre davantage** une photo verticale. C'est precisement ce
+ * que repare l'agrandissement au clic — la photo entiere est a un clic, au
+ * lieu d'occuper l'ecran en permanence.
  */
 export default function GalerieMedia({
   medias,
@@ -52,6 +74,8 @@ export default function GalerieMedia({
   const [actif, setActif] = useState(0);
   /** La video que l'acheteur a demandee. Avant ce geste, rien ne charge. */
   const [lance, setLance] = useState(false);
+  /** L'image affichee en grand, par-dessus la page. */
+  const [agrandie, setAgrandie] = useState(false);
 
   /* Changer de media coupe la lecture en cours : sans ce retour a zero, on
      reviendrait sur une image avec le son d'une video qui tourne derriere. */
@@ -59,8 +83,29 @@ export default function GalerieMedia({
     setLance(false);
   }, [actif]);
 
+  /* Echap ferme l'agrandissement, et le defilement de la page est fige
+     derriere : sans cela, la molette fait glisser la fiche sous l'image, et on
+     la retrouve ailleurs en refermant. */
+  useEffect(() => {
+    if (!agrandie) {
+      return;
+    }
+    const auClavier = (evenement: KeyboardEvent) => {
+      if (evenement.key === "Escape") setAgrandie(false);
+    };
+    const defilementInitial = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", auClavier);
+    return () => {
+      document.body.style.overflow = defilementInitial;
+      window.removeEventListener("keydown", auClavier);
+    };
+  }, [agrandie]);
+
   if (medias.length === 0) {
-    return <div className="aspect-4/5 w-full bg-surface-douce lg:rounded-xl" />;
+    return (
+      <div className="aspect-4/5 w-full bg-surface-douce lg:aspect-4/3 lg:rounded-xl" />
+    );
   }
 
   const media = medias[Math.min(actif, medias.length - 1)];
@@ -68,17 +113,28 @@ export default function GalerieMedia({
 
   return (
     <div>
-      <div className="relative aspect-4/5 w-full overflow-hidden bg-surface-douce lg:rounded-xl">
+      <div className="relative aspect-4/5 w-full overflow-hidden bg-surface-douce lg:aspect-4/3 lg:rounded-xl">
         {media.type === "image" ? (
-          <img
-            src={media.url}
-            alt={texte}
-            /* Seule la couverture est prioritaire : les autres ne sont
-               demandees que si l'acheteur les ouvre. */
-            fetchPriority={actif === 0 ? "high" : "auto"}
-            decoding="async"
-            className="size-full object-cover"
-          />
+          /* ⚠️ **L'image est un bouton.** Le cadre recadre — c'est le prix du
+             format paysage — donc il faut un moyen de voir la photo entiere.
+             `zoom-in` au survol l'annonce avant le clic : une image cliquable
+             qui ne le dit pas n'est jamais cliquee. */
+          <button
+            type="button"
+            onClick={() => setAgrandie(true)}
+            aria-label={`Agrandir : ${texte}`}
+            className="size-full cursor-zoom-in"
+          >
+            <img
+              src={media.url}
+              alt={texte}
+              /* Seule la couverture est prioritaire : les autres ne sont
+                 demandees que si l'acheteur les ouvre. */
+              fetchPriority={actif === 0 ? "high" : "auto"}
+              decoding="async"
+              className="size-full object-cover"
+            />
+          </button>
         ) : lance ? (
           /* `autoPlay` ne contredit pas la regle ci-dessus : cet element
              n'existe qu'apres l'appui. Sans lui, l'acheteur devrait appuyer
@@ -171,6 +227,70 @@ export default function GalerieMedia({
             </li>
           ))}
         </ul>
+      ) : null}
+
+      {agrandie && media.type === "image" ? (
+        /*
+         * ⚠️ **`object-contain` ici, `object-cover` dans le cadre.** C'est
+         * toute la raison d'etre de cet agrandissement : la vignette recadre
+         * pour tenir dans une mise en page, la vue agrandie montre la photo
+         * **entiere**. Les deux en `cover` rendraient le clic inutile.
+         *
+         * Le voile est a 90 % : une photo de produit se juge sur ses couleurs,
+         * et un fond clair derriere fausse ce qu'on croit voir. Le noir est
+         * ici fonctionnel, pas decoratif.
+         */
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={texte}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4"
+        >
+          {/* Le fond ferme : c'est le geste attendu, et il couvre tout
+              l'ecran. Un bouton de fermeture seul obligerait a viser. */}
+          <button
+            type="button"
+            onClick={() => setAgrandie(false)}
+            aria-label="Fermer l'image"
+            className="absolute inset-0 cursor-zoom-out"
+          />
+
+          <img
+            src={media.url}
+            alt={texte}
+            decoding="async"
+            className="relative max-h-full max-w-full object-contain"
+          />
+
+          {/* La croix reste, pour qui ne devine pas que le fond ferme. */}
+          <button
+            type="button"
+            onClick={() => setAgrandie(false)}
+            aria-label="Fermer l'image"
+            className="absolute top-4 right-4 flex size-11 items-center justify-center rounded-full bg-white/92 text-texte"
+          >
+            <IconeFermer taille={20} />
+          </button>
+
+          {medias.length > 1 ? (
+            /* Changer de photo sans refermer : sinon il faut sortir, viser une
+               vignette, et rouvrir — trois gestes pour voir la suivante. */
+            <div className="absolute inset-x-0 bottom-6 flex justify-center gap-2">
+              {medias.map((vignette, rang) => (
+                <button
+                  key={`${vignette.url}-${rang}`}
+                  type="button"
+                  onClick={() => setActif(rang)}
+                  aria-label={`Photo ${rang + 1}`}
+                  aria-current={rang === actif ? "true" : undefined}
+                  className={`h-2 rounded-full transition-all ${
+                    rang === actif ? "w-6 bg-white" : "w-2 bg-white/60"
+                  }`}
+                />
+              ))}
+            </div>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );

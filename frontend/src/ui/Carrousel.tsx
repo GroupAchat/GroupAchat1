@@ -125,9 +125,35 @@ export default function Carrousel({
       const reste = element.scrollWidth - element.clientWidth - element.scrollLeft;
       if (reste <= 8) {
         element.scrollTo({ left: 0, behavior: "smooth" });
-      } else {
-        defiler(1);
+        return;
       }
+
+      /*
+       * ⚠️ **Elle avance d'une carte, pas d'une page** — contrairement aux
+       * fleches, qui gardent le saut de page parce qu'on les actionne pour
+       * aller vite.
+       *
+       * `defiler(1)` deplacait de 85 % de la largeur visible. Sur un ecran
+       * large, la rangee ne depasse souvent que de peu : cinq cartes de
+       * 320 px tiennent presque dans 1 536 px, il ne reste que ~160 px a
+       * parcourir. La rotation sautait donc **directement a la fin**, puis
+       * revenait au debut au coup suivant — un aller-retour brusque qui
+       * laissait en permanence une carte tranchee au bord, et qui se lisait
+       * comme un defaut d'affichage plutot que comme un mouvement voulu.
+       *
+       * Le pas est mesure entre deux cartes voisines plutot que calcule :
+       * l'ecart contient deja la gouttiere, qui change avec la largeur
+       * (`gap-4` puis `lg:gap-6`). La deduire a la main ferait un second
+       * endroit a corriger le jour ou elle bouge.
+       */
+      const cartes = element.children;
+      const pas =
+        cartes.length > 1
+          ? (cartes[1] as HTMLElement).offsetLeft -
+            (cartes[0] as HTMLElement).offsetLeft
+          : element.clientWidth * 0.85;
+
+      element.scrollBy({ left: pas, behavior: "smooth" });
     }, INTERVALLE_MS);
     return () => window.clearInterval(minuteur);
     /* `defiler` ne figure pas dans les dependances : elle est recreee a chaque
@@ -228,7 +254,7 @@ function FlecheCarrousel({
       aria-label={sens === "precedent" ? "Précédent" : "Suivant"}
       aria-hidden={!visible}
       tabIndex={visible ? 0 : -1}
-      className={`flex size-11 items-center justify-center rounded-full border border-bordure text-texte transition-opacity hover:border-primaire hover:text-primaire ${
+      className={`flex size-11 items-center justify-center rounded-full border border-bordure-champ text-texte transition-opacity hover:border-primaire hover:text-primaire ${
         visible ? "opacity-100" : "pointer-events-none opacity-0"
       }`}
     >

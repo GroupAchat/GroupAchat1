@@ -154,6 +154,15 @@ interface Options {
 }
 
 /**
+ * Un corps de requete : du JSON, ou un formulaire multipart.
+ *
+ * ⚠️ **Un `FormData` ne doit jamais etre passe a `JSON.stringify`**, qui en
+ * ferait `{}` — le fichier partirait a la poubelle et le serveur repondrait
+ * 201 sur une demande sans photo. C'est pour rendre cette faute impossible
+ * que le type est explicite plutot que `unknown`.
+ */
+
+/**
  * Appelle l'API et rend le corps decode.
  *
  * Leve une `ErreurApi` dans tous les cas d'echec, **y compris reseau** : un
@@ -182,8 +191,16 @@ export async function appeler<T>(
     }
   }
 
+  const multipart = corps instanceof FormData;
+
   const entetes: Record<string, string> = {};
-  if (corps !== undefined) {
+  /* ⚠️ **Aucun `Content-Type` sur un envoi multipart.** C'est le navigateur
+     qui doit le poser, parce que lui seul connait la frontiere (`boundary`)
+     qu'il vient de tirer au hasard. En ecrire un a la main produit un corps
+     que le serveur ne sait pas decouper : DRF repond alors 400 sur un
+     formulaire parfaitement valide, et l'erreur est penible a diagnostiquer
+     puisque le fichier est bien parti. */
+  if (corps !== undefined && !multipart) {
     entetes["Content-Type"] = "application/json";
   }
   if (jetonAdmin) {
@@ -198,7 +215,12 @@ export async function appeler<T>(
     reponse = await fetch(adresse, {
       method: methode,
       headers: entetes,
-      body: corps === undefined ? undefined : JSON.stringify(corps),
+      body:
+        corps === undefined
+          ? undefined
+          : multipart
+            ? corps
+            : JSON.stringify(corps),
       signal,
     });
   } catch (cause) {
@@ -260,7 +282,9 @@ function champsDepuisLeCorps(donnees: unknown): ErreursDeChamp {
     return {};
   }
   const champs: ErreursDeChamp = {};
-  for (const [cle, valeur] of Object.entries(donnees as Record<string, unknown>)) {
+  for (const [cle, valeur] of Object.entries(
+    donnees as Record<string, unknown>,
+  )) {
     if (Array.isArray(valeur)) {
       champs[cle] = valeur.map(String);
     } else if (typeof valeur === "string") {

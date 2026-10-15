@@ -156,22 +156,44 @@ export default defineConfig({
   server: {
     port: 5173,
     /**
-     * ⚠️ **Ne pas surveiller les paquets construits.**
+     * ⚠️ **`ignored` REMPLACE les exclusions par defaut, il ne s'y ajoute
+     * pas.**
      *
-     * `dist/` et `dist-admin/` sont **sous la racine du projet**, donc le
-     * surveillant de Vite les regarde par defaut. Lancer `npm run build`
-     * pendant que le serveur tourne reecrit alors des centaines de fichiers
-     * d'un coup : le journal se remplit de « page reload dist/index.html », et
-     * le serveur finit par s'arreter — code 1, sans message d'erreur.
+     * C'est le piege de cette option, et il a coute trois pannes. Le probleme
+     * de depart etait reel : `dist/` et `dist-admin/` sont **sous la racine du
+     * projet**, donc le surveillant les regarde, et un `npm run build` lance
+     * pendant que le serveur tourne y reecrit des centaines de fichiers d'un
+     * coup — le journal se remplit de « page reload dist/index.html ».
      *
-     * C'est ce qui a fait tomber les deux serveurs deux fois, et le symptome
-     * ressemblait a tout sauf a sa cause : les pages mouraient ensemble,
-     * quelques secondes apres une construction, sans rien dire.
+     * Mais la premiere correction n'a mis que ces deux motifs dans `ignored`,
+     * **ce qui a efface les exclusions que Vite pose par defaut** — dont
+     * celle de `node_modules`. Le surveillant s'est donc mis a suivre
+     * recursivement `node_modules`, soit des dizaines de milliers de fichiers,
+     * chacun coutant un descripteur. Les deux serveurs mouraient ensemble,
+     * code 1 et sans message, des que quelque chose touchait beaucoup de
+     * fichiers a la fois. Le remede etait devenu la maladie, en pire : le
+     * symptome etait le meme, donc on cherchait au mauvais endroit.
      *
-     * Ces dossiers ne contiennent de toute facon aucune source : les
-     * recharger ne sert a rien.
+     * D'ou la liste complete ci-dessous. **Les trois premieres entrees sont les
+     * defauts de Vite** : les retirer casse tout, les garder ne coute rien.
+     * Les deux dernieres sont le besoin reel.
+     *
+     * ⚠️ **Ne jamais ecrire un motif glob dans ce commentaire.** Un glob
+     * recursif se termine par deux etoiles suivies d'une barre oblique, et
+     * cette sequence **ferme le commentaire de bloc** : le fichier devient
+     * invalide, et Vite refuse de demarrer sur un « Expected } ». C'est
+     * exactement ce qui est arrive en ecrivant le motif de node_modules ici.
+     * Les motifs vivent dans le tableau ci-dessous, nulle part ailleurs.
      */
-    watch: { ignored: ["**/dist/**", "**/dist-admin/**"] },
+    watch: {
+      ignored: [
+        "**/.git/**",
+        "**/node_modules/**",
+        "**/test-results/**",
+        "**/dist/**",
+        "**/dist-admin/**",
+      ],
+    },
     /* S'arreter plutot que de glisser silencieusement sur 5174 — ou vit
        l'administration. Sans `strictPort`, un 5173 deja occupe ferait demarrer
        la boutique sur le port de l'administration, et on passerait un moment a

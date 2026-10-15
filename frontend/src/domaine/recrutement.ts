@@ -33,9 +33,10 @@
  * ```
  *
  * **Rien n'est automatique entre les deux colonnes.** Le §10.5 confie la
- * decision a un humain, et c'est le produit lui-meme : « groupeurs
- * selectionnes par Group Achat », affiche a l'acheteur sur presque chaque
- * ecran, ne vaut que si quelqu'un a reellement ouvert le dossier.
+ * decision a un humain, et c'est le produit lui-meme : « vous etes livre, ou
+ * rembourse » s'affiche a l'acheteur sur presque chaque ecran, et c'est
+ * **nous** qui remboursons. Notre seul recours contre le groupeur est son
+ * dossier, qui ne vaut que si quelqu'un l'a reellement ouvert.
  */
 
 /** L'etat d'un dossier. Il decide de ce que le groupeur peut faire. */

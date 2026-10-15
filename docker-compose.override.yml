@@ -1,0 +1,23 @@
+# Developpement local uniquement — Compose lit ce fichier automatiquement et
+# il n'est jamais deploye.
+#
+# ⚠️ **Il publie le port de la base, ce que `docker-compose.yml` refuse.**
+#
+# Ce refus est motive, et il reste juste : en production la base n'a aucune
+# raison d'etre joignable depuis la machine hote, seule l'API lui parle par le
+# reseau interne. Mais en developpement on lance `manage.py migrate`, les tests
+# et le serveur **depuis la machine**, pas depuis un conteneur : sans port
+# publie, rien de tout cela n'atteint la base.
+#
+# Un fichier d'override est la bonne reponse a cette tension : la decision de
+# production reste ecrite et intacte dans `docker-compose.yml`, et le besoin du
+# developpement vit ici, a cote, sans la contredire.
+#
+# **5433 et non 5432, et ce n'est pas un detail** : un PostgreSQL 17 tourne deja
+# sur 5432 sur cette machine. Publier 5432 echouerait, ou pire, ferait croire
+# que ca marche en parlant au mauvais serveur. C'est aussi le port que
+# `DATABASE_URL` vise deja.
+services:
+  base:
+    ports:
+      - "${PORT_BASE:-5433}:5432"

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import Bouton from "../../ui/Bouton";
 import CompteurTemps from "../composants/CompteurTemps";
+import JaugeParticipants from "../../composants/JaugeParticipants";
 import EnTeteApplication from "../mise-en-page/EnTeteApplication";
 import {
   IconeChevronHaut,
@@ -10,6 +11,7 @@ import {
 } from "../../ui/Icones";
 import { type Groupage } from "../../domaine/groupage";
 import { useCatalogue } from "../../api/CatalogueContexte";
+import { useNotifications } from "../../api/NotificationsContexte";
 import { ErreurReseau } from "../../ui/EtatReseau";
 import { formaterFrancs } from "../../domaine/format";
 
@@ -40,11 +42,28 @@ import { formaterFrancs } from "../../domaine/format";
 export default function Fil({
   onOuvrirGroupage,
   onRechercher,
+  onQuestions,
+  onPartager,
+  onDemanderProduit,
 }: {
   onOuvrirGroupage: (groupage: Groupage) => void;
   onRechercher: () => void;
+  /**
+   * Vers l'ecran 10.
+   *
+   * ⚠️ **L'ecran plein, et pas le panneau de la fiche.** Le fil occupe tout
+   * l'ecran d'un telephone : il n'y a pas de coin ou poser un panneau, et le
+   * fil n'existe pas sur ordinateur (§ecran 1).
+   */
+  onQuestions: (groupage: Groupage) => void;
+  onPartager: (groupage: Groupage) => void;
+  /** Vers l'ecran 11, depuis la fin du fil. */
+  onDemanderProduit: () => void;
 }) {
   const { groupages, chargement, erreur, recharger } = useCatalogue();
+  /* La cloche vit dans la coquille ; cet ecran n'en lit que le
+     compteur et de quoi l'ouvrir. */
+  const cloche = useNotifications();
   const [aDefile, setADefile] = useState(false);
   const conteneur = useRef<HTMLDivElement>(null);
 
@@ -80,7 +99,8 @@ export default function Fil({
         <EnTeteApplication
           surMedia
           onActiverRecherche={onRechercher}
-          notifications={1}
+          notifications={cloche.nonLues}
+          onNotifications={cloche.ouvrir}
         />
       </div>
     );
@@ -89,7 +109,11 @@ export default function Fil({
   if (erreur) {
     return (
       <div className="relative flex h-dvh flex-col bg-white">
-        <EnTeteApplication onActiverRecherche={onRechercher} notifications={1} />
+        <EnTeteApplication
+          onActiverRecherche={onRechercher}
+          notifications={cloche.nonLues}
+          onNotifications={cloche.ouvrir}
+        />
         <div className="flex flex-1 items-center justify-center">
           <ErreurReseau erreur={erreur} onReessayer={recharger} />
         </div>
@@ -99,7 +123,12 @@ export default function Fil({
 
   return (
     <div className="relative h-dvh bg-black">
-      <EnTeteApplication surMedia onActiverRecherche={onRechercher} notifications={1} />
+      <EnTeteApplication
+        surMedia
+        onActiverRecherche={onRechercher}
+        notifications={cloche.nonLues}
+        onNotifications={cloche.ouvrir}
+      />
 
       <div
         ref={conteneur}
@@ -112,6 +141,8 @@ export default function Fil({
             premiere={indice === 0}
             indiceVisible={indice === 0 && !aDefile}
             onOuvrir={() => onOuvrirGroupage(groupage)}
+            onQuestions={() => onQuestions(groupage)}
+            onPartager={() => onPartager(groupage)}
           />
         ))}
 
@@ -124,7 +155,9 @@ export default function Fil({
             Dites-nous ce que vous cherchez : un groupeur peut le lancer.
           </p>
           <div className="mt-6 w-full max-w-72">
-            <Bouton style="secondaire">Demander un produit</Bouton>
+            <Bouton style="secondaire" onClick={onDemanderProduit}>
+              Demander un produit
+            </Bouton>
           </div>
         </section>
       </div>
@@ -141,11 +174,16 @@ function CarteFil({
   premiere,
   indiceVisible,
   onOuvrir,
+  onQuestions,
+  onPartager,
 }: {
   groupage: Groupage;
   premiere: boolean;
   indiceVisible: boolean;
   onOuvrir: () => void;
+  /* Le rail d'actions vit ici, donc ses deux gestes descendent jusqu'ici. */
+  onQuestions: () => void;
+  onPartager: () => void;
 }) {
   return (
     <section className="relative h-full w-full snap-start overflow-hidden bg-surface-douce">
@@ -177,6 +215,7 @@ function CarteFil({
       <div className="absolute right-3 bottom-80 flex flex-col items-center gap-4 text-white">
         <button
           type="button"
+          onClick={onQuestions}
           className="flex flex-col items-center gap-0.5"
           aria-label={`Voir les ${groupage.questions} questions`}
         >
@@ -188,6 +227,7 @@ function CarteFil({
 
         <button
           type="button"
+          onClick={onPartager}
           className="flex flex-col items-center gap-0.5"
           aria-label="Partager ce groupage"
         >
@@ -208,21 +248,24 @@ function CarteFil({
         </h2>
 
         {/* Le prix seul. Aucun prix barre, aucune pastille de reduction (§3). */}
-        <p className="mt-1 text-[22px] font-bold text-white">
+        <p className="mt-1 text-prix font-bold text-white">
           {formaterFrancs(groupage.prixPart)}
         </p>
         <p className="text-xs text-white/85">la part</p>
 
+        {/* Variante `sombre` : texte blanc, gouttiere blanc transparent,
+            remplissage `marque`. L'orange vif n'est ici qu'un **bloc plein**
+            sur un aplat fonce, jamais du texte (§1.2). */}
+        <div className="mt-2.5">
+          <JaugeParticipants
+            acheteursConfirmes={groupage.acheteursConfirmes}
+            objectif={groupage.objectifParticipants}
+            progression={groupage.progression}
+            fond="sombre"
+          />
+        </div>
+
         <p className="mt-2 flex flex-wrap items-center gap-x-2 text-sm text-white">
-          <span>
-            <strong className="font-semibold">
-              {groupage.acheteursConfirmes}
-            </strong>{" "}
-            acheteurs confirmés
-          </span>
-          <span aria-hidden="true" className="text-white/60">
-            ·
-          </span>
           {/* Non cliquable : le pseudonyme est tout ce que l'acheteur voit, et
               il ne doit pas suggerer une fiche a ouvrir (§1.7, §3). */}
           <span className="inline-flex items-center gap-1">

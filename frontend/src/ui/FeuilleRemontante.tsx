@@ -61,7 +61,7 @@ export default function FeuilleRemontante({
         role="dialog"
         aria-modal="true"
         aria-label={titre}
-        className="absolute inset-x-0 bottom-0 mx-auto max-h-[92dvh] max-w-[430px] overflow-y-auto rounded-t-[20px] bg-white px-4 pt-3 pb-6 lg:bottom-auto lg:top-1/2 lg:max-h-[86dvh] lg:-translate-y-1/2 lg:rounded-[20px]"
+        className="absolute inset-x-0 bottom-0 mx-auto max-h-[92dvh] max-w-[430px] overflow-y-auto rounded-t-[20px] bg-white px-4 pt-3 pb-6 lg:bottom-auto lg:top-1/2 lg:max-h-[86dvh] lg:-translate-y-1/2 lg:rounded-xl"
       >
         <div className="flex items-center">
           <span

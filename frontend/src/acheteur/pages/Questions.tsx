@@ -16,6 +16,7 @@ import Bouton from "../../ui/Bouton";
 import Encart from "../../ui/Encart";
 import EtatVide from "../../ui/EtatVide";
 import { IconeDrapeau, IconeQuestion } from "../../ui/Icones";
+import FeuilleSignalement from "../composants/FeuilleSignalement";
 
 /**
  * Ecran 10 — Questions sur un groupage. SPEC_ECRANS_FIGMA.md, ecran 10.
@@ -51,6 +52,7 @@ export default function Questions({
   telephone,
   onRetour,
   onSeConnecter,
+  variante = "page",
 }: {
   groupage: Groupage;
   estBureau: boolean;
@@ -58,8 +60,23 @@ export default function Questions({
   telephone?: string;
   onRetour: () => void;
   onSeConnecter: () => void;
+  /**
+   * `panneau` rend **le corps seul**, sans en-tete ni pied de page, pour le
+   * panneau flottant de `PanneauQuestions`.
+   *
+   * ⚠️ **Une variante plutot qu'un second composant.** Tout ce qui est
+   * delicat ici — le filtre de moderation du §15, la connexion demandee au
+   * bouton et non a l'ouverture (§1.5), le refus du serveur affiche sous le
+   * champ — n'existe qu'une fois. Un panneau qui reecrirait ce formulaire
+   * finirait par laisser passer un numero de telephone que la page, elle,
+   * bloque encore.
+   */
+  variante?: "page" | "panneau";
 }) {
   const [brouillon, setBrouillon] = useState("");
+
+  /** Le message dont la feuille de signalement est ouverte (§15, niveau 3). */
+  const [signalee, setSignalee] = useState<Question>();
 
   const requete = useRequete(
     (signal) => listerLesQuestions(groupage.id, signal),
@@ -117,7 +134,15 @@ export default function Questions({
         <p className="min-w-0 font-medium text-texte">{groupage.produit}</p>
       </div>
 
-      {/* Les questions courantes, avant le champ libre. Un appui envoie. */}
+      {/*
+        Les questions courantes, avant le champ libre.
+
+        ⚠️ **Un appui remplit le champ, il n'envoie pas.** Le commentaire
+        d'origine disait l'inverse de ce que fait le code, et c'est le code qui
+        a raison : publier d'un seul appui une question qu'on a effleurée par
+        erreur est irrattrapable — elle est publique, et elle porte le
+        pseudonyme de son auteur. On remplit, il relit, il envoie.
+      */}
       <section>
         <h2 className="text-sm font-medium text-texte-secondaire">
           Questions courantes
@@ -133,8 +158,17 @@ export default function Questions({
               {question}
             </button>
           ))}
+          {/* ⚠️ Ce bouton n'avait **aucun `onClick`** : il ne faisait rien.
+              Son role est d'amener au champ libre, donc il y amene — et il
+              vide le brouillon, sinon appuyer dessus apres avoir choisi une
+              question courante laisserait le texte de celle-ci dans le
+              champ. */}
           <button
             type="button"
+            onClick={() => {
+              setBrouillon("");
+              document.getElementById("question")?.focus();
+            }}
             className="inline-flex min-h-12 shrink-0 items-center rounded-full border border-bordure px-4 text-sm font-medium whitespace-nowrap text-texte active:bg-surface-douce"
           >
             Autre question
@@ -237,11 +271,23 @@ export default function Questions({
         ) : (
           <ul className="mt-3 space-y-5">
             {questions.map((question) => (
-              <FilQuestion key={question.id} question={question} />
+              <FilQuestion
+                key={question.id}
+                question={question}
+                onSignaler={setSignalee}
+              />
             ))}
           </ul>
         )}
       </section>
+
+      {signalee !== undefined ? (
+        <FeuilleSignalement
+          question={signalee.id}
+          onFermer={() => setSignalee(undefined)}
+          onSeConnecter={onSeConnecter}
+        />
+      ) : null}
 
       {/* A dessiner, pas a sous-entendre (§1.7). */}
       <Encart variante="attention">
@@ -250,6 +296,8 @@ export default function Questions({
       </Encart>
     </div>
   );
+
+  if (variante === "panneau") return corps;
 
   if (estBureau) {
     return (
@@ -274,7 +322,20 @@ export default function Questions({
 }
 
 /** Une question et sa reponse. */
-function FilQuestion({ question }: { question: Question }) {
+function FilQuestion({
+  question,
+  onSignaler,
+}: {
+  question: Question;
+  /**
+   * Ouvre la feuille de signalement (§15, niveau 3).
+   *
+   * ⚠️ **Tenu par l'ecran, pas par la ligne.** Une feuille par message
+   * donnerait autant de voiles superposes qu'il y a de questions, et il n'y
+   * en a qu'une d'ouverte a la fois de toute facon.
+   */
+  onSignaler: (question: Question) => void;
+}) {
   return (
     <li>
       <div className="flex items-start justify-between gap-3">
@@ -290,6 +351,7 @@ function FilQuestion({ question }: { question: Question }) {
         {/* Signalement : une icone discrete, pas un bouton qui attire. */}
         <button
           type="button"
+          onClick={() => onSignaler(question)}
           aria-label="Signaler ce message"
           className="flex size-10 shrink-0 items-center justify-center text-texte-secondaire"
         >

@@ -77,7 +77,7 @@ export default function Portefeuille({
 
       <div className="space-y-6 px-4 pt-5">
         {/* La carte principale. Fond `confiance`, texte blanc (10,36:1). */}
-        <div className="rounded-2xl bg-confiance p-5 text-white">
+        <div className="rounded-xl bg-confiance p-5 text-white">
           <p className="text-sm text-white/85">Disponible</p>
           <p className="mt-1 text-3xl font-bold">
             {formaterFrancs(disponible)}
@@ -152,7 +152,7 @@ export default function Portefeuille({
             {mouvements.map((mouvement) => (
               <li
                 key={mouvement.id}
-                className="flex items-start justify-between gap-3 border-b border-bordure py-3 last:border-b-0"
+                className="flex items-start justify-between gap-3 border-b border-filet py-3 last:border-b-0"
               >
                 <div className="min-w-0">
                   <p className="text-sm text-texte">{mouvement.libelle}</p>

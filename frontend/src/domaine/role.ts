@@ -26,8 +26,10 @@ const ROLES_PAR_ADRESSE: readonly Role[] = ["livreur"];
  * cahier des charges). L'adresse **est** son mode d'entree, pas un raccourci.
  *
  * Autoriser `?role=groupeur` ouvrirait en revanche un contournement de
- * l'inscription et du dossier KYC, qui est precisement ce qui donne son sens a
- * la phrase « groupeurs selectionnes par Group Achat ». D'ou la liste blanche.
+ * l'inscription et du dossier KYC — et ce dossier est ce qui nous permet
+ * d'honorer « vous etes livre, ou rembourse » : nous remboursons l'acheteur et
+ * nous nous retournons contre le groupeur, ce qui suppose de savoir qui il
+ * est. D'ou la liste blanche.
  *
  * ⚠️ Aujourd'hui le lien n'est pas signe : n'importe qui peut taper
  * `?role=livreur` et voir la tournee de demonstration. **C'est acceptable tant

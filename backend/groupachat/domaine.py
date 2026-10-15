@@ -30,6 +30,60 @@ from decimal import ROUND_HALF_UP, Decimal
 #: franchement ce que ce choix nous coûte.
 FRAIS_PLATEFORME = Decimal("1500")
 
+#: La photo que l'acheteur joint a sa demande de produit (ecran 11).
+#:
+#: ## ⚠️ Pourquoi des octets en base, et non un fichier
+#:
+#: Le §18 du cahier des charges laisse le **stockage des medias « a
+#: definir »**, et le §10.5 explique pourquoi ``MEDIA_ROOT`` serait le mauvais
+#: endroit : des URL devinables, dans le meme espace que tout le reste. Poser
+#: un ``ImageField`` ici reviendrait donc a trancher a la place de
+#: l'utilisateur une decision qu'il a laissee ouverte.
+#:
+#: La photo est donc gardee **dans la base**, bornee court, et servie par une
+#: route authentifiee. C'est le seul stockage qui existe aujourd'hui dans ce
+#: projet.
+#:
+#: **Ce que ca coute, dit franchement :** des octets dans PostgreSQL
+#: alourdissent les sauvegardes et ne s'y pretent pas a grande echelle. Le
+#: plafond ci-dessous est ce qui rend le choix tenable en attendant le
+#: stockage objet — a 300 ko, mille demandes pesent 300 Mo, ce qui se
+#: sauvegarde encore. Le jour ou le stockage existe, ces deux champs
+#: deviennent une reference et le reste de la chaine ne change pas.
+#:
+#: 300 ko, et non 5 Mo : le navigateur **reduit la photo avant de l'envoyer**
+#: (voir l'ecran 11), parce que le public vise a un forfait data limite
+#: (§18.1). Une photo de telephone brute pese 3 a 5 Mo, et la televerser
+#: couterait a l'acheteur plus que sa part.
+PHOTO_DEMANDE_MAX_OCTETS = 300 * 1024
+
+#: Les seules natures acceptees, avec leur signature de debut de fichier.
+#:
+#: ⚠️ **On verifie les octets, pas l'en-tete ``Content-Type``.** Celui-ci est
+#: declare par le client : il suffit de le mentir pour deposer autre chose
+#: qu'une image sous un nom d'image. La signature, elle, est dans le fichier.
+PHOTO_DEMANDE_SIGNATURES = {
+    "image/jpeg": (b"\xff\xd8\xff",),
+    "image/png": (b"\x89PNG\r\n\x1a\n",),
+    "image/webp": (b"RIFF",),
+}
+
+
+def nature_de_la_photo(octets: bytes) -> str | None:
+    """Le type MIME deduit des premiers octets, ou ``None`` si inconnu.
+
+    Renvoyer ``None`` plutot que lever : l'appelant sait quoi repondre a
+    l'acheteur, le domaine non.
+    """
+    for nature, signatures in PHOTO_DEMANDE_SIGNATURES.items():
+        if any(octets.startswith(signature) for signature in signatures):
+            # WebP commence par RIFF, comme un WAV : on confirme sur l'octet 8.
+            if nature == "image/webp" and octets[8:12] != b"WEBP":
+                continue
+            return nature
+    return None
+
+
 #: Frais de livraison, en francs CFA.
 #:
 #: Le calcul réel selon la position n'existe pas encore : la fonction renvoie

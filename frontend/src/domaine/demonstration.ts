@@ -1,5 +1,5 @@
 /**
- * Le mode démonstration — **limité au parcours groupeur**.
+ * Le mode démonstration — **les deux inscriptions, acheteur et groupeur**.
  *
  * ## Ce qu'il fait
  *
@@ -15,12 +15,19 @@
  * ## Ce qu'il suspend, et c'est sérieux
  *
  * L'**examen du dossier par un humain** (§10.5). C'est lui qui donne son sens
- * à « groupeurs sélectionnés par Group Achat », la phrase qui s'affiche à
+ * à « vous êtes livré, ou remboursé », la phrase qui s'affiche à
  * l'acheteur sur presque chaque écran et sur laquelle repose son acceptation
  * de payer d'avance.
  *
- * ⚠️ **Rien ici ne touche au parcours acheteur** : le code SMS, les conditions
- * de vente et l'adresse de livraison restent demandés comme avant.
+ * ⚠️ **Ce paragraphe disait : « Rien ici ne touche au parcours acheteur ».**
+ * Ce n'est plus vrai : le formulaire d'inscription acheteur est pré-rempli lui
+ * aussi, et les quatre cases du code le sont à l'arrivée sur l'étape 2. La
+ * phrase est reproduite pour qu'on ne la restaure pas par réflexe.
+ *
+ * **Ce qui n'a pas changé et ne doit pas changer** : le code est toujours
+ * **vérifié par le serveur**. On le pré-remplit, on ne le contourne pas. Les
+ * conditions de vente et l'adresse de livraison restent demandées comme
+ * avant.
  *
  * ## Comment on rallume la sécurité
  *
@@ -71,6 +78,28 @@ export const GROUPEUR_DEMO = {
    * l'autre ordre exprès — la concordance doit le tolérer.
    */
   titulaire: "ADANLÉTÉ Kodjo",
+  code: "1234",
+} as const;
+
+/**
+ * Le formulaire d'inscription acheteur, pré-rempli.
+ *
+ * ⚠️ **Son numéro est tiré à chaque chargement, pour la même raison que celui
+ * du groupeur** : le téléphone identifie le compte, donc un numéro fixe ferait
+ * échouer la deuxième démonstration sur « ce numéro a déjà un compte » — et
+ * l'écran basculerait vers la connexion, exactement au moment où un jury
+ * regarde. Il réutilise `numeroLibre()`, et les deux tirages diffèrent parce
+ * qu'ils sont faits à deux instants.
+ *
+ * **Un prénom, pas un nom complet** : c'est ce que le formulaire demande, et
+ * c'est tout ce dont le livreur a besoin le jour de la remise.
+ */
+export const ACHETEUR_DEMO = {
+  prenom: "Akosua",
+  /** Sans le `+228`, comme le champ l'attend. */
+  telephone: numeroLibre(),
+  courriel: "akosua@exemple.tg",
+  /** Le même code fixe que le serveur sert en mode démonstration. */
   code: "1234",
 } as const;
 

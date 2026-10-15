@@ -50,6 +50,8 @@ export interface CampagneApi {
   /** Le **pseudonyme** du groupeur. Jamais son nom (§1.7). */
   groupeur: string;
   acheteurs_confirmes: number;
+  objectif_participants: number;
+  progression: number;
   heures_restantes: number;
   frais_livraison_a_partir_de: string;
   caracteristiques: { cle: string; valeur: string }[];
@@ -81,6 +83,8 @@ export function adapterGroupage(campagne: CampagneApi): Groupage {
        un prix. */
     prixPart: Number(campagne.prix_part),
     acheteursConfirmes: campagne.acheteurs_confirmes,
+    objectifParticipants: campagne.objectif_participants,
+    progression: campagne.progression,
     groupeur: campagne.groupeur,
     categorie: campagne.categorie,
     heuresRestantes: campagne.heures_restantes,
@@ -123,6 +127,28 @@ export async function listerLesGroupages(
     signal,
   });
   return page.results.map(adapterGroupage);
+}
+
+/**
+ * Un seul groupage, par son identifiant.
+ *
+ * ⚠️ **Elle existe pour les groupages que la liste ne contient pas.** Le
+ * catalogue ne sert que de l'ouvert — `get_queryset` filtre sur `list`
+ * seulement — alors que `retrieve` repond encore sur un groupage cloture.
+ * C'est exactement ce que demande le `CLAUDE.md` : « sa fiche reste
+ * atteignable par son lien ». Chercher la fiche dans le catalogue deja charge
+ * aurait donc marche pour les groupages ouverts et echoue, en silence, pour
+ * les seuls cas ou ce lien sert vraiment — celui qu'on a recu hier et qu'on
+ * ouvre aujourd'hui.
+ */
+export async function lireUnGroupage(
+  identifiant: string,
+  signal?: AbortSignal,
+): Promise<Groupage> {
+  const campagne = await appeler<CampagneApi>(`/campagnes/${identifiant}/`, {
+    signal,
+  });
+  return adapterGroupage(campagne);
 }
 
 // ── Questions publiques ────────────────────────────────────────────────────
@@ -189,6 +215,63 @@ export function poserUneQuestion(
   signal?: AbortSignal,
 ): Promise<QuestionApi> {
   return appeler("/questions/", { methode: "POST", corps: entree, signal });
+}
+
+/** Les trois motifs de signalement du §15. **Liste fermee, pas de champ libre.** */
+export const MOTIFS_DE_SIGNALEMENT = [
+  { cle: "coordonnees", libelle: "Coordonnées personnelles" },
+  { cle: "hors-plateforme", libelle: "Proposition de vente hors plateforme" },
+  { cle: "inapproprie", libelle: "Contenu inapproprié" },
+] as const;
+
+export type MotifDeSignalement = (typeof MOTIFS_DE_SIGNALEMENT)[number]["cle"];
+
+/**
+ * Signale une question deja publiee. §15, niveau 3.
+ *
+ * ⚠️ **Elle ne depublie rien.** Le serveur enregistre le signalement et laisse
+ * la question en ligne : un humain tranche. Depublier sur signalement
+ * donnerait a n'importe qui le pouvoir de faire taire n'importe qui.
+ */
+export function signalerUneQuestion(
+  identifiant: string,
+  motif: MotifDeSignalement,
+  signal?: AbortSignal,
+): Promise<{ signale: boolean; message: string }> {
+  return appeler(`/questions/${identifiant}/signaler/`, {
+    methode: "POST",
+    corps: { motif },
+    signal,
+  });
+}
+
+/** Les trois motifs de refus de l'ecran 9. Liste fermee elle aussi. */
+export const MOTIFS_DE_REFUS = [
+  { cle: "pas-le-produit", libelle: "Ce n'est pas le produit commandé" },
+  { cle: "abime", libelle: "Produit visiblement abîmé" },
+  { cle: "autre", libelle: "Autre" },
+] as const;
+
+export type MotifDeRefus = (typeof MOTIFS_DE_REFUS)[number]["cle"];
+
+/**
+ * Refuse le colis a la remise. Ecran 9.
+ *
+ * ⚠️ **Le refus ouvre un litige, il ne rembourse pas** — la commande passe a
+ * `litige` et un humain examine sous 48 h. C'est exactement ce que l'ecran
+ * promet, et l'ecrire autrement serait promettre un virement.
+ */
+export function refuserLeColis(
+  identifiant: string,
+  motif: MotifDeRefus,
+  description: string,
+  signal?: AbortSignal,
+): Promise<CommandeApi> {
+  return appeler<CommandeApi>(`/commandes/${identifiant}/refuser/`, {
+    methode: "POST",
+    corps: { motif, description },
+    signal,
+  });
 }
 
 // ── Commandes de l'acheteur ────────────────────────────────────────────────
@@ -317,6 +400,8 @@ export interface DemandeApi {
   quartier: string;
   budget_maximum: string | null;
   precisions: string;
+  /** L'adresse de la photo, ou `null`. **Jamais les octets** — voir l'API. */
+  photo_url: string | null;
   statut: string;
   campagne: number | null;
   deposee_le: string;
@@ -355,6 +440,7 @@ export function adapterDemande(brute: DemandeApi): Demande {
       ? Number(brute.budget_maximum)
       : undefined,
     precisions: brute.precisions || undefined,
+    photoUrl: brute.photo_url ?? undefined,
     deposeeLe: brute.deposee_le.slice(0, 10),
     statut: brute.statut as Demande["statut"],
     detail: detail[brute.statut] ?? "",
@@ -367,4 +453,64 @@ export async function listerMesDemandes(
 ): Promise<Demande[]> {
   const page = await appeler<Page<DemandeApi>>("/demandes/", { signal });
   return page.results.map(adapterDemande);
+}
+
+/**
+ * Depose une demande de produit. **La demande cree l'offre.**
+ *
+ * ⚠️ **L'ecran 11 ne l'appelait pas.** Il affichait « Demande envoyee » apres
+ * un simple changement d'etat local : rien ne partait, et l'acheteur
+ * attendait une reponse a une demande que personne n'avait recue. C'est le
+ * defaut que cette fonction corrige, et la photo n'en est que l'occasion.
+ *
+ * Le corps part en **multipart** des qu'il y a une photo, en JSON sinon : une
+ * demande sans photo n'a aucune raison de payer le surcout d'un formulaire
+ * multipart.
+ *
+ * Appel **authentifie** — le serveur reconnait l'acheteur a son jeton de
+ * session, comme pour ses commandes. Un depot sans session repond 401, et
+ * l'ecran doit alors ouvrir la feuille de connexion (§1.5).
+ */
+export async function deposerUneDemande(
+  entree: {
+    produit: string;
+    quantite: string;
+    quartier: Quartier;
+    budgetMaximum?: number;
+    precisions?: string;
+    photo?: Blob;
+  },
+  signal?: AbortSignal,
+): Promise<Demande> {
+  const champs: Record<string, string> = {
+    produit: entree.produit,
+    quantite: entree.quantite,
+    quartier: entree.quartier,
+  };
+  if (entree.budgetMaximum !== undefined) {
+    champs.budget_maximum = String(entree.budgetMaximum);
+  }
+  if (entree.precisions) {
+    champs.precisions = entree.precisions;
+  }
+
+  let corps: Record<string, string> | FormData = champs;
+  if (entree.photo) {
+    const formulaire = new FormData();
+    for (const [cle, valeur] of Object.entries(champs)) {
+      formulaire.append(cle, valeur);
+    }
+    /* Le nom de fichier est impose ici : celui du telephone peut contenir
+       l'identite de son proprietaire (« IMG_Akosua_… »), et cette demande est
+       lue par un groupeur qui ne doit rien savoir de l'acheteur (§1.7). */
+    formulaire.append("photo", entree.photo, "demande.jpg");
+    corps = formulaire;
+  }
+
+  const brute = await appeler<DemandeApi>("/demandes/", {
+    methode: "POST",
+    corps,
+    signal,
+  });
+  return adapterDemande(brute);
 }

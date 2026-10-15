@@ -91,6 +91,9 @@ GROUPAGES = (
     {
         "etat": "ouverte",
         "titre": "Riz parfumé 25 kg, sac entier",
+        "autres_photos": (
+            (38781904, "Sac de riz ouvert vu de dessus, grains beiges et pelle en métal"),
+        ),
         "description": (
             "Sac de riz parfumé de 25 kg, importé, grain long. Acheté chez un "
             "grossiste du port de Lomé et réparti en parts de 5 kg. Le sac "
@@ -101,6 +104,7 @@ GROUPAGES = (
         "prix": 4500,
         "heures": 61,
         "commandes": 23,
+        "objectif": 30,
         # C6 du catalogue — un sac de riz ouvert, vérifié.
         "photo": 5472000,
         "alt": "Sac de riz ouvert",
@@ -122,6 +126,7 @@ GROUPAGES = (
         # et fait passer le compte à rebours en orange (§2.4).
         "heures": 5,
         "commandes": 17,
+        "objectif": 20,
         # La même photo que « Huile de palme 20 L » du catalogue : vérifiée,
         # et elle montre bien de l'huile de cuisine.
         "photo": 6823599,
@@ -142,6 +147,7 @@ GROUPAGES = (
         "prix": 2800,
         "heures": -3,
         "commandes": 14,
+        "objectif": 20,
         # C8 du catalogue — des bidons de produits ménagers, vérifié.
         "photo": 5218019,
         "alt": "Bidons de produits ménagers",
@@ -151,6 +157,9 @@ GROUPAGES = (
     {
         "etat": "en-cours",
         "titre": "Peinture murale blanc mat, 20 L",
+        "autres_photos": (
+            (9222200, "Pot de peinture ouvert avec son rouleau et son bac bleus, posés au sol"),
+        ),
         "description": (
             "Peinture acrylique blanc mat, seau de 20 litres, pour murs "
             "intérieurs. Commandée par palette chez un grossiste "
@@ -161,6 +170,7 @@ GROUPAGES = (
         "prix": 7500,
         "heures": -48,
         "commandes": 19,
+        "objectif": 20,
         # C11 du catalogue — un seau de peinture et des rouleaux, vérifié.
         "photo": 2293819,
         "alt": "Seau de peinture et rouleaux",
@@ -172,6 +182,10 @@ GROUPAGES = (
     {
         "etat": "livree",
         "titre": "Serviettes de bain éponge, lot de 6",
+        "autres_photos": (
+            (4210372, "Pile de serviettes éponge beiges pliées sur un tabouret blanc"),
+            (30982437, "Haute pile de serviettes rayées à franges, sur fond beige"),
+        ),
         "description": (
             "Serviettes de bain en coton éponge, lot de six, coloris assortis. "
             "Achetées en gros chez un importateur. Groupage déjà livré : la "
@@ -182,6 +196,7 @@ GROUPAGES = (
         "prix": 3200,
         "heures": -192,
         "commandes": 26,
+        "objectif": 25,
         # C15 du catalogue — du textile plié tenu à la main, vérifié.
         "photo": 8346226,
         "alt": "Textile plié tenu à la main",
@@ -193,6 +208,9 @@ GROUPAGES = (
     {
         "etat": "annulee",
         "titre": "Ventilateur sur pied, 3 vitesses",
+        "autres_photos": (
+            (1374448, "Gros plan sur la grille d'un ventilateur aux pales dorées, sur fond noir"),
+        ),
         "description": (
             "Ventilateur sur pied, 16 pouces, trois vitesses. Le fournisseur "
             "a augmenté son prix entre l'ouverture du groupage et la "
@@ -203,6 +221,7 @@ GROUPAGES = (
         "prix": 12500,
         "heures": -120,
         "commandes": 8,
+        "objectif": 30,
         # C9 du catalogue — un ventilateur électrique blanc, vérifié.
         "photo": 3675622,
         "alt": "Ventilateur électrique blanc",
@@ -353,12 +372,24 @@ def peupler(groupeur: Groupeur) -> int:
             contenu_part=modele["contenu_part"],
             categorie=modele["categorie"],
             prix_part=Decimal(str(modele["prix"])),
+            objectif_participants=modele["objectif"],
             medias=[
                 {
                     "type": "image",
                     "url": _photo(modele["photo"]),
                     "alt": modele["alt"],
-                }
+                },
+                # ⚠️ **Les supplementaires ont ete regardees avant d'etre
+                # decrites.** Elles ne sont posees que sur les groupages dont
+                # le produit est litteralement le meme que celui du catalogue :
+                # l'huile et l'eau de javel n'ont pas d'equivalent verifie,
+                # donc elles gardent une seule photo. Une fiche a une image
+                # vaut mieux qu'une fiche a deux dont la seconde montre autre
+                # chose.
+                *(
+                    {"type": "image", "url": _photo(identifiant), "alt": alt}
+                    for identifiant, alt in modele.get("autres_photos", ())
+                ),
             ],
             quartier_remise=modele["quartier"],
             point_remise=modele["remise"],

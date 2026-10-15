@@ -1,6 +1,7 @@
 import { type Groupage } from "../../domaine/groupage";
 import { formaterFrancs } from "../../domaine/format";
 import CompteurTemps from "./CompteurTemps";
+import JaugeParticipants from "../../composants/JaugeParticipants";
 import { IconeVerifie } from "../../ui/Icones";
 
 /**
@@ -21,10 +22,27 @@ import { IconeVerifie } from "../../ui/Icones";
  *
  * | | `CarteGroupage` *(grille)* | **`CarteUrgente`** *(ici)* |
  * |---|---|---|
- * | Media | 4/3, texte en dessous | **3/4 vertical**, texte **pose dessus** |
+ * | Media | 4/3, texte en dessous | **16/9 couche**, texte **pose dessus** |
  * | Compteur | sous le titre | **en haut du media**, premier element lu |
  * | Prix | `primaire` sur blanc | **blanc**, en grand, sur le voile |
  * | Contenu de la part | deux lignes | retire — ici on choisit, on ne compare pas |
+ *
+ * ## ⚠️ Elle etait verticale (3/4), elle est maintenant couchee (16/10)
+ *
+ * Le format portrait coutait **341 px de haut** pour 256 px de large. Dans une
+ * rangee posee sous la banniere et le bloc de titre, cette hauteur suffisait a
+ * la faire tomber sous la ligne de flottaison : la rangee qui porte **ce qui
+ * ferme dans moins de 48 h** n'existait donc pas pour qui ne faisait pas
+ * defiler. Une alerte invisible n'est pas une alerte.
+ *
+ * Couchee, la meme carte fait **180 px** pour 320 px de large : 161 px de
+ * gagnes, et la rangee entre dans la premiere fenetre.
+ *
+ * Elle y gagne autre chose. Un rectangle couche donne au **titre du produit**
+ * la largeur de deux lignes pleines, la ou le portrait les coupait souvent au
+ * milieu d'un mot. Ce qu'il perd — la hauteur d'image, donc la presence du
+ * produit — est le bon echange ici : cette rangee sert a decider vite, pas a
+ * admirer une photo.
  *
  * ## ⚠️ Le voile, et pourquoi il n'est pas decoratif
  *
@@ -61,12 +79,16 @@ export default function CarteUrgente({
   groupage: Groupage;
   onOuvrir: (groupage: Groupage) => void;
 }) {
+  /* ⚠️ **Plus large que haute, et les deux vont ensemble.** `w-80` avec
+     `aspect-[16/9]` donne 320 x 180 : c'est cette hauteur qui permet a la
+     rangee de tenir dans la premiere fenetre (voir l'en-tete). Changer l'une
+     sans l'autre repousse la rangee sous la ligne de flottaison. */
   return (
-    <li className="w-56 shrink-0 snap-start sm:w-64">
+    <li className="w-72 shrink-0 snap-start sm:w-80">
       <button
         type="button"
         onClick={() => onOuvrir(groupage)}
-        className="group relative block aspect-3/4 w-full overflow-hidden rounded-2xl text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primaire"
+        className="group relative block aspect-[16/9] w-full overflow-hidden rounded-xl text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primaire"
       >
         {groupage.photo ? (
           <img
@@ -89,8 +111,21 @@ export default function CarteUrgente({
 
         {/* Le bloc de texte et son voile ne font qu'un : le voile ne deborde
             pas, et il ne va jamais jusqu'a `transparent` sous une lettre. */}
-        <span className="absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-gradient-to-t from-black/85 to-black/70 p-4 pt-6">
-          <span className="line-clamp-2 text-[15px] leading-snug font-semibold text-white">
+        <span /* ⚠️ **`to-transparent` et un `pt-12` genereux.** La version precedente
+               s'arretait net a `black/70` : le voile commencait d'un coup, ce
+               qui dessinait **une couture horizontale visible** en travers de
+               chaque carte — bien plus laid que ce qu'il corrigeait.
+
+               Le degrade remonte maintenant jusqu'a transparent, donc aucune
+               arete. Et le rembourrage haut tient le texte **hors de la zone
+               claire** : la premiere lettre ne commence qu'ou le voile vaut
+               encore au moins 75 %, soit **10,4:1** pour du blanc dans le pire
+               cas d'une photo entierement blanche. C'est le `pt-12` qui porte
+               cette garantie, pas le degrade seul — le reduire la casse. */
+          className="absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-gradient-to-t from-black/90 via-black/75 to-transparent p-4 pt-10">
+          {/* `text-base` et non `text-sm` : la carte est plus large, le
+              titre a la place de se lire. */}
+          <span className="line-clamp-2 text-base leading-snug font-semibold text-white">
             {groupage.produit}
           </span>
 
@@ -103,14 +138,21 @@ export default function CarteUrgente({
             <span className="text-xs font-medium text-white/85">la part</span>
           </span>
 
-          <span className="mt-0.5 flex items-center gap-1.5 text-xs text-white/85">
+          {/* Variante `sombre` et `compacte` : la carte urgente est petite,
+              et elle est posee sur un media foncé. */}
+          <span className="mt-1.5 block">
+            <JaugeParticipants
+              acheteursConfirmes={groupage.acheteursConfirmes}
+              objectif={groupage.objectifParticipants}
+              progression={groupage.progression}
+              taille="compacte"
+              fond="sombre"
+            />
+          </span>
+
+          <span className="mt-1 flex items-center gap-1.5 text-xs text-white/85">
             <IconeVerifie taille={12} className="shrink-0" />
             {groupage.groupeur}
-            <span aria-hidden="true">·</span>
-            <strong className="font-semibold text-white">
-              {groupage.acheteursConfirmes}
-            </strong>
-            confirmés
           </span>
         </span>
       </button>

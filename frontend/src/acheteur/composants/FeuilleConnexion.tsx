@@ -4,6 +4,8 @@ import {
   completerMonProfil,
   demanderUnCode,
   ouvrirUneSession,
+  ouvrirUneSessionParMotDePasse,
+  preparerLaConnexion,
   type Profil,
   retenirLeJeton,
 } from "../../api/session";
@@ -25,9 +27,40 @@ import FeuilleRemontante from "../../ui/FeuilleRemontante";
  * **l'action reprend seule**.
  *
  * **Aucun second bouton** : pas de « Creer un compte » a cote de « Se
- * connecter ». Si le numero est inconnu, le compte se cree, et l'etape C
- * demande le nom — rien d'autre. Ni e-mail, ni mot de passe : chaque champ
- * ajoute ici est un acheteur perdu a un ecran du paiement.
+ * connecter ». Si le numero est inconnu, le compte se cree, et l'etape du nom
+ * est la seule question de plus.
+ *
+ * ⚠️ **La phrase « ni e-mail, ni mot de passe » etait ici, et elle est
+ * fausse depuis que le compte acheteur est un vrai compte.** Elle est
+ * reproduite pour que personne ne la restaure en croyant reparer une
+ * regression. Son argument reste respecte autrement, et c'est le point
+ * important : **aucun champ n'a ete ajoute a ce parcours.** Le mot de passe ne
+ * se pose pas ici, il se pose depuis l'ecran de profil, plus tard, quand plus
+ * rien n'est en jeu. Ce qui change ici est qu'on peut desormais **entrer**
+ * avec lui.
+ *
+ * ## Les deux voies, et comment la feuille choisit
+ *
+ * ```
+ * numero ──▶ preparerLaConnexion()
+ *              │
+ *              ├─ a un mot de passe ──▶ etape « mot-de-passe »
+ *              │                          └─ lien : recevoir plutot un code
+ *              │
+ *              └─ sinon ──────────────▶ envoi du code ──▶ etape « code »
+ * ```
+ *
+ * ⚠️ **C'est `preparerLaConnexion` qui decide, et elle n'envoie aucun SMS.**
+ * Avant elle, la feuille devait envoyer un code **pour savoir quoi afficher** :
+ * quelqu'un qui connait son mot de passe recevait un SMS inutile, et le jour
+ * ou un fournisseur sera branche (§18.2) ce serait un SMS facture a chaque
+ * ouverture de cette feuille.
+ *
+ * ⚠️ **Le code SMS reste accessible depuis l'etape du mot de passe**, en
+ * lien secondaire. C'est la voie de recuperation, et c'est elle qui leve le
+ * verrou de cinq echecs cote serveur. Elle est ce qui dispense d'ecrire un
+ * parcours « mot de passe oublie » : pas de lien a duree de vie, pas de
+ * courriel a attendre — et le courriel est justement facultatif sur ce marche.
  *
  * Pas de fleche de retour : on superpose, on ne navigue pas.
  *
@@ -87,8 +120,11 @@ export default function FeuilleConnexion({
   onFermer: () => void;
   onConnecte: (identite: Identite) => void;
 }) {
-  const [etape, setEtape] = useState<"numero" | "code" | "nom">("numero");
+  const [etape, setEtape] = useState<
+    "numero" | "mot-de-passe" | "code" | "nom"
+  >("numero");
   const [telephone, setTelephone] = useState("");
+  const [motDePasse, setMotDePasse] = useState("");
   const [code, setCode] = useState(["", "", "", ""]);
   const [erreurCode, setErreurCode] = useState<string>();
   const [secondes, setSecondes] = useState(SECONDES_AVANT_RENVOI);
@@ -99,7 +135,9 @@ export default function FeuilleConnexion({
   const [profil, setProfil] = useState<Profil>();
 
   const envoi = useAction(demanderUnCode);
+  const preparation = useAction(preparerLaConnexion);
   const ouverture = useAction(ouvrirUneSession);
+  const entreeParMotDePasse = useAction(ouvrirUneSessionParMotDePasse);
   const majProfil = useAction(completerMonProfil);
 
   const cases = useRef<(HTMLInputElement | null)[]>([]);
@@ -153,9 +191,68 @@ export default function FeuilleConnexion({
     setSecondes(SECONDES_AVANT_RENVOI);
   }
 
+  /**
+   * L'aiguillage, après le numéro. **Aucun SMS n'est envoyé ici.**
+   *
+   * ⚠️ **En cas d'échec de `preparerLaConnexion`, on envoie le code.** Ce
+   * repli compte : la question à laquelle elle répond est un confort —
+   * « faut-il montrer le champ de mot de passe ? » — et une panne dessus ne
+   * doit pas empêcher de se connecter. Le code SMS marche pour **tout le
+   * monde**, avec ou sans mot de passe, donc c'est le repli sûr.
+   */
+  async function continuerDepuisLeNumero() {
+    const voies = await preparation.executer(numeroComplet());
+    if (voies?.a_un_mot_de_passe) {
+      setMotDePasse("");
+      setEtape("mot-de-passe");
+      return;
+    }
+    await envoyerLeCode();
+  }
+
   /** Pose le jeton et rend la main à l'écran appelant. */
   function terminer(telephoneCompte: string, nomCompte?: string) {
     onConnecte({ telephone: telephoneCompte, nom: nomCompte || undefined });
+  }
+
+  /**
+   * Retient le jeton d'une session qui vient de s'ouvrir, par l'une ou l'autre
+   * voie, puis termine ou demande le nom.
+   *
+   * Mis en commun dès qu'il y a eu deux voies : dupliquer ces quatre lignes
+   * aurait laissé passer, un jour, une voie qui oublie `poserLeJetonAcheteur`
+   * — et un jeton retenu mais non posé donne une session qui survit au
+   * rechargement et ne marche pas avant.
+   */
+  function accueillir(session: { jeton: string; acheteur: Profil }) {
+    retenirLeJeton(session.jeton);
+    poserLeJetonAcheteur(session.jeton);
+    setProfil(session.acheteur);
+
+    if (session.acheteur.nom) {
+      terminer(session.acheteur.telephone, session.acheteur.nom);
+      return;
+    }
+    setEtape("nom");
+  }
+
+  /**
+   * La seconde voie. **Le serveur verrouille après cinq échecs**, et son
+   * message dit alors d'essayer le code SMS — qui lève le verrou.
+   */
+  async function entrerAvecLeMotDePasse() {
+    const session = await entreeParMotDePasse.executer({
+      telephone: numeroComplet(),
+      mot_de_passe: motDePasse,
+    });
+    if (!session) {
+      /* Comme pour le code : on ne recopie pas l'erreur dans un état local.
+         Juste après le `await`, cette closure voit encore la valeur
+         précédente. C'est le JSX qui lit `entreeParMotDePasse.erreur` au
+         re-rendu suivant. */
+      return;
+    }
+    accueillir(session);
   }
 
   /**
@@ -190,15 +287,7 @@ export default function FeuilleConnexion({
     /* La session est ouverte : le jeton part avec tous les appels suivants,
        et il survit à la fermeture de l'onglet. C'est ça, la reconnexion
        automatique. */
-    retenirLeJeton(session.jeton);
-    poserLeJetonAcheteur(session.jeton);
-    setProfil(session.acheteur);
-
-    if (session.acheteur.nom) {
-      terminer(session.acheteur.telephone, session.acheteur.nom);
-      return;
-    }
-    setEtape("nom");
+    accueillir(session);
   }
 
   /** Pose le nom sur le compte — appel authentifié, le code est consommé. */
@@ -221,6 +310,14 @@ export default function FeuilleConnexion({
       ? (Object.values(ouverture.erreur.champs)[0]?.[0] ?? "Code incorrect.")
       : ouverture.erreur.messageLisible
     : erreurCode;
+
+  /** Le message sous le champ de mot de passe. **Il vient du serveur.** */
+  const messageMotDePasse = entreeParMotDePasse.erreur
+    ? entreeParMotDePasse.erreur.estRefusDeSaisie
+      ? (Object.values(entreeParMotDePasse.erreur.champs)[0]?.[0] ??
+        "Mot de passe incorrect.")
+      : entreeParMotDePasse.erreur.messageLisible
+    : undefined;
 
   return (
     <FeuilleRemontante titre="Connexion" onFermer={onFermer}>
@@ -255,16 +352,81 @@ export default function FeuilleConnexion({
               </p>
             ) : null}
 
+            {/* ⚠️ « Continuer » et non « Recevoir mon code » : à cet instant
+                **la feuille ne sait pas encore** par quelle voie ce numéro
+                entre. Promettre un SMS à quelqu'un qui verra ensuite un champ
+                de mot de passe le ferait attendre un code qui n'arrive pas.
+                C'est aussi ce qui évite le second bouton que le §1.5 interdit :
+                un seul chemin, et le serveur choisit. */}
             <Bouton
               desactive={!numeroValide}
-              chargement={envoi.enCours}
-              onClick={envoyerLeCode}
+              chargement={preparation.enCours || envoi.enCours}
+              onClick={continuerDepuisLeNumero}
             >
-              Recevoir mon code
+              Continuer
             </Bouton>
 
             {/* 7 — Rappel de contexte : on sait toujours ce qu'on est en train
                 de commander. */}
+            <p className="text-center text-xs text-texte-secondaire">
+              {rappelContexte}
+            </p>
+          </div>
+        ) : null}
+
+        {etape === "mot-de-passe" ? (
+          <div className="mt-4 space-y-4">
+            <div>
+              <h2 className="text-xl font-semibold text-texte">
+                Votre mot de passe
+              </h2>
+              <p className="mt-1 text-texte-secondaire">
+                +228 {telephone}{" "}
+                <button
+                  type="button"
+                  onClick={() => setEtape("numero")}
+                  className="font-medium text-primaire"
+                >
+                  Modifier
+                </button>
+              </p>
+            </div>
+
+            <Champ
+              libelle="Mot de passe"
+              valeur={motDePasse}
+              onChanger={setMotDePasse}
+              type="password"
+              /* `current-password` et non `new-password` : c'est un champ de
+                 connexion, et la valeur proposée doit être celle qui est
+                 enregistrée. */
+              autoComplete="current-password"
+              erreur={messageMotDePasse}
+              autoFocus
+            />
+
+            <Bouton
+              desactive={motDePasse === ""}
+              chargement={entreeParMotDePasse.enCours}
+              onClick={entrerAvecLeMotDePasse}
+            >
+              Se connecter
+            </Bouton>
+
+            {/* ⚠️ **C'est tout le parcours « mot de passe oublié »**, et il
+                tient en un lien. Le code SMS marche pour tout le monde, et il
+                **lève le verrou** des cinq échecs côté serveur : personne ne
+                reste enfermé dehors. Pas de lien à durée de vie à écrire, pas
+                de courriel à attendre — et le courriel est facultatif ici. */}
+            <button
+              type="button"
+              onClick={envoyerLeCode}
+              disabled={envoi.enCours}
+              className="mx-auto block min-h-12 text-sm font-medium text-primaire"
+            >
+              Mot de passe oublié ? Recevoir un code par SMS
+            </button>
+
             <p className="text-center text-xs text-texte-secondaire">
               {rappelContexte}
             </p>

@@ -93,7 +93,7 @@ export default function TourneeLivreur() {
        ordinateur du depot. */
     <div className="mx-auto min-h-dvh max-w-[430px] bg-white pb-10">
       {/* En-tete simple. Pas de navigation, pas de menu. */}
-      <header className="border-b border-bordure px-4 py-4">
+      <header className="border-b border-filet px-4 py-4">
         <div className="flex items-center justify-between gap-3">
           <Logo variante="couleur" disposition="cote" hauteur={24} />
           <span className="text-sm text-texte-secondaire">

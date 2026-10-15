@@ -57,12 +57,32 @@ export interface Groupage {
   prixPart: number;
   /** Acheteurs ayant deja paye leur part. Pas de plafond, pas de minimum. */
   acheteursConfirmes: number;
+  /**
+   * Combien de personnes le groupeur veut reunir — le denominateur de la barre
+   * de progression (§2.5).
+   *
+   * ⚠️ **Ni plafond ni minimum.** Depasser est permis, et un groupage
+   * au-dessous de son objectif peut parfaitement aboutir : a la cloture, c'est
+   * le groupeur qui decide (§7 du cahier des charges). Aucun ecran ne doit
+   * s'en servir pour ecrire « places disponibles », « complet » ou « il manque
+   * 6 personnes ».
+   */
+  objectifParticipants: number;
+  /**
+   * Le remplissage en pourcentage, **calcule par le serveur** et plafonne a
+   * 100.
+   *
+   * Servi plutot que deduit des deux chiffres ci-dessus : le fil, la carte, la
+   * ligne et le detail l'affichent tous, et quatre ecrans ne doivent pas
+   * refaire le meme arrondi chacun a sa facon.
+   */
+  progression: number;
   /** Pseudonyme du groupeur (§1.7). */
   groupeur: string;
   categorie: Categorie;
   /**
    * Heures avant la cloture. Fixe plutot que calcule depuis l'horloge : la
-   * demo doit afficher « RESTE 2 JOURS » sur C1 quel que soit le jour ou on la
+   * demo doit afficher « Il reste 2 jours » sur C1 quel que soit le jour ou on la
    * montre.
    */
   heuresRestantes: number;

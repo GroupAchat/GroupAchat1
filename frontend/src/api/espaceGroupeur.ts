@@ -74,9 +74,12 @@ export interface CampagneGroupeurApi {
   prix_part: string;
   commandes: number;
   collecte: string;
+  objectif_participants: number;
+  progression: number;
   heures_restantes: number;
   statut: StatutCampagne;
   photo: string;
+  arrivee_annoncee_le: string | null;
 }
 
 export function adapterCampagne(brute: CampagneGroupeurApi): Campagne {
@@ -87,9 +90,12 @@ export function adapterCampagne(brute: CampagneGroupeurApi): Campagne {
     prixPart: Number(brute.prix_part),
     commandes: brute.commandes,
     collecte: Number(brute.collecte),
+    objectifParticipants: brute.objectif_participants,
+    progression: brute.progression,
     heuresRestantes: brute.heures_restantes,
     statut: brute.statut,
     photo: brute.photo || undefined,
+    arriveeAnnonceeLe: brute.arrivee_annoncee_le ?? undefined,
   };
 }
 
@@ -107,6 +113,14 @@ export async function listerMesCampagnes(
 export interface NouvelleCampagne {
   telephone: string;
   titre: string;
+  /**
+   * Combien de personnes le groupeur veut reunir. **Obligatoire.**
+   *
+   * ⚠️ Le serveur refuse une creation sans lui : c'est le denominateur de la
+   * barre de progression des cartes (§2.5), et un objectif pose d'office
+   * serait publie aux acheteurs sans qu'il l'ait choisi.
+   */
+  objectif_participants: number;
   description: string;
   contenu_part: string;
   categorie: Categorie;

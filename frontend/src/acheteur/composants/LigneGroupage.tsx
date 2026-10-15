@@ -1,6 +1,7 @@
 import { type Groupage } from "../../domaine/groupage";
 import { formaterFrancs } from "../../domaine/format";
 import CompteurTemps from "./CompteurTemps";
+import JaugeParticipants from "../../composants/JaugeParticipants";
 import { IconeVerifie } from "../../ui/Icones";
 import Vignette from "../../composants/Vignette";
 
@@ -33,6 +34,8 @@ export default function LigneGroupage({
     produit,
     prixPart,
     acheteursConfirmes,
+    objectifParticipants,
+    progression,
     groupeur,
     heuresRestantes,
     photo,
@@ -40,7 +43,7 @@ export default function LigneGroupage({
   } = groupage;
 
   return (
-    <li className="border-b border-bordure last:border-b-0">
+    <li className="border-b border-filet last:border-b-0">
       <button
         type="button"
         onClick={() => onOuvrir(groupage)}
@@ -67,12 +70,16 @@ export default function LigneGroupage({
             <span className="truncate font-medium text-texte">{groupeur}</span>
             <IconeVerifie taille={13} className="shrink-0 text-confiance" />
           </p>
-          <p className="text-sm text-texte-secondaire">
-            <strong className="font-semibold text-texte">
-              {acheteursConfirmes}
-            </strong>{" "}
-            acheteurs confirmés
-          </p>
+          {/* Version `compacte` : la ligne de liste est dense, et une barre
+              de 8 px y prendrait la place d'un texte. */}
+          <div className="mt-1.5">
+            <JaugeParticipants
+              acheteursConfirmes={acheteursConfirmes}
+              objectif={objectifParticipants}
+              progression={progression}
+              taille="compacte"
+            />
+          </div>
         </div>
       </button>
     </li>

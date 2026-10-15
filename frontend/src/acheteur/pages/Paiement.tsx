@@ -145,7 +145,7 @@ export default function Paiement({
 
         {/* 3 — Le montant au centre */}
         <div className="text-center">
-          <p className="text-[32px] leading-none font-bold text-texte">
+          <p className="text-code leading-none font-bold text-texte">
             {formaterFrancs(commande.total)}
           </p>
           <p className="mt-2 text-texte-secondaire">

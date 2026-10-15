@@ -5,8 +5,12 @@ import {
   useEspaceGroupeur,
 } from "../api/EspaceGroupeurContexte";
 import { useRequete } from "../api/useRequete";
+import { formaterFrancs } from "../domaine/format";
 import { LIBELLE_QUARTIER } from "../domaine/groupage";
+import { annoncerLArrivee } from "../api/notifications";
+import { lienGroupage, partager } from "../domaine/partage";
 import { peutLancerUnGroupage } from "../domaine/recrutement";
+import Fugitif, { useFugitif } from "../ui/Fugitif";
 import type { Campagne, DemandeAgregee } from "../domaine/groupeur";
 import {
   BarreNavGroupeur,
@@ -128,6 +132,9 @@ function RouteurGroupeur({
   const [ecran, setEcran] = useState<EcranGroupeur>({ nom: "tableau-de-bord" });
   const [onglet, setOnglet] = useState<OngletGroupeur>("tableau-de-bord");
 
+  /** De quoi dire « Lien copie » quand le partage passe par le presse-papier. */
+  const { message, annoncer } = useFugitif();
+
   /**
    * L'etat du dossier, **relu a chaque ouverture**.
    *
@@ -153,9 +160,10 @@ function RouteurGroupeur({
    * Tout le reste du cote groupeur s'ouvre normalement, et c'est un equilibre
    * delibere : faire attendre quelqu'un devant une porte close pendant deux
    * jours ouvres lui fait oublier le produit, alors que le laisser creer un
-   * groupage avant examen viderait de son sens la phrase « groupeurs
-   * selectionnes par Group Achat » affichee a l'acheteur sur presque chaque
-   * ecran. Il decouvre l'outil ; il n'engage pas encore l'argent des autres.
+   * groupage avant examen nous ferait garantir « vous etes livre, ou
+   * rembourse » — affiche a l'acheteur sur presque chaque ecran — sur le
+   * compte de quelqu'un dont nous ne savons encore rien. Il decouvre l'outil ;
+   * il n'engage pas encore l'argent des autres.
    *
    * **Et ce n'est qu'un confort d'affichage.** Le verrou reel est dans
    * `Campagne.save()` cote serveur : une interface ne protege rien, il suffit
@@ -335,6 +343,55 @@ function RouteurGroupeur({
         <GererCampagne
           campagne={ecran.campagne}
           onRetour={retourTableau}
+          /*
+           * ⚠️ **Le groupeur partage la fiche acheteur, pas un ecran a lui.**
+           * C'est le meme lien que celui du bouton « Partager » de la fiche :
+           * recruter des participants, c'est envoyer quelqu'un sur la page ou
+           * il peut commander. Un lien vers l'ecran 14 l'enverrait sur sa
+           * propre gestion de campagne.
+           */
+          onPartager={async () => {
+            const resultat = await partager({
+              titre: ecran.campagne.produit,
+              texte: `${ecran.campagne.produit} — ${formaterFrancs(ecran.campagne.prixPart)} la part sur Group Achat.`,
+              lien: lienGroupage(ecran.campagne.id),
+            });
+            if (resultat === "copie") {
+              annoncer("Lien copié");
+            } else if (resultat === "echec") {
+              annoncer("Impossible de copier le lien");
+            }
+          }}
+          arriveeAnnoncee={ecran.campagne.arriveeAnnonceeLe !== undefined}
+          /*
+           * ⚠️ **Le compte est la seule chose qu'on lui renvoie.**
+           *
+           * « 32 personnes prevenues » lui dit que son geste a porte, sans
+           * rien lui apprendre sur qui elles sont — ni nom, ni numero, ni
+           * quartier. C'est ce qui rend cette fonctionnalite compatible avec
+           * l'anonymat : il annonce un fait sur sa campagne, nous le
+           * distribuons.
+           *
+           * Et on **relit ses campagnes** ensuite, pour que le bouton
+           * s'eteigne : sans cela il resterait actif et un second appui
+           * repondrait « deja annonce » sans rien faire.
+           */
+          onAnnoncerLArrivee={async () => {
+            try {
+              const resultat = await annoncerLArrivee(
+                ecran.campagne.id,
+                telephone,
+              );
+              annoncer(
+                resultat.deja_annonce
+                  ? "Arrivée déjà annoncée"
+                  : `${resultat.prevenus} personne${resultat.prevenus > 1 ? "s" : ""} prévenue${resultat.prevenus > 1 ? "s" : ""}`,
+              );
+              recharger();
+            } catch {
+              annoncer("L'annonce n'a pas pu être envoyée");
+            }
+          }}
           onCloturer={() =>
             setEcran({ nom: "decision", campagne: ecran.campagne })
           }
@@ -387,6 +444,8 @@ function RouteurGroupeur({
           }
         />
       ) : null}
+
+          <Fugitif message={message} />
 
           {navigation ? (
             <BarreNavGroupeur actif={onglet} onChanger={changerDOnglet} />

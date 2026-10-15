@@ -1,5 +1,6 @@
-import { IconeCloche, IconeDemander, IconeRecherche } from "../../ui/Icones";
+import { IconeDemander, IconeRecherche } from "../../ui/Icones";
 import Logo from "../../ui/Logo";
+import BoutonCloche from "./BoutonCloche";
 
 /**
  * L'en-tete des ecrans d'accueil, d'apres la maquette fournie : le logo a
@@ -21,6 +22,7 @@ export default function EnTeteApplication({
   onDemander,
   surMedia = false,
   notifications = 0,
+  onNotifications,
 }: {
   recherche?: string;
   onRecherche?: (valeur: string) => void;
@@ -30,35 +32,49 @@ export default function EnTeteApplication({
   onDemander?: () => void;
   /** Sur le fil, l'en-tete est pose sur le media : fond blanc a 92 %. */
   surMedia?: boolean;
+  /**
+   * Le nombre de notifications non lues.
+   *
+   * ⚠️ **Il vient du serveur.** C'etait la constante `1` ecrite dans le
+   * routeur : la pastille etait donc allumee en permanence, pour une
+   * notification qui n'existait pas. Une pastille qui ment est pire qu'une
+   * cloche absente, parce qu'on finit par ne plus la regarder.
+   */
   notifications?: number;
+  /** Ouvre le panneau de notifications. */
+  onNotifications?: () => void;
 }) {
   return (
     <header
       className={`${
         surMedia ? "absolute inset-x-0 top-0 z-10" : "sticky top-0 z-10"
-      } bg-white/92 backdrop-blur-sm`}
+      } bg-white`}
     >
+      {/*
+       * ⚠️ **Fond blanc plein, et non plus `white/85` + flou.**
+       *
+       * Sur le fil, cet en-tete est pose **sur une photo plein cadre**. A
+       * 85 %, la photo transparaissait au travers : le bandeau prenait la
+       * teinte de l'image — gris sur une basket sombre, jaunatre sur un sac de
+       * riz — et le logo changeait de fond a chaque glissement. Un en-tete qui
+       * change de couleur avec le produit n'est plus un repere.
+       *
+       * Le flou coutait en plus : `backdrop-blur-xl` sur une surface qui
+       * couvre toute la largeur fait travailler le compositeur a chaque image
+       * du defilement, sur des telephones d'entree de gamme (§5).
+       */}
       <div className="flex h-14 items-center justify-between px-4">
-        {/* Fond blanc a 92 % dans les deux cas, donc la version couleur. */}
-        <Logo variante="couleur" disposition="cote" hauteur={26} />
+        <Logo variante="couleur" disposition="cote" hauteur={28} />
 
-        <button
-          type="button"
-          aria-label={
-            notifications > 0
-              ? `Notifications, ${notifications} non lue${notifications > 1 ? "s" : ""}`
-              : "Notifications"
-          }
-          className="relative flex size-12 items-center justify-center rounded-full text-texte"
-        >
-          <IconeCloche taille={22} />
-          {notifications > 0 ? (
-            <span
-              aria-hidden="true"
-              className="absolute top-2.5 right-2.5 size-2.5 rounded-full bg-marque"
-            />
-          ) : null}
-        </button>
+        {/* Le meme bouton que sur bureau : le compteur et son contraste
+            n'existent qu'a un seul endroit, donc ils ne peuvent pas diverger.
+            `surMedia` rend le fond opaque quand l'en-tete est pose sur le fil. */}
+        <BoutonCloche
+          notifications={notifications}
+          onClick={onNotifications}
+          surMedia={surMedia}
+          taille="compacte"
+        />
       </div>
 
       <div className="flex items-center gap-2 px-4 pb-3">

@@ -51,7 +51,12 @@ export default function BarreNav({
   return (
     <nav
       aria-label="Navigation principale"
-      className="fixed inset-x-0 bottom-0 z-20 mx-auto h-18 max-w-[430px] border-t border-bordure bg-white"
+      /* ⚠️ **Fond blanc plein.** A `white/85`, la photo du fil remontait au
+         travers et la barre virait au gris : les quatre libelles se
+         posaient alors sur une couleur qui changeait a chaque groupage.
+         Une barre de navigation est un repere fixe — elle ne doit rien
+         emprunter a ce qu'il y a derriere elle. */
+      className="fixed inset-x-0 bottom-0 z-20 mx-auto h-18 max-w-[430px] border-t border-filet bg-white"
     >
       <ul className="flex h-full">
         {ONGLETS.map(({ cle, libelle, Icone }) => {

@@ -1,12 +1,28 @@
 import { useEffect, useState } from "react";
+import FeuilleInscription from "./composants/FeuilleInscription";
+import InviteCompte, {
+  type OperationCompte,
+} from "./composants/InviteCompte";
 import FeuilleConnexion, {
   type Identite,
 } from "./composants/FeuilleConnexion";
 import type { Commande } from "../domaine/commande";
 import { FILTRES_PAR_DEFAUT, type Filtres } from "../domaine/filtres";
 import { formaterFrancs } from "../domaine/format";
+import {
+  groupageDepuisAdresse,
+  inscrireLeGroupageDansLAdresse,
+  lienGroupage,
+  partager,
+} from "../domaine/partage";
 import type { Groupage } from "../domaine/groupage";
-import { payer } from "../api/campagnes";
+import type { NotificationApi } from "../api/notifications";
+import {
+  adapterCommande,
+  listerMesCommandes,
+  lireUnGroupage,
+  payer,
+} from "../api/campagnes";
 import { ErreurApi, poserLeJetonAcheteur } from "../api/client";
 import {
   lireLeJeton,
@@ -19,9 +35,20 @@ import {
   FournisseurCatalogue,
   useCatalogue,
 } from "../api/CatalogueContexte";
+import {
+  FournisseurNotifications,
+  useNotifications,
+} from "../api/NotificationsContexte";
 import useEstBureau from "../hooks/useEstBureau";
+import Fugitif, { useFugitif } from "../ui/Fugitif";
 import BarreNav, { type OngletAcheteur } from "./mise-en-page/BarreNav";
+import PanneauNotifications from "./composants/PanneauNotifications";
+import PanneauQuestions from "./composants/PanneauQuestions";
 import EnTeteBureau from "./mise-en-page/EnTeteBureau";
+import MenuPrincipal, {
+  type DestinationMenu,
+} from "./mise-en-page/MenuPrincipal";
+import { FournisseurNavigation } from "./mise-en-page/NavigationContexte";
 import Commander, { type BrouillonPaiement } from "./pages/Commander";
 import Confirmation from "./pages/Confirmation";
 import DemanderProduit from "./pages/DemanderProduit";
@@ -128,15 +155,64 @@ const ECRANS_AVEC_BARRE_NAV: Ecran["nom"][] = [
  * `api/CatalogueContexte.tsx` pour le raisonnement, qui tient au forfait de
  * donnees limite du §5.
  */
-export default function ApplicationAcheteur() {
+export default function ApplicationAcheteur({
+  onDevenirGroupeur,
+}: {
+  /**
+   * Vers le depot de dossier du groupeur (ecran 13).
+   *
+   * ⚠️ Il **change de produit**, pas d'ecran : le cote groupeur a son propre
+   * chrome et son propre routeur, et c'est `App` qui bascule entre les deux.
+   * Il traverse donc la coquille sans qu'elle s'en serve.
+   */
+  onDevenirGroupeur?: () => void;
+}) {
   return (
     <FournisseurCatalogue>
-      <RouteurAcheteur />
+      <CoquilleAcheteur onDevenirGroupeur={onDevenirGroupeur} />
     </FournisseurCatalogue>
   );
 }
 
-function RouteurAcheteur() {
+/**
+ * Pose le fournisseur de notifications, qui a besoin de savoir si on est
+ * connecte.
+ *
+ * ⚠️ **Un etage de plus, et pour une raison precise.** L'etat de connexion
+ * vit dans `RouteurAcheteur` ; le fournisseur doit l'envelopper tout en le
+ * connaissant. On lit donc le jeton **une fois de plus ici**, au lieu de le
+ * faire descendre : les notifications sont nominatives, et rien ne doit etre
+ * demande au serveur sans session.
+ *
+ * Lire le jeton deux fois ne coute rien — c'est une lecture de stockage
+ * local — et le mettre en commun aurait demande un contexte supplementaire
+ * pour la session, ce qui est beaucoup d'echafaudage pour un booleen.
+ */
+function CoquilleAcheteur({
+  onDevenirGroupeur,
+}: {
+  onDevenirGroupeur?: () => void;
+}) {
+  const [connecte, setConnecte] = useState(() => lireLeJeton() !== undefined);
+
+  return (
+    <FournisseurNotifications connecte={connecte}>
+      <RouteurAcheteur
+        onConnexionChangee={setConnecte}
+        onDevenirGroupeur={onDevenirGroupeur}
+      />
+    </FournisseurNotifications>
+  );
+}
+
+function RouteurAcheteur({
+  /** Previent la coquille qu'il faut relire les notifications. */
+  onConnexionChangee,
+  onDevenirGroupeur,
+}: {
+  onConnexionChangee: (connecte: boolean) => void;
+  onDevenirGroupeur?: () => void;
+}) {
   const estBureau = useEstBureau();
   const { groupages } = useCatalogue();
 
@@ -204,9 +280,81 @@ function RouteurAcheteur() {
    * diffferent — l'une reprend le paiement, l'autre reste ou elle est.
    */
   const [connexionDemandee, setConnexionDemandee] = useState(false);
+
+  /**
+   * **La porte du compte** : le message, puis l'inscription ou la connexion.
+   *
+   * Elle s'ouvre quand l'acheteur engage quelque chose sans compte —
+   * rejoindre un groupage, poser une question. Les trois étapes vivent dans
+   * un seul état parce qu'elles sont **un seul parcours** : fermer à
+   * n'importe laquelle doit ramener à la page intacte, et la reprise à la fin
+   * doit être la même quel que soit le chemin pris.
+   *
+   * ```
+   * invite ──▶ inscription ──▶ reprise
+   *    └────▶ connexion ───▶ reprise
+   * ```
+   *
+   * `groupage` ne sert qu'à l'opération « rejoindre » : c'est ce qu'on ouvre
+   * après. Pour une question, il n'y a rien à rouvrir — le panneau est resté
+   * monté derrière la feuille, et il redevient utilisable dès que `connecte`
+   * passe à vrai.
+   *
+   * ⚠️ **Distincte de `enAttenteDeConnexion`**, et il faut les deux.
+   *
+   * | | `porte` | `enAttenteDeConnexion` |
+   * |---|---|---|
+   * | Quand | À l'**ouverture** de l'écran 5, ou à une question | Au clic sur « Payer » |
+   * | Ce qu'elle porte | Le groupage seul | Un brouillon complet |
+   * | Adresse à transmettre | **aucune** | Celle de l'écran 5 |
+   * | On reprend sur | L'écran 5, ou rien | L'écran 6 |
+   *
+   * Les fusionner reviendrait à fabriquer un faux brouillon — quantité 1,
+   * adresse vide — juste pour faire tenir le premier cas dans la forme du
+   * second, et cette adresse vide partirait au serveur comme adresse par
+   * défaut du compte.
+   */
+  const [porte, setPorte] = useState<{
+    operation: OperationCompte;
+    groupage?: Groupage;
+    etape: "invite" | "inscription" | "connexion";
+  }>();
+
+  /**
+   * Le groupage dont le panneau de questions est ouvert.
+   *
+   * ⚠️ **Pose dans la coquille, pas dans la fiche.** Le panneau se superpose
+   * a la page et doit survivre au defilement ; surtout, c'est ici que vivent
+   * le numero du compte et la feuille de connexion, dont il a besoin pour
+   * demander la connexion au moment de l'envoi (§1.5).
+   */
+  const [questionsOuvertes, setQuestionsOuvertes] = useState<
+    Groupage | undefined
+  >();
   const [commandesPassees, setCommandesPassees] = useState(0);
 
+  /** De quoi dire « Lien copie » : sans ce retour, partager est invisible. */
+  const { message, annoncer } = useFugitif();
+
+  const cloche = useNotifications();
+
+  /** Le menu principal, seule navigation du cote bureau. */
+  const [menuOuvert, setMenuOuvert] = useState(false);
+
   const connecte = identite !== undefined;
+
+  /**
+   * La coquille relit les notifications quand la session change.
+   *
+   * ⚠️ **Un effet sur `connecte`, et non un appel a chaque endroit ou la
+   * session bouge.** Elle bouge a cinq endroits — connexion, reprise de
+   * paiement, deconnexion, relecture du jeton au demarrage — et en oublier un
+   * laisserait la cloche de la personne precedente allumee pour la suivante.
+   * Un seul effet sur l'etat lui-meme ne peut pas etre incomplet.
+   */
+  useEffect(() => {
+    onConnexionChangee(connecte);
+  }, [connecte, onConnexionChangee]);
 
   /**
    * Relit le profil complet apres une connexion.
@@ -226,14 +374,96 @@ function RouteurAcheteur() {
       });
   };
 
+  /**
+   * Le groupage demande par l'adresse, au tout premier affichage.
+   *
+   * ⚠️ **Il passe par l'API, pas par le catalogue deja charge.** Un groupage
+   * cloture quitte le catalogue mais garde sa fiche accessible par son lien
+   * (regle produit) : le chercher dans la liste aurait marche pour l'ouvert et
+   * echoue precisement dans le cas ou le lien sert — celui qu'on a recu hier.
+   *
+   * Un lien invalide ou un groupage supprime **ne bloque rien** : on reste sur
+   * l'ecran d'accueil. Afficher une erreur pour un parametre d'adresse que
+   * l'utilisateur n'a probablement pas tape lui-meme serait l'accuser d'une
+   * faute qui n'est pas la sienne.
+   */
+  useEffect(() => {
+    const demande = groupageDepuisAdresse();
+    if (demande === undefined) {
+      return;
+    }
+    const abandon = new AbortController();
+    lireUnGroupage(demande, abandon.signal)
+      .then((groupage) => setEcran({ nom: "groupage", groupage }))
+      .catch(() => inscrireLeGroupageDansLAdresse(undefined));
+    return () => abandon.abort();
+  }, []);
+
   /** Sur ordinateur, le fil n'existe pas : « accueil » montre le catalogue. */
   const vue: Ecran =
     estBureau && ecran.nom === "fil" ? { nom: "catalogue" } : ecran;
 
-  const ouvrirGroupage = (groupage: Groupage) =>
+  /**
+   * Ouvre une fiche **et l'inscrit dans l'adresse**.
+   *
+   * ⚠️ Les deux vont ensemble, sinon le partage mentirait : le bouton
+   * « Partager » fabrique son lien a partir de l'identifiant du groupage
+   * affiche, et quelqu'un qui copie la barre d'adresse doit obtenir le meme
+   * lien que quelqu'un qui appuie sur le bouton. Recharger la page revient
+   * alors sur la fiche, au lieu de retomber sur le catalogue.
+   */
+  const ouvrirGroupage = (groupage: Groupage) => {
+    inscrireLeGroupageDansLAdresse(groupage.id);
     setEcran({ nom: "groupage", groupage });
+  };
+
+  /**
+   * Partage le groupage affiche.
+   *
+   * Le texte dit **ce qu'on partage**, pas « regarde ca » : le destinataire
+   * recoit souvent le lien seul, sans contexte. Le prix y figure parce que
+   * c'est l'information qui decide d'ouvrir le lien ou non.
+   *
+   * ⚠️ Pas de prix barre, pas de « au lieu de » — la regle vaut aussi dans un
+   * message WhatsApp, qui est pourtant l'endroit ou la tentation est la plus
+   * forte.
+   */
+  const partagerLeGroupage = async (groupage: Groupage) => {
+    const resultat = await partager({
+      titre: groupage.produit,
+      texte: `${groupage.produit} — ${formaterFrancs(groupage.prixPart)} la part sur Group Achat.`,
+      lien: lienGroupage(groupage.id),
+    });
+    if (resultat === "copie") {
+      annoncer("Lien copié");
+    } else if (resultat === "echec") {
+      annoncer("Impossible de copier le lien");
+    }
+  };
+
+  /**
+   * Ce qu'on propose sous une fiche produit.
+   *
+   * Calcule ici plutot que dans l'ecran : la fiche ne connait pas le
+   * catalogue, et lui faire lire le contexte la rendrait impossible a monter
+   * seule.
+   */
+  const similaires =
+    vue.nom === "groupage"
+      ? (() => {
+          const autres = groupages.filter((g) => g.id !== vue.groupage.id);
+          const memeCategorie = autres.filter(
+            (g) => g.categorie === vue.groupage.categorie,
+          );
+          const reste = autres.filter(
+            (g) => g.categorie !== vue.groupage.categorie,
+          );
+          return [...memeCategorie, ...reste].slice(0, 4);
+        })()
+      : [];
 
   const ouvrirCatalogue = () => {
+    inscrireLeGroupageDansLAdresse(undefined);
     setOnglet("groupage");
     setEcran({ nom: "catalogue" });
   };
@@ -244,8 +474,143 @@ function RouteurAcheteur() {
   };
 
   /**
-   * Declenche par « Payer ». C'est le **seul** point ou un compte est exige
-   * (§1.5) : si l'utilisateur en a un, on va droit a l'ecran 6.
+   * Ouvre ce dont parle une notification.
+   *
+   * ⚠️ **Une cloche dont les lignes ne menent nulle part est une cloche qu'on
+   * lit une fois.** On y apprend que le groupage est cloture, puis on doit
+   * retrouver sa commande a la main — et on cesse de l'ouvrir.
+   *
+   * L'ordre n'est pas arbitraire :
+   *
+   * 1. **la commande d'abord**, quand la notification en designe une. C'est la
+   *    que vivent le suivi et le code de livraison, donc ce qu'on cherche
+   *    apres « votre commande est arrivee » ou « vous etes rembourse » ;
+   * 2. **la fiche du produit** sinon, qui porte les questions publiques — donc
+   *    la reponse du groupeur.
+   *
+   * ⚠️ **Les deux passent par l'API, pas par ce qui est deja charge.** Une
+   * notification parle presque toujours d'un groupage **cloture** : c'est la
+   * cloture qui la declenche. Or le catalogue ne sert que de l'ouvert. Le
+   * chercher en memoire aurait donc echoue dans le cas le plus courant, et
+   * reussi seulement sur les notifications dont on a le moins besoin.
+   */
+  const ouvrirDepuisUneNotification = async (
+    notification: NotificationApi,
+  ) => {
+    if (notification.campagne === null) {
+      ouvrirCatalogue();
+      return;
+    }
+
+    const identifiant = String(notification.campagne);
+    let groupage = groupages.find((candidat) => candidat.id === identifiant);
+    if (groupage === undefined) {
+      try {
+        groupage = await lireUnGroupage(identifiant);
+      } catch {
+        /* Groupage supprime, ou reseau coupe. On ne bloque pas sur une
+           notification : on revient au catalogue plutot que d'afficher une
+           erreur pour un clic qui ne demandait rien de precis. */
+        ouvrirCatalogue();
+        return;
+      }
+    }
+
+    if (notification.commande !== null) {
+      try {
+        const brutes = await listerMesCommandes();
+        const brute = brutes.find(
+          (candidate) => String(candidate.id) === String(notification.commande),
+        );
+        const commande = brute
+          ? adapterCommande(brute, [groupage])
+          : undefined;
+        if (commande) {
+          setOnglet("commandes");
+          setEcran({ nom: "commande", commande });
+          return;
+        }
+      } catch {
+        /* On retombe sur la fiche du produit, qui est toujours parlante. */
+      }
+    }
+
+    ouvrirGroupage(groupage);
+  };
+
+  /**
+   * Declenche par « Commander », sur la fiche produit.
+   *
+   * ⚠️ **C'est ici que le compte est desormais exige, et c'est un
+   * deplacement assume par rapport au §1.5**, qui ecrit « le compte est
+   * demande au moment de payer ». Il l'est maintenant un ecran plus tot.
+   *
+   * Ce qui ne change pas, et qui est l'essentiel de ce paragraphe : **on
+   * navigue toujours librement.** Le fil, le catalogue, les fiches produit,
+   * les categories, les questions publiques se lisent sans compte. Il n'y a
+   * pas de mur d'authentification a l'entree ; il y a une porte a l'entree du
+   * tunnel d'achat.
+   *
+   * Ce que ca coute, franchement : quelqu'un venu d'un lien WhatsApp qui
+   * voudrait seulement *voir* le formulaire de commande — les variantes
+   * disponibles, les frais de livraison vers son quartier — doit maintenant
+   * se connecter d'abord. C'est reel, et c'est le prix de la decision.
+   *
+   * Ce que ca rend en echange : l'ecran 5 affiche des frais de livraison et
+   * pre-remplit une adresse, deux choses qui appartiennent a un compte. Les
+   * demander a un inconnu, puis lui demander un code SMS a l'ecran suivant,
+   * faisait saisir son adresse avant de savoir qu'un compte serait necessaire.
+   */
+  const demanderCommande = (groupage: Groupage) => {
+    if (connecte) {
+      setEcran({ nom: "commander", groupage });
+      return;
+    }
+    setPorte({ operation: "rejoindre", groupage, etape: "invite" });
+  };
+
+  /**
+   * La même porte, pour une question publique.
+   *
+   * `Questions` appelle déjà `onSeConnecter` à l'envoi quand il n'y a pas de
+   * numéro ; ce qui change est **ce qui s'affiche alors** : un message qui dit
+   * pourquoi un compte est nécessaire, plutôt qu'un formulaire de connexion
+   * surgi sans explication.
+   */
+  const demanderUnCompte = (operation: OperationCompte) => {
+    setPorte({ operation, etape: "invite" });
+  };
+
+  /**
+   * Ce qui se passe quand la porte est franchie, par l'un ou l'autre chemin.
+   *
+   * ⚠️ **La reprise est lue avant d'effacer l'état.** `setPorte(undefined)`
+   * est asynchrone, mais `porte` est la valeur capturée par ce rendu : la lire
+   * après l'appel donnerait encore la bonne valeur ici, et serait un piège à
+   * la première refonte. On la met de côté d'abord.
+   */
+  const franchirLaPorte = (nouvelleIdentite: Identite) => {
+    const ouverte = porte;
+    setIdentite(nouvelleIdentite);
+    setPorte(undefined);
+    rafraichirLeProfil();
+
+    if (ouverte?.operation === "rejoindre" && ouverte.groupage) {
+      /* L'action reprend seule : la feuille redescend sur l'ecran de
+         commande, qui pre-remplira l'adresse du compte si elle existe. */
+      setEcran({ nom: "commander", groupage: ouverte.groupage });
+    }
+  };
+
+  /**
+   * Declenche par « Payer ».
+   *
+   * ⚠️ **Ce n'est plus le seul point ou un compte est exige** — la porte est
+   * passee a `demanderCommande`, un ecran plus tot. Ce controle **reste
+   * necessaire** malgre tout, et pas par prudence decorative : une session
+   * expire, et elle peut expirer entre l'ecran 5 et le clic sur « Payer ».
+   * Sans lui, le paiement partirait sans jeton et echouerait en 401, devant
+   * quelqu'un qui n'aurait aucun moyen de comprendre pourquoi.
    */
   const demanderPaiement = (brouillon: BrouillonPaiement) => {
     if (connecte) {
@@ -256,6 +621,28 @@ function RouteurAcheteur() {
   };
 
   return (
+    /*
+     * ⚠️ **Les destinations du chrome sont fournies ici, une seule fois.**
+     *
+     * Le pied de page est monte par neuf ecrans ; sans ce fournisseur, ces
+     * cinq fonctions devraient traverser les neuf, dont aucun ne s'en sert.
+     * Voir `mise-en-page/NavigationContexte`.
+     */
+    <FournisseurNavigation
+      destinations={{
+        onCatalogue: ouvrirCatalogue,
+        onDemanderProduit: ouvrirDemande,
+        onMesCommandes: () => {
+          setOnglet("commandes");
+          setEcran({ nom: "mes-commandes" });
+        },
+        onMesDemandes: () => {
+          setOnglet("profil");
+          setEcran({ nom: "mes-demandes" });
+        },
+        onDevenirGroupeur,
+      }}
+    >
     <div
       className={
         estBureau
@@ -273,7 +660,10 @@ function RouteurAcheteur() {
             setEcran({ nom: "catalogue" });
           }}
           onDemander={ouvrirDemande}
-          notifications={1}
+          notifications={cloche.nonLues}
+          onNotifications={cloche.ouvrir}
+          onMenu={() => setMenuOuvert(true)}
+          menuOuvert={menuOuvert}
           onAccueil={() => {
             setFiltres(FILTRES_PAR_DEFAUT);
             setEcran({ nom: "catalogue" });
@@ -282,7 +672,13 @@ function RouteurAcheteur() {
       ) : null}
 
       {vue.nom === "fil" ? (
-        <Fil onOuvrirGroupage={ouvrirGroupage} onRechercher={ouvrirCatalogue} />
+        <Fil
+          onOuvrirGroupage={ouvrirGroupage}
+          onRechercher={ouvrirCatalogue}
+          onQuestions={(groupage) => setEcran({ nom: "questions", groupage })}
+          onPartager={partagerLeGroupage}
+          onDemanderProduit={ouvrirDemande}
+        />
       ) : null}
 
       {vue.nom === "catalogue" ? (
@@ -304,12 +700,37 @@ function RouteurAcheteur() {
               nom: !estBureau && onglet === "accueil" ? "fil" : "catalogue",
             })
           }
-          onCommander={() =>
-            setEcran({ nom: "commander", groupage: vue.groupage })
-          }
+          onCommander={() => demanderCommande(vue.groupage)}
+          /*
+           * ⚠️ **Le panneau sur ordinateur, l'ecran sur telephone.**
+           *
+           * Poser une question fait quitter la fiche, et c'est le mauvais
+           * moment : on la pose parce qu'on hesite a commander. Le panneau
+           * laisse le produit derriere lui.
+           *
+           * Sur 390 px, en revanche, un panneau dans un coin n'est pas un
+           * coin : il couvrirait la fiche sans rien laisser voir, pour un
+           * resultat moins lisible que l'ecran plein qui existe deja.
+           */
           onQuestions={() =>
-            setEcran({ nom: "questions", groupage: vue.groupage })
+            estBureau
+              ? setQuestionsOuvertes(vue.groupage)
+              : setEcran({ nom: "questions", groupage: vue.groupage })
           }
+          questionsOuvertes={questionsOuvertes !== undefined}
+          onPartager={() => partagerLeGroupage(vue.groupage)}
+          onOuvrirGroupage={ouvrirGroupage}
+          /*
+           * Les groupages proposes sous la fiche.
+           *
+           * ⚠️ **Meme categorie d'abord, et le catalogue ne contient que
+           * de l'ouvert** (ecran 2) : on ne propose donc jamais un groupage
+           * qu'on ne peut plus rejoindre. Si la categorie n'a rien d'autre a
+           * offrir, on complete avec le reste plutot que de n'afficher
+           * qu'une carte seule — une rangee d'un seul element ressemble a un
+           * defaut d'affichage.
+           */
+          similaires={similaires}
         />
       ) : null}
 
@@ -393,6 +814,20 @@ function RouteurAcheteur() {
         <Confirmation
           commande={vue.commande}
           estBureau={estBureau}
+          /*
+           * ⚠️ **« Modifier » renvoie au suivi, pas a l'ecran de commande.**
+           *
+           * Le bouton ne faisait rien, et le rebrancher sur l'ecran 5 aurait
+           * ete pire : cet ecran prepare un **nouveau** paiement. On aurait
+           * donc propose de « modifier » une adresse et fait payer une
+           * seconde part. La commande est deja passee ; c'est depuis son
+           * suivi (ecran 9) qu'on la corrige, tant que le groupage n'est pas
+           * cloture.
+           */
+          onModifierAdresse={() => {
+            setOnglet("commandes");
+            setEcran({ nom: "commande", commande: vue.commande });
+          }}
           onSuivre={() => {
             setOnglet("commandes");
             setEcran({ nom: "commande", commande: vue.commande });
@@ -425,6 +860,40 @@ function RouteurAcheteur() {
           onQuestions={() =>
             setEcran({ nom: "questions", groupage: vue.commande.groupage })
           }
+          /*
+           * ⚠️ **On relit la commande, on ne devine pas son nouvel etat.**
+           *
+           * Ecrire `statut: "litige"` localement aurait suffi a l'affichage et
+           * aurait menti a la premiere divergence : c'est le serveur qui
+           * decide ce qu'un refus produit, et il pourrait demain ouvrir autre
+           * chose qu'un litige. On redemande donc la liste et on reprend la
+           * ligne correspondante.
+           *
+           * Un echec de relecture **ne fait rien** : le refus, lui, est bien
+           * enregistre, et la feuille vient de le confirmer. Afficher une
+           * erreur ici ferait croire le contraire.
+           */
+          onRefuse={() => {
+            listerMesCommandes()
+              .then((brutes) => {
+                const relue = brutes.find(
+                  (brute) => String(brute.id) === vue.commande.id,
+                );
+                /* ⚠️ On passe **le groupage qu'on a deja**, et non le
+                   catalogue : une commande en livraison appartient par
+                   definition a un groupage cloture, donc absent du catalogue
+                   — `adapterCommande` ne le trouverait pas et rendrait
+                   `undefined`. Le groupage, lui, n'a pas change : seul le
+                   statut de la commande vient d'etre modifie. */
+                const adaptee = relue
+                  ? adapterCommande(relue, [vue.commande.groupage])
+                  : undefined;
+                if (adaptee) {
+                  setEcran({ nom: "commande", commande: adaptee });
+                }
+              })
+              .catch(() => {});
+          }}
         />
       ) : null}
 
@@ -436,15 +905,26 @@ function RouteurAcheteur() {
           onRetour={() => setEcran({ nom: "groupage", groupage: vue.groupage })}
           /* Poser une question demande un compte, le lire non (§1.5). La
              feuille de connexion s'ouvre donc au moment de l'envoi. */
-          onSeConnecter={() => setConnexionDemandee(true)}
+          /* ⚠️ **La porte, comme dans le panneau de questions.** L'ecran 10
+             passait encore par la feuille de connexion nue : le message qui
+             explique pourquoi un compte est necessaire n'apparaissait que
+             dans le panneau. Deux chemins vers la meme action, deux
+             experiences differentes. */
+          onSeConnecter={() => demanderUnCompte("question")}
         />
       ) : null}
 
       {vue.nom === "demander" ? (
         <DemanderProduit
           estBureau={estBureau}
+          connecte={connecte}
           onRetour={ouvrirCatalogue}
           onEnvoyee={() => setEcran({ nom: "mes-demandes" })}
+          /* ⚠️ L'ecran 11 **reste monte** derriere la feuille : c'est ce qui
+             preserve la saisie et la photo deja reduite. Le §1.5 ne demande
+             pas seulement de ne pas montrer de mur, il demande que fermer la
+             feuille ne coute rien. */
+          onConnexionRequise={() => setConnexionDemandee(true)}
         />
       ) : null}
 
@@ -468,7 +948,13 @@ function RouteurAcheteur() {
           estBureau={estBureau}
           connecte={connecte}
           profil={profil}
-          onVoirCampagnes={ouvrirCatalogue}
+          /* Droit au formulaire, sans passer par le message : quelqu'un qui
+             appuie sur « Creer mon compte » n'a pas besoin qu'on lui explique
+             pourquoi un compte est utile — il vient de le demander. Le
+             message ne sert qu'a interrompre une operation en cours. */
+          onCreerUnCompte={() =>
+            setPorte({ operation: "compte", etape: "inscription" })
+          }
           onMesDemandes={() => setEcran({ nom: "mes-demandes" })}
           onDemanderProduit={ouvrirDemande}
           onSeConnecter={() => setConnexionDemandee(true)}
@@ -491,6 +977,53 @@ function RouteurAcheteur() {
                ce qui est la reponse honnete a « je viens de me deconnecter ».
                Renvoyer au fil ferait croire a une erreur. */
           }}
+        />
+      ) : null}
+
+      {/* ⚠️ **La porte du compte — une seule à la fois, par construction.**
+          Les trois branches lisent le même `porte.etape`, donc il est
+          impossible d'en afficher deux : c'est ce qui empêche de superposer un
+          message et un formulaire, où fermer celui du dessus découvrirait le
+          second sans qu'on comprenne pourquoi.
+
+          Le rappel de contexte ne porte **que le produit et le prix de la
+          part** : a cet instant l'acheteur n'a choisi ni quantite ni variante,
+          donc il n'y a pas de total a annoncer. Ecrire « 1 part » serait une
+          quantite qu'il n'a pas demandee. */}
+      {porte?.etape === "invite" ? (
+        <InviteCompte
+          operation={porte.operation}
+          onCreerUnCompte={() => setPorte({ ...porte, etape: "inscription" })}
+          onSeConnecter={() => setPorte({ ...porte, etape: "connexion" })}
+          onFermer={() => setPorte(undefined)}
+        />
+      ) : null}
+
+      {porte?.etape === "inscription" ? (
+        <FeuilleInscription
+          motif={
+            porte.groupage
+              ? `Vous rejoignez : ${porte.groupage.produit} — ${formaterFrancs(porte.groupage.prixPart)} la part`
+              : undefined
+          }
+          onFermer={() => setPorte(undefined)}
+          onSeConnecter={() => setPorte({ ...porte, etape: "connexion" })}
+          onInscrit={franchirLaPorte}
+        />
+      ) : null}
+
+      {porte?.etape === "connexion" ? (
+        <FeuilleConnexion
+          rappelContexte={
+            porte.groupage
+              ? `Vous rejoignez : ${porte.groupage.produit} — ${formaterFrancs(porte.groupage.prixPart)} la part`
+              : "Votre question sera publiée sous votre compte."
+          }
+          /* Aucune adresse : il ne l'a pas encore saisie. C'est toute la
+             difference avec la feuille du paiement ci-dessous, qui transmet
+             celle de l'ecran 5 pour en faire l'adresse par defaut du compte. */
+          onFermer={() => setPorte(undefined)}
+          onConnecte={franchirLaPorte}
         />
       ) : null}
 
@@ -519,8 +1052,108 @@ function RouteurAcheteur() {
         />
       ) : null}
 
+      {/* Le panneau de questions, pose sur la page courante. */}
+      {questionsOuvertes ? (
+        <PanneauQuestions
+          groupage={questionsOuvertes}
+          telephone={identite?.telephone}
+          onFermer={() => setQuestionsOuvertes(undefined)}
+          /* ⚠️ **La porte, pas la feuille de connexion nue.** Quelqu'un qui
+             vient d'écrire une question et voit surgir un formulaire de
+             connexion sans un mot d'explication croit avoir perdu son texte.
+             Le message dit pourquoi un compte est nécessaire — la réponse du
+             groupeur lui revient par là — et le panneau reste monté derrière,
+             donc le texte saisi est intact. */
+          onSeConnecter={() => demanderUnCompte("question")}
+        />
+      ) : null}
+
       {/* Ecran 4, sans rien a reprendre : le lien du §1.5. */}
-      {connexionDemandee && !enAttenteDeConnexion ? (
+      {cloche.ouvert ? (
+        <PanneauNotifications
+          notifications={cloche.notifications}
+          chargement={cloche.chargement}
+          erreur={cloche.erreur}
+          onRecharger={cloche.recharger}
+          onFermer={cloche.fermer}
+          /*
+           * ⚠️ **Une notification mene a ce dont elle parle, et a rien
+           * d'autre.** Une cloche dont les lignes ne sont pas cliquables est
+           * une cloche qu'on lit une fois : on apprend que le groupage est
+           * cloture, et on doit ensuite retrouver sa commande a la main.
+           *
+           * L'ordre n'est pas arbitraire. La commande d'abord quand il y en a
+           * une — c'est la que vivent le suivi et le code de livraison, donc
+           * ce qu'on cherche apres « votre commande est arrivee ». La fiche
+           * du produit sinon, qui porte les questions publiques et donc la
+           * reponse du groupeur.
+           */
+          onOuvrir={(notification) => {
+            cloche.fermer();
+            void ouvrirDepuisUneNotification(notification);
+          }}
+        />
+      ) : null}
+
+      {/*
+       * ⚠️ **Monte sans condition sur `estBureau`**, a la difference de
+       * `EnTeteBureau` : il se referme de lui-meme quand la fenetre retrecit,
+       * puisque seul le bouton de l'en-tete de bureau peut l'ouvrir. Le
+       * conditionner ici demonterait le panneau pendant qu'il est ouvert si
+       * l'on redimensionne — et React perdrait alors le verrou de defilement
+       * pose sur le corps de page, qui resterait fige.
+       */}
+      <MenuPrincipal
+        ouvert={menuOuvert}
+        onFermer={() => setMenuOuvert(false)}
+        actif={
+          vue.nom === "catalogue"
+            ? "catalogue"
+            : vue.nom === "mes-commandes"
+              ? "mes-commandes"
+              : vue.nom === "mes-demandes"
+                ? "mes-demandes"
+                : vue.nom === "profil"
+                  ? "profil"
+                  : undefined
+        }
+        connecte={connecte}
+        nom={identite?.nom}
+        telephone={identite?.telephone}
+        onAller={(destination: DestinationMenu) => {
+          switch (destination) {
+            case "accueil":
+              setFiltres(FILTRES_PAR_DEFAUT);
+              return ouvrirCatalogue();
+            case "catalogue":
+              return ouvrirCatalogue();
+            case "mes-commandes":
+              setOnglet("commandes");
+              return setEcran({ nom: "mes-commandes" });
+            case "mes-demandes":
+              setOnglet("profil");
+              return setEcran({ nom: "mes-demandes" });
+            case "profil":
+              setOnglet("profil");
+              return setEcran({ nom: "profil" });
+          }
+        }}
+        onSeConnecter={() => setConnexionDemandee(true)}
+        onSeDeconnecter={() => {
+          void seDeconnecter();
+          poserLeJetonAcheteur("");
+          setIdentite(undefined);
+          setProfil(undefined);
+        }}
+      />
+
+      <Fugitif message={message} />
+
+      {/* ⚠️ Les deux autres feuilles l'emportent : elles ont **quelque chose
+          a reprendre** apres la connexion, celle-ci n'a rien. Deux feuilles
+          superposees laisseraient l'acheteur fermer celle du dessus et
+          decouvrir la seconde, sans comprendre. */}
+      {connexionDemandee && !enAttenteDeConnexion && !porte ? (
         <FeuilleConnexion
           rappelContexte="Connectez-vous pour retrouver vos commandes, vos demandes et votre adresse de livraison."
           onFermer={() => setConnexionDemandee(false)}
@@ -554,5 +1187,6 @@ function RouteurAcheteur() {
         />
       ) : null}
     </div>
+    </FournisseurNavigation>
   );
 }

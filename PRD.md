@@ -15,9 +15,9 @@
 
 **Acheteur**
 - Parcourir les campagnes sans compte
-- Rejoindre une campagne et payer sa part (Payer sa part demande a creer un compte)
+- Rejoindre une campagne et payer sa part — **rejoindre demande un compte**, demandé dès l'ouverture de l'écran de commande
 - Suivre sa livraison, validée par un code
-- Poser une question publique au groupeur, qui reste anonyme
+- Poser une question publique au groupeur, qui reste anonyme — **demande un compte**
 
 **Groupeur**
 - Créer une campagne
@@ -30,7 +30,8 @@
 
 - Je vois les campagnes sans créer de compte
 - Je vois mon total, livraison comprise, avant de payer
-- Mon compte se crée au moment de payer, pas avant
+- Je crée mon compte par un formulaire classique — nom, numéro, courriel facultatif, mot de passe — puis je vérifie mon numéro par un code SMS
+- On me le demande **quand j'engage quelque chose** : rejoindre un groupage, poser une question. Jamais à l'ouverture
 - Je reçois une confirmation avec mon code de livraison
 - Si la campagne n'aboutit pas, je suis remboursé intégralement
 

@@ -99,6 +99,34 @@ class Commande(models.Model):
     )
     passee_le = models.DateTimeField("passée le", auto_now_add=True)
 
+    # ── Le refus du colis à la livraison (écran 9) ──────────────────────────
+    #
+    # ⚠️ **Le refus ouvre un litige, il ne rembourse pas.** La spec de
+    # l'écran 9 est précise sur ce qu'on promet : « Group Achat examine votre
+    # dossier sous 48 h et vous rembourse **si le refus est justifié** ».
+    # Rembourser sur simple déclaration serait ouvrir la porte à refuser un
+    # colis conforme, et le groupeur a déjà retiré son argent à la clôture —
+    # la perte serait pour nous, à chaque fois. D'où ``LITIGE`` et un humain.
+
+    class MotifDeRefus(models.TextChoices):
+        PAS_LE_PRODUIT = "pas-le-produit", "Ce n'est pas le produit commandé"
+        ABIME = "abime", "Produit visiblement abîmé"
+        AUTRE = "autre", "Autre"
+
+    motif_de_refus = models.CharField(
+        "motif du refus",
+        max_length=20,
+        choices=MotifDeRefus.choices,
+        blank=True,
+    )
+    #: La description libre que l'acheteur a écrite. ⚠️ **Elle est utile ici,
+    #: là où un champ libre est interdit dans la file de modération (§15) :**
+    #: celle-ci n'est pas triée par machine, elle est lue une par une par
+    #: quelqu'un qui doit décider s'il rembourse. « Ce n'est pas la bonne
+    #: pointure » est exactement ce qu'il a besoin de savoir.
+    description_du_refus = models.TextField("description du refus", blank=True)
+    refuse_le = models.DateTimeField("refusé le", null=True, blank=True)
+
     class Meta:
         verbose_name = "commande"
         verbose_name_plural = "commandes"
@@ -107,6 +135,44 @@ class Commande(models.Model):
 
     def __str__(self) -> str:
         return f"{self.code_livraison} — {self.campagne.titre}"
+
+    def refuser_le_colis(self, motif: str, description: str = "") -> None:
+        """L'acheteur refuse le colis au moment de la remise (écran 9).
+
+        ⚠️ **Refusable pendant la livraison, et à ce moment seulement.**
+        Avant, il n'y a rien à refuser — le colis n'est pas parti. Après, la
+        commande est marquée livrée, donc le code de livraison a été donné au
+        livreur : contester alors n'est plus un refus de colis mais une
+        réclamation après réception, et les deux ne s'instruisent pas de la
+        même façon. Sans ce verrou, le bouton serait un moyen de rouvrir
+        indéfiniment une commande close.
+
+        ⚠️ **Elle n'appelle pas ``save()`` du modèle entier par hasard.**
+        ``full_clean`` recalculerait les montants et les frais de livraison :
+        si le barème du §4 a changé depuis la commande, une commande
+        parfaitement valable deviendrait impossible à refuser — l'acheteur
+        serait bloqué par une règle qui ne le concerne pas. On n'écrit donc
+        que les quatre champs du refus.
+        """
+        if self.statut != self.Statut.EN_LIVRAISON:
+            raise ValidationError(
+                "Un colis ne se refuse que pendant la livraison."
+            )
+        if motif not in self.MotifDeRefus.values:
+            raise ValidationError({"motif": "Motif de refus inconnu."})
+
+        self.motif_de_refus = motif
+        self.description_du_refus = description
+        self.refuse_le = timezone.now()
+        self.statut = self.Statut.LITIGE
+        self.save(
+            update_fields=[
+                "motif_de_refus",
+                "description_du_refus",
+                "refuse_le",
+                "statut",
+            ]
+        )
 
     def clean(self) -> None:
         """Vérifie que le total n'a pas été fabriqué par le client.
@@ -384,6 +450,19 @@ def cloturer_campagne(campagne) -> Retrait:
         statut=Commande.Statut.CLOTUREE
     )
 
+    # ⚠️ **Les participants sont prévenus ici, et non dans la vue.** La
+    # clôture a deux points d'entrée — le bouton du groupeur et la date qui
+    # tombe — et brancher la notification sur l'un des deux aurait fait une
+    # clôture silencieuse sur l'autre. C'est pourtant l'événement que
+    # l'acheteur attend le plus : à partir de là, le groupeur a été payé et
+    # c'est notre garantie qui porte.
+    #
+    # Import tardif : ``echanges`` connaît ``commandes``, et l'inverse ferait
+    # un cycle au chargement des modèles.
+    from ..echanges.models import prevenir_de_la_cloture
+
+    prevenir_de_la_cloture(campagne)
+
     return Retrait.objects.create(
         campagne=campagne,
         collecte=resultat.collecte,
@@ -513,9 +592,27 @@ def annuler_campagne(campagne) -> None:
     """
     campagne.statut = campagne.Statut.ANNULEE
     campagne.save(update_fields=["statut"])
+
+    # ⚠️ **On lit les commandes à rembourser avant de les mettre à jour.**
+    # Après l'``update``, plus aucune ne répond au filtre ``STATUTS_PAYANTS``
+    # et la notification ne partirait à personne — un remboursement annoncé
+    # nulle part, qui est exactement le cas où l'acheteur appelle.
+    #
+    # ``list()`` force la requête tout de suite, pour la même raison : un
+    # queryset paresseux serait évalué après l'``update``.
+    a_rembourser = list(
+        campagne.commandes.filter(
+            statut__in=Commande.STATUTS_PAYANTS
+        ).select_related("acheteur", "campagne", "campagne__groupeur")
+    )
+
     campagne.commandes.filter(statut__in=Commande.STATUTS_PAYANTS).update(
         statut=Commande.Statut.REMBOURSEE
     )
+
+    from ..echanges.models import prevenir_de_l_annulation
+
+    prevenir_de_l_annulation(a_rembourser)
 
     # Si le groupage avait déjà été clôturé, son retrait est annulé avec lui —
     # mais **seulement s'il n'est pas déjà parti**. De l'argent retiré ne se

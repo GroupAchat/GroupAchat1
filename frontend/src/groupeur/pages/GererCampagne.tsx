@@ -29,12 +29,40 @@ export default function GererCampagne({
   campagne,
   onRetour,
   onCloturer,
+  onPartager,
+  onAnnoncerLArrivee,
+  arriveeAnnoncee,
 }: {
   campagne: Campagne;
   onRetour: () => void;
   onCloturer: () => void;
+  /** Partage la **fiche acheteur** de la campagne : c'est ainsi qu'on recrute. */
+  onPartager: () => void;
+  /**
+   * Previent les participants que le produit est arrive.
+   *
+   * ⚠️ **Il declenche, il ne redige pas.** Aucun champ de texte n'accompagne
+   * ce geste, et c'est la condition qui le rend compatible avec le produit :
+   * un champ libre vers ses acheteurs serait une messagerie privee, et un
+   * texte partant a trente personnes d'un coup echapperait au filtre du §15.
+   * La plateforme ecrit le message ; lui annonce un fait.
+   */
+  onAnnoncerLArrivee: () => void;
+  /** Deja annonce : l'arrivee est un fait unique, on ne la repete pas. */
+  arriveeAnnoncee: boolean;
 }) {
   const temps = decrireTempsRestant(campagne.heuresRestantes);
+
+  /**
+   * On n'annonce l'arrivee qu'apres la cloture.
+   *
+   * « Le produit est arrive » sur un groupage encore ouvert n'a pas de sens —
+   * la commande n'est pas passee — et le dire ferait croire a une livraison
+   * imminente a des gens qui viennent de payer. Le serveur refuse ce cas ;
+   * l'interface ne doit pas proposer un bouton qu'il refusera.
+   */
+  const peutAnnoncer =
+    campagne.statut === "en-cours" || campagne.statut === "a-decider";
 
   /**
    * Les commandes de cette campagne, **telles que le groupeur a le droit de
@@ -116,7 +144,7 @@ export default function GererCampagne({
       <EnTeteGroupeur titre={campagne.produit} onRetour={onRetour} />
 
       {/* Bandeau de synthese. */}
-      <div className="grid grid-cols-3 gap-px border-b border-bordure bg-bordure">
+      <div className="grid grid-cols-3 gap-px border-b border-filet bg-bordure">
         {[
           [String(campagne.commandes), "commandes"],
           [formaterFrancs(campagne.collecte), "collectés"],
@@ -136,7 +164,7 @@ export default function GererCampagne({
 
       <div className="space-y-6 px-4 pt-5">
         <div className="space-y-3">
-          <Bouton role="groupeur" style="secondaire">
+          <Bouton role="groupeur" style="secondaire" onClick={onPartager}>
             Partager la campagne
           </Bouton>
           {campagne.heuresRestantes > 0 ? (
@@ -148,9 +176,33 @@ export default function GererCampagne({
               Décider de la commande
             </Bouton>
           )}
-          <Bouton role="groupeur" style="secondaire">
-            Prévenir les participants
-          </Bouton>
+          {/*
+            ⚠️ **« Prévenir les participants » est devenu « Prévenir que le
+            produit est arrivé », et ce n'est pas qu'une question de mots.**
+
+            L'ancien libellé promettait un canal du groupeur vers ses
+            acheteurs, c'est-à-dire une messagerie privée — ce que le produit
+            refuse, et ce que son anonymat interdit. Le nouveau annonce **un
+            fait précis** : la plateforme rédige le message, le groupeur ne
+            fait que dire que la marchandise est là. Il n'apprend rien sur qui
+            la reçoit ; la réponse ne lui renvoie qu'un compte.
+
+            Il n'apparaît **qu'après la clôture**, et **une seule fois** :
+            l'arrivée est un fait unique, et une cloche qui répète le même
+            message perd le droit d'être regardée.
+          */}
+          {peutAnnoncer ? (
+            <Bouton
+              role="groupeur"
+              style="secondaire"
+              onClick={onAnnoncerLArrivee}
+              desactive={arriveeAnnoncee}
+            >
+              {arriveeAnnoncee
+                ? "Arrivée annoncée"
+                : "Prévenir que le produit est arrivé"}
+            </Bouton>
+          ) : null}
         </div>
 
         <section>
@@ -166,7 +218,7 @@ export default function GererCampagne({
             {commandes.map((commande) => (
               <li
                 key={commande.codeLivraison}
-                className="flex items-center justify-between gap-3 border-b border-bordure py-3 last:border-b-0"
+                className="flex items-center justify-between gap-3 border-b border-filet py-3 last:border-b-0"
               >
                 <div className="min-w-0">
                   {/* Le code identifie la commande, et c'est tout. */}
@@ -200,7 +252,7 @@ export default function GererCampagne({
           </h2>
           <table className="mt-3 w-full text-sm">
             <thead>
-              <tr className="border-b border-bordure text-left text-texte-secondaire">
+              <tr className="border-b border-filet text-left text-texte-secondaire">
                 <th className="py-2 font-medium">Quartier</th>
                 <th className="py-2 text-right font-medium">Parts</th>
                 <th className="py-2 text-right font-medium">Part</th>
@@ -208,7 +260,7 @@ export default function GererCampagne({
             </thead>
             <tbody>
               {repartition.map(([quartier, parts]) => (
-                <tr key={quartier} className="border-b border-bordure last:border-b-0">
+                <tr key={quartier} className="border-b border-filet last:border-b-0">
                   <td className="py-2 text-texte">
                     {LIBELLE_QUARTIER[quartier]}
                   </td>

@@ -219,7 +219,7 @@ function Contenu({
             {donnees.activite.map((ligne, indice) => (
               <li
                 key={`${ligne.date}-${indice}`}
-                className="flex items-center gap-4 border-b border-bordure px-5 py-3 text-sm last:border-b-0"
+                className="flex items-center gap-4 border-b border-filet px-5 py-3 text-sm last:border-b-0"
               >
                 <span className="w-24 shrink-0 text-texte-secondaire">
                   {ligne.date}
@@ -302,7 +302,7 @@ function TuileFile({
       }`}
     >
       <span
-        className={`block text-[22px] font-bold ${
+        className={`block text-prix font-bold ${
           file.nombre === 0 ? "text-texte-secondaire" : "text-texte"
         }`}
       >
@@ -343,7 +343,7 @@ function TuileIndicateur({ indicateur }: { indicateur: IndicateurAdmin }) {
   return (
     <div className="rounded-xl border border-bordure bg-white p-5">
       <p className="text-sm text-texte-secondaire">{indicateur.libelle}</p>
-      <p className={`mt-1 text-[22px] font-bold ${couleur}`}>
+      <p className={`mt-1 text-prix font-bold ${couleur}`}>
         {indicateur.unite === "F"
           ? formaterFrancs(indicateur.valeur)
           : `${indicateur.valeur} ${indicateur.unite}`}

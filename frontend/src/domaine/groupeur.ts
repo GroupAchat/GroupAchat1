@@ -72,8 +72,24 @@ export interface Campagne {
   commandes: number;
   /** Collecte sur les parts, hors frais de livraison. */
   collecte: number;
+  /**
+   * Combien de personnes il voulait reunir — ce qu'il a declare a la creation.
+   *
+   * ⚠️ **Ni plafond ni minimum** : a la cloture il decide, objectif atteint
+   * ou non (§7 du cahier des charges). Voir `JaugeParticipants`.
+   */
+  objectifParticipants: number;
+  /** Le remplissage en pourcentage, **calcule par le serveur**, plafonne a 100. */
+  progression: number;
   heuresRestantes: number;
   statut: StatutCampagne;
+  /**
+   * Quand le groupeur a annonce que le produit etait arrive, s'il l'a fait.
+   *
+   * ⚠️ **Ce n'est pas une date a afficher**, c'est ce qui eteint le bouton
+   * d'annonce de l'ecran 15 : l'arrivee est un fait unique.
+   */
+  arriveeAnnonceeLe?: string;
   photo?: string;
 }
 

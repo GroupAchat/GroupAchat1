@@ -49,13 +49,72 @@ from .models import Acheteur, DecisionKyc, Groupeur, PieceKyc
 class AcheteurAdmin(admin.ModelAdmin):
     """L'acheteur. Peu de champs, et c'est le propos (§1.5).
 
-    Ni mot de passe ni courriel : un numéro et un code SMS suffisent. Chaque
-    champ ajouté ici serait un acheteur perdu à un écran du paiement.
+    ⚠️ **Cette classe portait : « Ni mot de passe ni courriel ».** C'est faux
+    depuis que le compte acheteur est un vrai compte, et la phrase est
+    reproduite pour que personne ne la restaure. Son argument tient toujours
+    autrement : ni l'un ni l'autre n'est **demandé** pour commander.
+
+    ## ⚠️ Pourquoi ``exclude`` existe, et ce qui arrivait sans lui
+
+    Un ``ModelAdmin`` sans ``fields`` ni ``exclude`` construit son formulaire
+    avec **tous** les champs modifiables. ``mot_de_passe`` y apparaissait donc
+    comme une simple ligne de texte, et deux choses s'ensuivaient :
+
+    - l'empreinte était **lisible** par tout membre du personnel ouvrant la
+      fiche — de quoi l'attaquer hors ligne, sans limite d'essais ni verrou ;
+    - y taper un mot de passe l'enregistrait **en clair**. ``check_password``
+      échouerait alors sur toute saisie, et l'acheteur se retrouverait
+      incapable de se connecter **sans aucun message d'erreur nulle part** :
+      l'administrateur croirait avoir rendu service.
+
+    Le mot de passe ne se pose que par ``POST /api/comptes/moi/mot-de-passe/``,
+    qui hache. Il n'y a volontairement **aucun moyen d'en définir un depuis
+    l'administration** : le support n'a pas à connaître le secret de
+    quelqu'un, et l'acheteur a déjà le code SMS pour reprendre la main.
+
+    ``a_un_mot_de_passe`` le remplace dans la fiche — un booléen, qui est tout
+    ce dont le support a besoin pour répondre à « je n'arrive pas à me
+    connecter ».
     """
 
-    list_display = ("telephone", "nom", "cree_le")
-    search_fields = ("telephone", "nom")
-    readonly_fields = ("cree_le",)
+    list_display = ("telephone", "nom", "a_un_mot_de_passe", "cree_le")
+    search_fields = ("telephone", "nom", "courriel")
+
+    #: ⚠️ **Ne jamais retirer ``mot_de_passe`` d'ici** — voir la docstring.
+    exclude = ("mot_de_passe",)
+
+    #: Le verrou se **lit** mais ne se modifie pas à la main : on le lève par
+    #: l'action ci-dessous, qui remet aussi le compteur à zéro. Les deux
+    #: valeurs doivent rester d'accord, et deux champs libres côte à côte sont
+    #: la façon sûre de les désynchroniser.
+    readonly_fields = (
+        "cree_le",
+        "a_un_mot_de_passe",
+        "echecs_connexion",
+        "bloque_jusqu_a",
+    )
+
+    actions = ("lever_le_verrou",)
+
+    @admin.display(boolean=True, description="a un mot de passe")
+    def a_un_mot_de_passe(self, acheteur: Acheteur) -> bool:
+        return bool(acheteur.mot_de_passe)
+
+    @admin.action(description="Lever le verrou de connexion")
+    def lever_le_verrou(self, request, queryset) -> None:
+        """Rouvre la voie du mot de passe après cinq échecs.
+
+        ⚠️ **C'est un confort de support, pas un recours indispensable.**
+        L'acheteur n'a pas besoin de nous : un code SMS lève le verrou tout
+        seul, et c'est précisément pour ça que le verrou peut être sévère.
+        Cette action sert à quelqu'un qui appelle avant d'avoir essayé.
+
+        Elle ne révèle ni ne change aucun mot de passe.
+        """
+        modifies = queryset.update(echecs_connexion=0, bloque_jusqu_a=None)
+        self.message_user(
+            request, f"{modifies} verrou(x) levé(s). Aucun mot de passe modifié."
+        )
 
 
 class PieceEnLigne(admin.TabularInline):

@@ -79,6 +79,10 @@ export default function CreerCampagne({
   const [medias, setMedias] = useState<MediaProduit[]>([]);
   const [garantie, setGarantie] = useState("");
   const [prixPiece, setPrixPiece] = useState("");
+  /* Combien de personnes il veut reunir. **Obligatoire** : c'est le
+     denominateur de la barre de progression des cartes (§2.5), et le serveur
+     refuse une creation sans lui. */
+  const [objectif, setObjectif] = useState("");
   const [coutPiece, setCoutPiece] = useState("");
   const [paliers, setPaliers] = useState<Palier[]>([]);
   const [duree, setDuree] = useState(7);
@@ -89,6 +93,7 @@ export default function CreerCampagne({
   const publication = useAction(creerUneCampagne);
 
   const prix = Number(prixPiece) || 0;
+  const objectifVoulu = Number(objectif) || 0;
   const cout = Number(coutPiece) || 0;
 
   /**
@@ -109,6 +114,7 @@ export default function CreerCampagne({
       contenu_part: contenuPart.trim() || produit.trim(),
       categorie: categorie as Categorie,
       prix_part: prix,
+      objectif_participants: objectifVoulu,
       duree_heures: duree * 24,
       quartier_remise: prerempli?.quartier ?? "Tokoin",
       point_remise: "Point de remise à préciser",
@@ -285,6 +291,32 @@ export default function CreerCampagne({
             ) : null}
 
             <section>
+              <Champ
+                libelle="Combien de personnes voulez-vous réunir ?"
+                valeur={objectif}
+                onChanger={(v) => setObjectif(v.replace(/\D/g, ""))}
+                inputMode="numeric"
+                exemple="20"
+                aide="Les acheteurs verront où en est le groupage par rapport à ce nombre."
+              />
+
+              {/* ⚠️ **Dire tout de suite les trois choses que ce nombre ne
+                  fait pas.** Un groupeur qui le prend pour une limite de
+                  places le met trop haut « pour avoir de la marge », et sa
+                  barre reste au quart pendant toute la campagne. Celui qui le
+                  prend pour un minimum le met trop bas par peur de l'annulation
+                  automatique — qui n'existe pas. */}
+              {objectifVoulu > 0 ? (
+                <Encart variante="info" role="groupeur">
+                  Ce nombre n&apos;est <strong>ni une limite ni un minimum</strong>.
+                  Vous pouvez dépasser {objectifVoulu} personnes, et à la clôture
+                  c&apos;est vous qui décidez de maintenir le groupage ou non,
+                  même s&apos;il n&apos;est pas atteint.
+                </Encart>
+              ) : null}
+            </section>
+
+            <section>
               <h2 className="font-semibold text-texte">Autres quantités</h2>
               <p className="mt-1 text-sm text-texte-secondaire">
                 Facultatif. Une campagne sans palier reste parfaitement valable.
@@ -293,7 +325,7 @@ export default function CreerCampagne({
               {paliers.length > 0 ? (
                 <table className="mt-3 w-full text-sm">
                   <thead>
-                    <tr className="border-b border-bordure text-left text-texte-secondaire">
+                    <tr className="border-b border-filet text-left text-texte-secondaire">
                       <th className="py-2 font-medium">Quantité</th>
                       <th className="py-2 text-right font-medium">Prix total</th>
                       <th className="py-2 text-right font-medium">À la pièce</th>
@@ -305,7 +337,7 @@ export default function CreerCampagne({
                         palier.prixTotal / palier.quantite,
                       );
                       return (
-                        <tr key={indice} className="border-b border-bordure">
+                        <tr key={indice} className="border-b border-filet">
                           <td className="py-2 text-texte">
                             {palier.quantite} pièces
                           </td>
@@ -455,6 +487,12 @@ export default function CreerCampagne({
                   cle="Prix d'une part"
                   valeur={prix ? formaterFrancs(prix) : "—"}
                 />
+                <Ligne
+                  cle="Objectif"
+                  valeur={
+                    objectifVoulu ? `${objectifVoulu} personnes` : "—"
+                  }
+                />
                 <Ligne cle="Durée" valeur={`${duree} jours`} />
                 <Ligne
                   cle="Vous recevez"
@@ -470,7 +508,12 @@ export default function CreerCampagne({
         {etape < 3 ? (
           <Bouton
             role="groupeur"
-            desactive={etape === 1 ? !etape1Complete : prix <= 0}
+            /* ⚠️ L'objectif compte autant que le prix pour passer a
+               l'etape 3 : le serveur refuse une creation sans lui, et decouvrir
+               ce refus a la derniere etape obligerait a revenir en arriere. */
+            desactive={
+              etape === 1 ? !etape1Complete : prix <= 0 || objectifVoulu <= 0
+            }
             onClick={() => setEtape(etape + 1)}
           >
             Continuer

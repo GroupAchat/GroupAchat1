@@ -167,6 +167,7 @@ class FiltreEnBaseTest(TestCase):
             contenu_part="1 écouteur",
             categorie=Campagne.Categorie.ELECTRONIQUE,
             prix_part=Decimal("4000"),
+            objectif_participants=40,
             date_fin=timezone.now() + timedelta(days=2),
         )
         self.acheteuse = Acheteur.objects.create(
@@ -254,7 +255,7 @@ class KycEnBaseTest(TestCase):
         self.assertEqual(groupeur.pseudonyme, "Lomé Deals")
 
     def test_un_groupeur_sans_dossier_valide_ne_lance_pas_de_campagne(self):
-        """C'est ce qui donne son sens à « groupeurs sélectionnés »."""
+        """C'est ce qui rend tenable « vous êtes livré, ou remboursé »."""
         groupeur = Groupeur.objects.create(
             pseudonyme="Nouveau",
             nom_complet="Kossi Ewe",
@@ -270,6 +271,7 @@ class KycEnBaseTest(TestCase):
                 contenu_part="1 pièce",
                 categorie=Campagne.Categorie.MAISON,
                 prix_part=Decimal("1000"),
+                objectif_participants=40,
                 date_fin=timezone.now() + timedelta(days=1),
             )
             campagne.full_clean()

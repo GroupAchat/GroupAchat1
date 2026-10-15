@@ -1,3 +1,4 @@
+import { useState } from "react";
 import CodeLivraison from "../composants/CodeLivraison";
 import Vignette from "../../composants/Vignette";
 import type { Commande, StatutCommande } from "../../domaine/commande";
@@ -6,6 +7,7 @@ import { LIBELLE_QUARTIER } from "../../domaine/groupage";
 import EnTeteEcran from "../mise-en-page/EnTeteEcran";
 import PiedPage from "../mise-en-page/PiedPage";
 import Bouton from "../../ui/Bouton";
+import FeuilleRefusColis from "../composants/FeuilleRefusColis";
 import Encart from "../../ui/Encart";
 import FriseEtapes from "../../ui/FriseEtapes";
 import { IconeQuestion, IconeRetour } from "../../ui/Icones";
@@ -40,13 +42,26 @@ export default function DetailCommande({
   estBureau,
   onRetour,
   onQuestions,
+  onRefuse,
 }: {
   commande: Commande;
   estBureau: boolean;
   onRetour: () => void;
   onQuestions: () => void;
+  /**
+   * Appele apres un refus accepte par le serveur.
+   *
+   * ⚠️ **La commande vient en propriete, donc l'ecran ne peut pas la mettre a
+   * jour lui-meme.** Sans ce rappel, le statut afficherait encore « en cours
+   * de livraison » apres un refus enregistre, et le bouton « Refuser le
+   * colis » resterait la — on croirait que rien n'a ete pris.
+   */
+  onRefuse: () => void;
 }) {
   const { groupage, quantite, position, statut, total } = commande;
+
+  /** La feuille « Refuser le colis » de l'ecran 9. */
+  const [refusOuvert, setRefusOuvert] = useState(false);
 
   const corps = (
     <div className="space-y-6">
@@ -129,9 +144,9 @@ export default function DetailCommande({
               {formaterFrancs(commande.fraisLivraison)}
             </dd>
           </div>
-          <div className="mt-2 flex justify-between gap-4 border-t border-bordure pt-3">
+          <div className="mt-2 flex justify-between gap-4 border-t border-filet pt-3">
             <dt className="font-semibold text-texte">Total payé</dt>
-            <dd className="text-[22px] font-bold text-texte">
+            <dd className="text-prix font-bold text-texte">
               {formaterFrancs(total)}
             </dd>
           </div>
@@ -170,11 +185,26 @@ export default function DetailCommande({
         </Encart>
       ) : null}
 
-      {/* Visible uniquement pendant la livraison. */}
+      {/* Visible uniquement pendant la livraison.
+
+          ⚠️ **Et refusable pendant la livraison seulement.** Avant, il n'y a
+          rien a refuser : le colis n'est pas parti. Apres, le code a ete
+          donne au livreur, donc contester n'est plus un refus de colis mais
+          une reclamation apres reception — le serveur refuse les deux cas. */}
       {statut === "en-livraison" ? (
         <div className="max-w-sm">
-          <Bouton style="danger-texte">Refuser le colis</Bouton>
+          <Bouton style="danger-texte" onClick={() => setRefusOuvert(true)}>
+            Refuser le colis
+          </Bouton>
         </div>
+      ) : null}
+
+      {refusOuvert ? (
+        <FeuilleRefusColis
+          commande={commande.id}
+          onFermer={() => setRefusOuvert(false)}
+          onRefuse={onRefuse}
+        />
       ) : null}
     </div>
   );

@@ -33,7 +33,7 @@ export default function CodeLivraison({ code }: { code: string }) {
   }, [code]);
 
   return (
-    <div className="rounded-2xl border-2 border-dashed border-primaire bg-white px-4 py-6 text-center">
+    <div className="rounded-xl border-2 border-dashed border-primaire bg-white px-4 py-6 text-center">
       <p className="text-sm font-medium text-texte-secondaire">
         Votre code de livraison
       </p>
@@ -51,7 +51,7 @@ export default function CodeLivraison({ code }: { code: string }) {
         <path d={chemin.d} fill="#14181F" />
       </svg>
 
-      <p className="mt-4 text-[32px] leading-none font-bold tracking-[0.25rem] text-texte">
+      <p className="mt-4 text-code leading-none font-bold tracking-[0.25rem] text-texte">
         {code}
       </p>
 

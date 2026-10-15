@@ -22,10 +22,36 @@ from .. import domaine, notifications
 
 
 class Acheteur(models.Model):
-    """Un acheteur. Créé au moment de payer, jamais avant (§1.5).
+    """Un acheteur. Créé **à l'ouverture de l'écran de commande** (§1.5).
 
-    Il n'y a ni mot de passe ni e-mail : un numéro et un code SMS suffisent.
-    Chaque champ ajouté ici est un acheteur perdu à un écran du paiement.
+    ## ⚠️ Ce que ce modèle disait avant, et pourquoi ça a changé
+
+    Il portait : *« Il n'y a ni mot de passe ni e-mail : un numéro et un code
+    SMS suffisent. Chaque champ ajouté ici est un acheteur perdu à un écran du
+    paiement. »* **C'est faux depuis que le compte acheteur est un vrai
+    compte**, et la phrase est reproduite ici pour que personne ne la
+    « restaure » en croyant réparer une régression.
+
+    L'argument de fond restait juste, et il est respecté autrement : aucun des
+    deux champs ajoutés n'est **demandé** pour commander.
+
+    | Champ | Obligatoire ? | Demandé quand |
+    |---|---|---|
+    | ``telephone`` | oui | À l'ouverture de l'écran de commande |
+    | ``mot_de_passe`` | **non** | Jamais à l'inscription — proposé depuis le profil |
+    | ``courriel`` | **non** | Jamais — proposé depuis le profil |
+
+    Le compte naît donc toujours d'un numéro et d'un code SMS, en un seul
+    écran. Le mot de passe est ce qui le rend **réutilisable sans SMS** à la
+    visite suivante, et le code SMS reste la voie de récupération — ce qui
+    garantit qu'un mot de passe oublié ne ferme jamais un compte.
+
+    ## ⚠️ Le mot de passe ne remplace pas le code, il s'y ajoute
+
+    Les deux voies restent ouvertes en permanence. C'est ce qui permet de
+    **verrouiller la voie du mot de passe** après quelques échecs (voir
+    ``echecs_connexion``) sans jamais enfermer personne dehors : le code SMS,
+    lui, a son propre compteur d'essais sur ``CodeConnexion``.
 
     ## L'adresse par défaut
 
@@ -44,6 +70,65 @@ class Acheteur(models.Model):
 
     telephone = models.CharField("téléphone", max_length=20, unique=True)
     nom = models.CharField("nom", max_length=120, blank=True)
+
+    #: Facultatif, et il le restera.
+    #:
+    #: Le même raisonnement que pour ``Groupeur.courriel`` : une partie du
+    #: cœur de cible à Lomé n'a pas d'adresse de messagerie consultée mais
+    #: répond au téléphone. L'exiger écarterait ces gens-là, et le numéro
+    #: étant obligatoire, l'acheteur reste toujours joignable.
+    #:
+    #: ⚠️ **Il n'identifie pas le compte et ne sert pas à se connecter.**
+    #: C'est le numéro qui identifie, lui seul, et il est ``unique``. Deux
+    #: comptes peuvent partager un courriel — une famille, une boutique — sans
+    #: que rien ne casse, précisément parce qu'on ne s'en sert jamais pour
+    #: retrouver qui que ce soit.
+    courriel = models.EmailField("courriel", blank=True)
+
+    #: Le mot de passe **haché**, ou une chaîne vide quand il n'y en a pas.
+    #:
+    #: Haché par ``django.contrib.auth.hashers.make_password``, donc avec
+    #: l'algorithme et les itérations configurés par Django — jamais à la
+    #: main. Le même mécanisme que ``CodeConnexion.code_hache``.
+    #:
+    #: ⚠️ **Vide signifie « aucun mot de passe », et doit être testé
+    #: explicitement.** ``check_password`` contre une chaîne vide est faux pour
+    #: toute entrée, donc le cas est sûr par accident ; mais le code qui
+    #: ouvre une session doit refuser **avant** d'appeler le vérificateur, pour
+    #: pouvoir répondre « ce compte n'a pas de mot de passe, demandez un
+    #: code » au lieu de « mot de passe incorrect ». Les deux phrases
+    #: n'envoient pas l'acheteur au même endroit.
+    #:
+    #: ``max_length=128`` : la longueur des empreintes de Django, la même que
+    #: celle de son propre champ ``password``.
+    mot_de_passe = models.CharField("mot de passe", max_length=128, blank=True)
+
+    #: Les échecs **consécutifs** de connexion par mot de passe.
+    #:
+    #: ⚠️ **Sans ce compteur, la voie du mot de passe serait plus faible que
+    #: celle qu'elle complète.** ``CodeConnexion`` meurt au bout de trois
+    #: essais ; un mot de passe sans limite se devine à la machine, et un
+    #: numéro togolais tient en huit chiffres, donc l'attaquant n'a même pas
+    #: besoin de connaître sa cible.
+    #:
+    #: Remis à zéro à chaque réussite — par mot de passe **comme par code
+    #: SMS**. La seconde remise à zéro est ce qui fait du code la voie de
+    #: secours : quelqu'un de verrouillé pour avoir mal tapé son mot de passe
+    #: reprend la main avec un SMS, sans attendre la fin du délai.
+    echecs_connexion = models.PositiveSmallIntegerField(
+        "échecs de connexion", default=0
+    )
+
+    #: Jusqu'à quand la connexion **par mot de passe** est refusée.
+    #:
+    #: ``None`` la plupart du temps. Le verrou ne ferme **que cette voie** : le
+    #: code SMS reste accepté pendant toute sa durée, et c'est délibéré. Un
+    #: verrou qui fermerait les deux voies offrirait à n'importe qui le moyen
+    #: d'enfermer l'acheteur de son choix dehors, en se trompant exprès cinq
+    #: fois sur un numéro qui n'est pas le sien.
+    bloque_jusqu_a = models.DateTimeField(
+        "bloqué jusqu'à", null=True, blank=True
+    )
 
     #: La dernière adresse de livraison, pour pré-remplir la prochaine commande.
     quartier = models.CharField("quartier", max_length=40, blank=True)
@@ -157,8 +242,9 @@ class Groupeur(models.Model):
     def peut_lancer_une_campagne(self) -> bool:
         """Un dossier non validé ne lance rien.
 
-        C'est ce qui donne son sens à la phrase « groupeurs sélectionnés par
-        Group Achat » affichée à l'acheteur sur presque chaque écran.
+        C'est ce qui rend tenable « vous êtes livré, ou remboursé » : nous
+        remboursons l'acheteur, puis nous nous retournons contre le groupeur —
+        ce qui suppose un dossier examiné et opposable (§10.5).
         """
         return self.statut_kyc == self.StatutKyc.VALIDE
 

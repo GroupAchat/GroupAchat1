@@ -4,7 +4,11 @@ import {
   ecrireEconomieDonnees,
   lireEconomieDonnees,
 } from "../../domaine/profil";
-import { completerMonProfil, type Profil as ProfilCompte } from "../../api/session";
+import {
+  completerMonProfil,
+  definirLeMotDePasse,
+  type Profil as ProfilCompte,
+} from "../../api/session";
 import { ErreurApi } from "../../api/client";
 import EnTeteEcran from "../mise-en-page/EnTeteEcran";
 import PiedPage from "../mise-en-page/PiedPage";
@@ -18,6 +22,7 @@ import {
   IconeDemander,
   IconeProfil,
   IconeTelephone,
+  IconeVerrou,
 } from "../../ui/Icones";
 
 /**
@@ -66,7 +71,7 @@ export default function Profil({
   estBureau,
   connecte,
   profil,
-  onVoirCampagnes,
+  onCreerUnCompte,
   onMesDemandes,
   onDemanderProduit,
   onSeConnecter,
@@ -77,7 +82,7 @@ export default function Profil({
   connecte: boolean;
   /** Absent tant que la reconnexion automatique n'a pas repondu (§ `api/session`). */
   profil?: ProfilCompte;
-  onVoirCampagnes: () => void;
+  onCreerUnCompte: () => void;
   onMesDemandes: () => void;
   onDemanderProduit: () => void;
   onSeConnecter: () => void;
@@ -95,71 +100,240 @@ export default function Profil({
     ecrireEconomieDonnees(suivant);
   };
 
-  const contenu = (
-    <div className="space-y-6">
-      {connecte ? (
-        <BlocInformations
-          profil={profil}
-          onProfilMisAJour={onProfilMisAJour}
-        />
-      ) : null}
-
-      {connecte ? (
-        <BlocMesDemandes onMesDemandes={onMesDemandes} />
-      ) : null}
-
-      <BlocEconomieDonnees actif={economie} onBasculer={basculerEconomie} />
-
-      <BlocAide />
-
-      {!connecte ? (
-        /* Le patron du §1.5, decline pour cet onglet. Il arrive **apres** la
-           bascule : la preference d'affichage ne depend pas du compte. */
-        <EtatVide
-          titre="Votre profil apparaîtra ici"
-          explication="Commandez une part dans une campagne : votre compte se crée au moment de payer, et vous retrouverez ici vos informations et vos demandes."
-          actionLibelle="Voir les campagnes"
-          registre="attente"
-          onAction={onVoirCampagnes}
-          lienSecondaire={{
-            libelle: "J'ai déjà un compte — me connecter",
-            onClick: onSeConnecter,
-          }}
-        />
-      ) : (
-        <BlocDeconnexion onSeDeconnecter={onSeDeconnecter} />
-      )}
-    </div>
+  /**
+   * **Les blocs sont groupes en deux familles, et c'est ce qui rend la page
+   * reponsive sans la dupliquer.**
+   *
+   * | Famille | Blocs | Ce qu'on y fait |
+   * |---|---|---|
+   * | Le compte | Mes informations, Mes demandes | On consulte, on corrige |
+   * | Les reglages | Economie de donnees, Aide, Deconnexion | On y touche une fois |
+   *
+   * La distinction n'est pas esthetique : au-dela de 1 280 px les deux
+   * familles tiennent cote a cote, en dessous elles s'empilent dans cet
+   * ordre. **Un seul jeu de blocs sert les deux cas** — rien n'est monte deux
+   * fois, donc rien ne peut diverger entre le telephone et l'ordinateur.
+   */
+  const blocsCompte = (
+    <>
+      <BlocInformations profil={profil} onProfilMisAJour={onProfilMisAJour} />
+      {/* Juste après les informations, et avant les demandes : c'est le compte
+          lui-même, pas un réglage d'affichage. */}
+      <BlocMotDePasse profil={profil} onProfilMisAJour={onProfilMisAJour} />
+      <BlocMesDemandes onMesDemandes={onMesDemandes} />
+    </>
   );
 
-  if (estBureau) {
+  const blocsReglages = (
+    <>
+      <BlocEconomieDonnees actif={economie} onBasculer={basculerEconomie} />
+      <BlocAide />
+    </>
+  );
+
+  /**
+   * L'état vide de l'onglet, pour un visiteur sans compte.
+   *
+   * ⚠️ **Il disait : « votre compte se crée au moment de payer ».** C'était
+   * vrai, ça ne l'est plus — le compte se crée par un formulaire, et il est
+   * demandé avant de rejoindre un groupage ou de poser une question. Une
+   * phrase d'interface qui décrit un parcours disparu est pire qu'une phrase
+   * absente : elle fait chercher un chemin qui n'existe pas.
+   *
+   * L'action proposée a changé avec elle. « Voir les campagnes » avait un sens
+   * quand le compte naissait du paiement : on renvoyait l'acheteur là où le
+   * compte se créerait tout seul. Aujourd'hui le chemin direct existe, et
+   * l'envoyer au catalogue serait un détour.
+   */
+  const etatVide = (
+    <EtatVide
+      titre="Créez votre compte"
+      explication="Vos commandes, vos codes de livraison et vos demandes de produits, au même endroit et sur tous vos appareils."
+      actionLibelle="Créer mon compte"
+      registre="attente"
+      onAction={onCreerUnCompte}
+      lienSecondaire={{
+        libelle: "J'ai déjà un compte — me connecter",
+        onClick: onSeConnecter,
+      }}
+    />
+  );
+
+  if (!estBureau) {
     return (
-      <>
-        <div className="mx-auto max-w-[1280px] px-4 py-8 lg:px-8">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <h1 className="text-2xl font-semibold text-texte lg:text-3xl">
-              Mon profil
-            </h1>
-            {connecte ? (
-              <div className="w-full max-w-xs">
-                <Bouton style="secondaire" onClick={onDemanderProduit}>
-                  Demander un produit
-                </Bouton>
-              </div>
-            ) : null}
-          </div>
-          <div className="mt-6 max-w-2xl">{contenu}</div>
+      /* `pb-18` : la barre de navigation du bas mesure `h-18` et flotte
+         au-dessus du contenu. Sans cette reserve, le bloc de deconnexion —
+         le dernier — passe dessous et devient inatteignable. */
+      <div className="pb-18">
+        <EnTeteEcran titre="Profil" />
+        <div className="space-y-4 px-4 py-4">
+          {connecte ? <CarteIdentite profil={profil} /> : null}
+          {connecte ? blocsCompte : null}
+          {blocsReglages}
+          {connecte ? (
+            <BlocDeconnexion onSeDeconnecter={onSeDeconnecter} />
+          ) : (
+            /* \u26a0\ufe0f **Apres la bascule, et c'est delibere** : l'economie de
+               donnees est une preference d'appareil qui ne demande aucun
+               compte. La mettre sous l'etat vide la ferait passer pour une
+               fonction reservee aux inscrits. */
+            etatVide
+          )}
         </div>
-        <PiedPage />
-      </>
+      </div>
     );
   }
 
   return (
-    <div className="pb-18">
-      <EnTeteEcran titre="Profil" />
-      <div className="px-4 py-2">{contenu}</div>
-    </div>
+    <>
+      <div className="largeur-page py-8 lg:py-10">
+        <header
+          className={`${CADRE} flex flex-wrap items-end justify-between gap-x-6 gap-y-4`}
+        >
+          <div className="min-w-0">
+            <h1 className="font-titre text-2xl font-semibold tracking-tight text-texte lg:text-3xl">
+              Mon profil
+            </h1>
+            <p className="mt-1 text-texte-secondaire">
+              Vos informations de livraison, vos demandes, et la fa\u00e7on dont le
+              site consomme vos donn\u00e9es.
+            </p>
+          </div>
+          {connecte ? (
+            /* `pleineLargeur={false}` : le bouton faisait 320 px de large pour
+               trois mots, parce qu'il etait enferme dans un `w-full max-w-xs`.
+               A cote d'un titre, il doit prendre la largeur de son libelle. */
+            <Bouton
+              style="secondaire"
+              pleineLargeur={false}
+              onClick={onDemanderProduit}
+            >
+              Demander un produit
+            </Bouton>
+          ) : null}
+        </header>
+
+        {connecte ? (
+          <>
+            <div className={`${CADRE} mt-6`}>
+              <CarteIdentite profil={profil} />
+            </div>
+
+            <div
+              className={`${CADRE} mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem] xl:items-start`}
+            >
+              <div className="space-y-6">{blocsCompte}</div>
+
+              {/* \u26a0\ufe0f **`xl:items-start` sur la grille est ce qui fait tenir
+                  le `sticky` ci-dessous.** Un element de grille s'etire par
+                  defaut sur toute la hauteur de sa rangee : la colonne
+                  laterale mesurerait alors exactement la hauteur du
+                  formulaire, elle n'aurait aucune marge pour glisser, et le
+                  `sticky` ne produirait rien du tout.
+
+                  `top-24` et non `top-0` : l'en-tete de bureau est collant et
+                  mesure 80 px plus son filet. Colle a 0, la colonne passerait
+                  dessous. */}
+              <aside className="space-y-6 xl:sticky xl:top-24">
+                {blocsReglages}
+                <BlocDeconnexion onSeDeconnecter={onSeDeconnecter} />
+              </aside>
+            </div>
+          </>
+        ) : (
+          /* Un visiteur sans compte n'a que deux blocs et un etat vide : une
+             grille a deux colonnes pour si peu laisserait une moitie d'ecran
+             vide. Une seule colonne, et l'ordre du \u00a71.5 est preserve —
+             la bascule, puis l'aide, puis l'invitation. */
+          <div className={`${CADRE} mt-6 space-y-6`}>
+            {blocsReglages}
+            {etatVide}
+          </div>
+        )}
+      </div>
+      <PiedPage />
+    </>
+  );
+}
+
+/**
+ * \u26a0\ufe0f **Deux largeurs, un seul point de rupture — et il est a `xl`,
+ * 1 280 px, pas a `md`.**
+ *
+ * Le defaut repare ici etait mesurable : la page etait plafonnee a
+ * `max-w-2xl`, soit **672 px, calee a gauche**. Sur un ecran de 1 920 il
+ * restait donc plus de 900 px de vide a droite, pendant que l'en-tete et le
+ * pied, eux, allaient d'un bord a l'autre. C'est exactement le defaut que le
+ * \u00a71.3 de la spec des ecrans raconte pour la fiche produit et les commandes,
+ * reste en place sur le profil.
+ *
+ * | Largeur | Ce qu'on voit |
+ * |---|---|
+ * | < 768 | Une colonne, en-tete d'ecran, barre du bas |
+ * | 768 a 1 279 | Une colonne **centree** de 672 px |
+ * | \u2265 1 280 | Formulaire ~776 px + colonne de reglages 352 px, collante |
+ *
+ * 672 px pour un formulaire n'est pas une limite arbitraire : au-dela, un
+ * libelle a gauche et sa valeur a droite finissent separes par tant de blanc
+ * qu'on ne les lit plus comme une paire — c'est ce que font les lignes de
+ * `Ligne` ci-dessous. Le probleme n'etait donc pas la largeur de la colonne,
+ * c'etait qu'elle ne soit **pas centree** et qu'aucune seconde colonne ne
+ * vienne occuper la place des qu'elle existe.
+ */
+const CADRE = "mx-auto w-full max-w-2xl xl:max-w-6xl";
+
+/* \u2500\u2500 La carte d'identite \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+
+/**
+ * Qui je suis, en un coup d'oeil : une initiale, un nom, un numero.
+ *
+ * \u26a0\ufe0f **Ce n'est pas une photo de profil, et il n'en faut pas.** Le \u00a71.7
+ * interdit tout profil public et tout moyen de joindre quelqu'un ; une page de
+ * profil acheteur qui ressemble a un reseau social invite a y chercher les
+ * autres. Une initiale sur une pastille dit \u00ab c'est bien ton compte \u00bb et
+ * s'arrete la.
+ *
+ * **L'initiale est en `primaire-texte-sur-fond` sur `primaire-fond`, soit
+ * 4,87:1** — au-dessus du seuil de 4,5:1. C'est calcule, pas estime. La
+ * pastille n'est pas en `primaire` plein : un disque orange vif de 56 px en
+ * haut d'une page deja coiffee d'un en-tete orange faisait un second aplat de
+ * marque a trois centimetres du premier.
+ */
+function CarteIdentite({ profil }: { profil?: ProfilCompte }) {
+  /* Pas de squelette ici : `BlocInformations` en porte deja un juste en
+     dessous, et deux zones qui pulsent pour une seule requete donnent
+     l'impression que la page est cassee. */
+  if (!profil) return null;
+
+  const nom = profil.nom?.trim();
+  /* `Array.from` et non `nom[0]` : une chaine indexee coupe au milieu d'un
+     caractere code sur deux unites et rend un demi-symbole. */
+  const initiale = nom ? Array.from(nom)[0].toUpperCase() : undefined;
+
+  return (
+    <section className="flex items-center gap-4 rounded-xl border border-bordure p-4">
+      <span
+        aria-hidden="true"
+        className="flex size-14 shrink-0 items-center justify-center rounded-full bg-primaire-fond text-xl font-semibold text-primaire-texte-sur-fond"
+      >
+        {/* Sans nom renseigne, une icone plutot qu'un \u00ab ? \u00bb : un point
+            d'interrogation en guise d'avatar donne l'air de ne pas savoir a
+            qui on parle. */}
+        {initiale ?? <IconeProfil taille={26} />}
+      </span>
+
+      <div className="min-w-0">
+        {/* `truncate` : un nom long ne doit pas pousser le numero hors de la
+            carte sur un ecran de 320 px. */}
+        <p className="truncate font-titre text-lg font-semibold text-texte">
+          {nom || "Votre compte"}
+        </p>
+        <p className="mt-0.5 flex items-center gap-1.5 text-sm text-texte-secondaire">
+          <IconeTelephone taille={16} />
+          {profil.telephone}
+        </p>
+      </div>
+    </section>
   );
 }
 
@@ -187,6 +361,7 @@ function BlocInformations({
 }) {
   const [edition, setEdition] = useState(false);
   const [nom, setNom] = useState(profil?.nom ?? "");
+  const [courriel, setCourriel] = useState(profil?.courriel ?? "");
   const [quartier, setQuartier] = useState<Quartier | undefined>(
     profil?.quartier as Quartier | undefined,
   );
@@ -214,6 +389,11 @@ function BlocInformations({
     setErreur(undefined);
     completerMonProfil({
       nom: nom.trim() || undefined,
+      /* ⚠️ `?? undefined` plutôt que `|| undefined` serait faux ici : une
+         chaîne vide **doit** partir, sinon on ne peut jamais effacer un
+         courriel qu'on a renseigné par erreur. `completerMonProfil` n'ignore
+         que les champs absents, pas les champs vides. */
+      courriel: courriel.trim(),
       quartier,
       repere: repere.trim() || undefined,
     })
@@ -239,6 +419,10 @@ function BlocInformations({
         <dl className="divide-y divide-bordure">
           <Ligne libelle="Nom" valeur={profil.nom || "Non renseigné"} />
           <Ligne libelle="Numéro" valeur={profil.telephone} />
+          <Ligne
+            libelle="Courriel"
+            valeur={profil.courriel || "Non renseigné"}
+          />
           <Ligne
             libelle="Livraison"
             valeur={
@@ -268,6 +452,17 @@ function BlocInformations({
           onChanger={setNom}
           exemple="Akosua Doe"
           aide="Il n'est montré qu'au livreur, le jour de la livraison."
+        />
+
+        <Champ
+          libelle="Courriel (facultatif)"
+          valeur={courriel}
+          onChanger={setCourriel}
+          type="email"
+          inputMode="email"
+          autoComplete="email"
+          exemple="akosua@example.tg"
+          aide="Facultatif. Nous ne nous en servons pas pour vous reconnaître : c'est votre numéro qui identifie votre compte."
         />
 
         {/* Le numero est affiche, jamais modifiable : voir l'en-tete. */}
@@ -335,12 +530,209 @@ function BlocInformations({
                    laisser le formulaire a moitie modifie au prochain clic
                    sur « Modifier ». */
                 setNom(profil.nom ?? "");
+                setCourriel(profil.courriel ?? "");
                 setQuartier(profil.quartier as Quartier | undefined);
                 setRepere(profil.repere ?? "");
                 setErreur(undefined);
                 setEdition(false);
               }}
             >
+              Annuler
+            </Bouton>
+          </div>
+        </div>
+      </div>
+    </Bloc>
+  );
+}
+
+/* ── Le mot de passe ─────────────────────────────────────────────────────── */
+
+/**
+ * Définir un mot de passe, ou en changer.
+ *
+ * ## ⚠️ Pourquoi c'est **ici** et pas dans la feuille de connexion
+ *
+ * Le compte acheteur n'est plus « un truc de code SMS », mais le parcours
+ * d'achat n'a pas gagné un champ pour autant, et c'est délibéré : le §1.5
+ * interdit d'alourdir le chemin vers le paiement, et chaque champ posé devant
+ * quelqu'un qui s'apprête à payer est un acheteur perdu. Le mot de passe se
+ * pose donc **plus tard, ici, quand plus rien n'est en jeu** — et il sert à la
+ * visite suivante, depuis un autre appareil.
+ *
+ * | État | Bouton | Ce qui est demandé |
+ * |---|---|---|
+ * | Aucun | « Définir un mot de passe » | Le nouveau, deux fois |
+ * | Il y en a un | « Modifier » | **L'actuel**, puis le nouveau deux fois |
+ *
+ * ⚠️ **L'actuel est exigé, et il faut résister à l'envie de s'en passer.** La
+ * session est déjà ouverte, donc techniquement elle suffirait. Mais le jeton
+ * vit dans le `localStorage` et survit à la fermeture de l'onglet : la
+ * différence est celle entre **voir** les commandes de quelqu'un et **lui
+ * prendre son compte définitivement**. Sans l'actuel, un téléphone prêté cinq
+ * minutes suffit à verrouiller son propriétaire dehors pour de bon. Le serveur
+ * l'exige de son côté ; ce formulaire ne fait que le demander avant de se
+ * faire refuser.
+ *
+ * ⚠️ **Il n'y a pas de « mot de passe oublié » à écrire.** Le code SMS ouvre
+ * le compte de tout le monde et **lève le verrou** des cinq échecs : c'est la
+ * voie de récupération, elle existe déjà, et elle ne demande ni lien à durée
+ * de vie ni courriel — qui est facultatif sur ce marché.
+ */
+function BlocMotDePasse({
+  profil,
+  onProfilMisAJour,
+}: {
+  profil?: ProfilCompte;
+  onProfilMisAJour: (profil: ProfilCompte) => void;
+}) {
+  const [ouvert, setOuvert] = useState(false);
+  const [actuel, setActuel] = useState("");
+  const [nouveau, setNouveau] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [envoi, setEnvoi] = useState(false);
+  const [erreurActuel, setErreurActuel] = useState<string>();
+  const [erreurNouveau, setErreurNouveau] = useState<string>();
+  const [erreur, setErreur] = useState<string>();
+
+  /* Même raison que dans `BlocInformations` : la reconnexion automatique n'a
+     pas répondu, et on ne sait pas encore s'il faut écrire « Définir » ou
+     « Modifier ». Rien plutôt qu'une proposition fausse — contrairement aux
+     informations, il n'y a ici aucune donnée à faire patienter, donc pas de
+     squelette non plus. */
+  if (!profil) return null;
+
+  const existe = profil.a_un_mot_de_passe;
+
+  const fermer = () => {
+    setOuvert(false);
+    setActuel("");
+    setNouveau("");
+    setConfirmation("");
+    setErreurActuel(undefined);
+    setErreurNouveau(undefined);
+    setErreur(undefined);
+  };
+
+  const enregistrer = () => {
+    setErreurActuel(undefined);
+    setErreurNouveau(undefined);
+    setErreur(undefined);
+
+    /* ⚠️ **La confirmation est vérifiée ici, et seulement ici.** Le serveur ne
+       la reçoit pas, et c'est normal : ce n'est pas une règle de sécurité mais
+       une protection contre la faute de frappe, et un champ masqué tapé une
+       seule fois est la façon ordinaire de se verrouiller dehors. Toutes les
+       autres règles — longueur, numéro interdit, mot de passe actuel — sont
+       vérifiées par le serveur, parce qu'un contrôle qui ne vit que dans
+       l'écran se contourne par un appel direct. */
+    if (nouveau !== confirmation) {
+      setErreurNouveau("Les deux saisies ne sont pas identiques.");
+      return;
+    }
+
+    setEnvoi(true);
+    definirLeMotDePasse({
+      mot_de_passe: nouveau,
+      ...(existe ? { ancien_mot_de_passe: actuel } : {}),
+    })
+      .then((misAJour) => {
+        onProfilMisAJour(misAJour);
+        fermer();
+      })
+      .catch((e: unknown) => {
+        if (e instanceof ErreurApi && e.estRefusDeSaisie) {
+          /* Le serveur répond champ par champ, et les deux ne mènent pas au
+             même endroit : « mot de passe actuel incorrect » se corrige dans
+             la première case, « trop court » dans la seconde. Les mêler dans
+             un message unique laisserait chercher laquelle reprendre. */
+          setErreurActuel(e.champs.ancien_mot_de_passe?.[0]);
+          setErreurNouveau(e.champs.mot_de_passe?.[0]);
+          if (!e.champs.ancien_mot_de_passe && !e.champs.mot_de_passe) {
+            setErreur(e.messageLisible);
+          }
+          return;
+        }
+        setErreur(
+          e instanceof ErreurApi
+            ? e.messageLisible
+            : "Votre mot de passe n'a pas pu être enregistré. Vérifiez votre connexion et réessayez.",
+        );
+      })
+      .finally(() => setEnvoi(false));
+  };
+
+  if (!ouvert) {
+    return (
+      <Bloc titre="Mot de passe" Icone={IconeVerrou}>
+        <p className="text-texte-secondaire">
+          {existe
+            ? "Vous pouvez vous connecter avec votre mot de passe, sans attendre de SMS."
+            : "Définissez-en un pour vous reconnecter sans attendre de SMS. Le code par SMS continuera de fonctionner."}
+        </p>
+        <div className="mt-4 max-w-xs">
+          <Bouton style="secondaire" onClick={() => setOuvert(true)}>
+            {existe ? "Modifier" : "Définir un mot de passe"}
+          </Bouton>
+        </div>
+      </Bloc>
+    );
+  }
+
+  return (
+    <Bloc titre="Mot de passe" Icone={IconeVerrou}>
+      <div className="space-y-4">
+        {existe ? (
+          <Champ
+            libelle="Mot de passe actuel"
+            valeur={actuel}
+            onChanger={setActuel}
+            type="password"
+            autoComplete="current-password"
+            erreur={erreurActuel}
+            autoFocus
+          />
+        ) : null}
+
+        <Champ
+          libelle="Nouveau mot de passe"
+          valeur={nouveau}
+          onChanger={setNouveau}
+          type="password"
+          /* `new-password` : c'est ce qui fait proposer un mot de passe fort
+             par le gestionnaire, au lieu de re-proposer l'ancien. */
+          autoComplete="new-password"
+          erreur={erreurNouveau}
+          aide="Au moins 8 caractères. Votre numéro de téléphone ne peut pas servir de mot de passe."
+          autoFocus={!existe}
+        />
+
+        <Champ
+          libelle="Confirmez le nouveau mot de passe"
+          valeur={confirmation}
+          onChanger={setConfirmation}
+          type="password"
+          autoComplete="new-password"
+        />
+
+        {erreur ? <Encart variante="danger">{erreur}</Encart> : null}
+
+        <div className="flex flex-wrap gap-3">
+          <div className="min-w-40 flex-1">
+            <Bouton
+              onClick={enregistrer}
+              chargement={envoi}
+              desactive={
+                nouveau === "" ||
+                confirmation === "" ||
+                (existe && actuel === "")
+              }
+            >
+              Enregistrer
+            </Bouton>
+          </div>
+          <div className="min-w-32 flex-1">
+            <Bouton style="secondaire" desactive={envoi} onClick={fermer}>
               Annuler
             </Bouton>
           </div>

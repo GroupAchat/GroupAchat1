@@ -111,7 +111,7 @@ export default function MesDemandes({
   if (estBureau) {
     return (
       <>
-        <div className="mx-auto max-w-[1280px] px-4 py-8 lg:px-8">
+        <div className="largeur-page py-8">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <h1 className="text-2xl font-semibold text-texte lg:text-3xl">
               Mes demandes
@@ -165,22 +165,36 @@ function LigneDemande({
       className={
         encadree
           ? "rounded-xl border border-bordure p-4"
-          : "border-b border-bordure py-4 last:border-b-0"
+          : "border-b border-filet py-4 last:border-b-0"
       }
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
-          <h3 className="font-semibold text-texte">
-            {demande.produit}, {demande.quantite}
-          </h3>
-          <p className="text-sm text-texte-secondaire">
-            {LIBELLE_QUARTIER[demande.quartier]}
-            <span aria-hidden="true"> · </span>
-            demandé le {formaterDateCourte(demande.deposeeLe)}
-            {demande.budgetMaximum
-              ? ` · jusqu'à ${formaterFrancs(demande.budgetMaximum)}`
-              : ""}
-          </p>
+        <div className="flex min-w-0 gap-3">
+          {/* ⚠️ `loading="lazy"` : une liste de trente demandes ne doit pas
+              televerser trente images avant d'etre lisible. Le serveur ne
+              sert les octets que si le navigateur les demande, et il ne les
+              demande que pour ce qui approche du cadre (§18.1). */}
+          {demande.photoUrl ? (
+            <img
+              src={demande.photoUrl}
+              alt={`Photo du produit demandé : ${demande.produit}`}
+              loading="lazy"
+              className="size-14 shrink-0 rounded-[10px] border border-bordure object-cover"
+            />
+          ) : null}
+          <div className="min-w-0">
+            <h3 className="font-semibold text-texte">
+              {demande.produit}, {demande.quantite}
+            </h3>
+            <p className="text-sm text-texte-secondaire">
+              {LIBELLE_QUARTIER[demande.quartier]}
+              <span aria-hidden="true"> · </span>
+              demandé le {formaterDateCourte(demande.deposeeLe)}
+              {demande.budgetMaximum
+                ? ` · jusqu'à ${formaterFrancs(demande.budgetMaximum)}`
+                : ""}
+            </p>
+          </div>
         </div>
 
         <span

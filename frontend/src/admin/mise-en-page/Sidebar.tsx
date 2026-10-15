@@ -82,7 +82,7 @@ export default function Sidebar({
         aria-label="Administration"
         className="flex w-60 shrink-0 flex-col border-r border-bordure bg-white"
       >
-        <div className="flex items-center gap-2 border-b border-bordure px-5 py-4">
+        <div className="flex items-center gap-2 border-b border-filet px-5 py-4">
           <IconeGroupage taille={22} className="text-texte" />
           <span className="font-semibold text-texte">Group Achat</span>
         </div>
@@ -97,7 +97,7 @@ export default function Sidebar({
                   type="button"
                   onClick={() => onNaviguer(cle)}
                   aria-current={estActif ? "page" : undefined}
-                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
+                  className={`flex w-full items-center gap-3 rounded-[10px] px-3 py-2.5 text-left text-sm transition-colors ${
                     estActif
                       ? "bg-texte font-semibold text-white"
                       : "text-texte hover:bg-surface-douce"
@@ -127,7 +127,7 @@ export default function Sidebar({
 
         {/* ⚠️ Dit franchement ce que le jeton ne protege pas. Quelqu'un lira
             cet ecran et en conclura que l'administration est securisee. */}
-        <p className="border-t border-bordure px-5 py-4 text-xs text-texte-secondaire">
+        <p className="border-t border-filet px-5 py-4 text-xs text-texte-secondaire">
           Jeton partagé — il n&apos;identifie personne. Les décisions portent le
           nom qu&apos;on veut bien y mettre.
         </p>

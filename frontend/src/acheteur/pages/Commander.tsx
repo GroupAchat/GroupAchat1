@@ -336,9 +336,9 @@ export default function Commander({
               </dd>
             </div>
 
-            <div className="mt-2 flex justify-between gap-4 border-t border-bordure pt-3">
+            <div className="mt-2 flex justify-between gap-4 border-t border-filet pt-3">
               <dt className="font-semibold text-texte">Total à payer</dt>
-              <dd className="text-[22px] font-bold text-texte">
+              <dd className="text-prix font-bold text-texte">
                 {total === undefined ? "—" : formaterFrancs(total)}
               </dd>
             </div>

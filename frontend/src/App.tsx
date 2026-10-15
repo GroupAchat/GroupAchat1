@@ -10,6 +10,7 @@ import {
 import useEstBureau from "./hooks/useEstBureau";
 import type { MonDossierApi } from "./api/dossiers";
 import { type Role, roleDepuisAdresse } from "./domaine/role";
+import { groupageDepuisAdresse } from "./domaine/partage";
 import ChoixProfil from "./pages/ChoixProfil";
 import Inscription from "./groupeur/pages/Inscription";
 import PageDemarrage from "./pages/PageDemarrage";
@@ -105,8 +106,24 @@ export default function App() {
    */
   const roleDemande = useMemo(() => roleDepuisAdresse(), []);
 
+  /**
+   * Un `?groupage=` dans l'adresse : quelqu'un a recu le lien d'une fiche.
+   *
+   * ⚠️ **Il saute l'ecran de choix de profil**, et c'est le cas ou le §1.5 est
+   * le plus imperatif : on arrive d'une conversation WhatsApp, sur un produit
+   * precis, souvent pour la premiere fois. Poser « voulez-vous acheter ou
+   * devenir groupeur ? » devant un produit qu'on vient nous recommander est
+   * exactement le mur que ce paragraphe interdit — et c'est aussi le meilleur
+   * moyen de perdre la visite.
+   *
+   * On **ne retient pas** ce profil, a la difference du bouton « Je veux
+   * acheter » : personne n'a choisi, donc rien n'a ete decide. L'ecran de
+   * choix reviendra a la prochaine ouverture sans lien.
+   */
+  const ficheDemandee = useMemo(() => groupageDepuisAdresse(), []);
+
   const [role, setRole] = useState<Role>(
-    roleDemande ?? profilRetenu ?? "acheteur",
+    roleDemande ?? (ficheDemandee ? "acheteur" : undefined) ?? profilRetenu ?? "acheteur",
   );
 
   /**
@@ -114,7 +131,7 @@ export default function App() {
    * C'est la troisieme condition du §1.5 : l'ecran ne vient qu'une fois.
    */
   const [ouverture, setOuverture] = useState<Ouverture>(
-    roleDemande || profilRetenu ? "entre" : "demarrage",
+    roleDemande || ficheDemandee || profilRetenu ? "entre" : "demarrage",
   );
 
   /**
@@ -198,7 +215,16 @@ export default function App() {
 
       {etape === "entre" ? (
         <>
-          {role === "acheteur" ? <ApplicationAcheteur /> : null}
+          {role === "acheteur" ? (
+            <ApplicationAcheteur
+              /* ⚠️ **Il change de produit, pas d'ecran.** Le pied de page
+                 propose « Devenir groupeur » ; le cote groupeur a son propre
+                 chrome et son propre routeur, donc seul `App` peut basculer.
+                 Il mene au depot de dossier (ecran 13), pas directement au
+                 tableau de bord : le KYC du §10.5 reste la porte. */
+              onDevenirGroupeur={() => setOuverture("inscription")}
+            />
+          ) : null}
           {role === "groupeur" ? (
             <ApplicationGroupeur
               telephone={telephoneGroupeur}

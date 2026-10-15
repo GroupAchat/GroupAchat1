@@ -129,10 +129,10 @@ export default function Decision({
                 − {formaterFrancs(frais)}
               </dd>
             </div>
-            <div className="mt-2 flex items-baseline justify-between gap-4 border-t border-bordure pt-3">
+            <div className="mt-2 flex items-baseline justify-between gap-4 border-t border-filet pt-3">
               <dt className="font-semibold text-texte">Retirable maintenant</dt>
               {/* Le chiffre qui decide. */}
-              <dd className="text-[22px] font-bold text-confiance">
+              <dd className="text-prix font-bold text-confiance">
                 {formaterFrancs(net)}
               </dd>
             </div>

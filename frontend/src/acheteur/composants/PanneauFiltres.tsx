@@ -70,7 +70,7 @@ export default function PanneauFiltres({
         </ul>
       </section>
 
-      <section className="mt-6 border-t border-bordure pt-5">
+      <section className="mt-6 border-t border-filet pt-5">
         <h3 className="text-sm font-semibold text-texte">Affiner</h3>
         <div className="mt-2 space-y-1">
           <CaseFiltre
@@ -88,7 +88,7 @@ export default function PanneauFiltres({
         </div>
       </section>
 
-      <section className="mt-6 border-t border-bordure pt-5">
+      <section className="mt-6 border-t border-filet pt-5">
         <h3 className="text-sm font-semibold text-texte">Trier par</h3>
         <ul className="mt-2 space-y-0.5">
           {ORDRE_TRI.map((tri) => (
@@ -123,7 +123,7 @@ function LigneFiltre({
       type="button"
       aria-pressed={actif}
       onClick={onClick}
-      className={`flex min-h-10 w-full items-center justify-between gap-2 rounded-lg px-2 text-left text-sm transition-colors ${
+      className={`flex min-h-10 w-full items-center justify-between gap-2 rounded-[10px] px-2 text-left text-sm transition-colors ${
         actif
           ? "bg-primaire-fond font-semibold text-primaire-texte-sur-fond"
           : "text-texte hover:bg-surface-douce"
@@ -147,7 +147,7 @@ function CaseFiltre({
   children: React.ReactNode;
 }) {
   return (
-    <label className="flex min-h-10 cursor-pointer items-center gap-2.5 rounded-lg px-2 text-sm text-texte hover:bg-surface-douce">
+    <label className="flex min-h-10 cursor-pointer items-center gap-2.5 rounded-[10px] px-2 text-sm text-texte hover:bg-surface-douce">
       <input
         type="checkbox"
         checked={coche}

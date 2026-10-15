@@ -12,8 +12,42 @@ python -m venv .venv
 .venv/Scripts/python manage.py charger_demo    # le jeu du §3
 .venv/Scripts/python manage.py runserver       # http://127.0.0.1:8000
 
-.venv/Scripts/python manage.py test groupachat # 64 tests
+.venv/Scripts/python manage.py test groupachat # 252 tests
 ```
+
+## ⚠️ Une tâche planifiée est obligatoire en production
+
+```bash
+.venv/Scripts/python manage.py cloturer_les_groupages_echus
+.venv/Scripts/python manage.py cloturer_les_groupages_echus --a-blanc  # pour regarder d'abord
+```
+
+**« Seule la date clôture »** est une règle produit non négociable, et elle ne
+l'était pas dans le code : `cloturer_campagne` n'avait que deux appelants, le
+bouton « Clôturer maintenant » du groupeur et les chargeurs de démonstration.
+Rien ne s'exécute quand une date passe — il faut donc quelque chose qui
+regarde l'heure.
+
+Sans cette tâche branchée sur le cron du VPS, un groupage dont la date tombe :
+
+- **disparaît du catalogue** — l'écran 2 écarte les `date_fin` passées — donc
+  plus personne ne le voit, pas même nous ;
+- **ne crée aucun `Retrait`**, donc l'argent déjà encaissé auprès des acheteurs
+  **ne devient jamais retirable**. Le portefeuille du groupeur affiche zéro sur
+  une collecte réelle ;
+- laisse ses commandes en `payee` au lieu de `cloturee`, donc l'écran 9
+  continue de promettre « détenu jusqu'à la clôture » sur un groupage échu ;
+- **n'envoie pas la notification de clôture**, puisque c'est
+  `cloturer_campagne` qui l'envoie.
+
+Autrement dit, un groupeur qui oublie un bouton bloque l'argent de ses
+acheteurs sans que personne ne soit averti. Un passage par quart d'heure
+suffit : la clôture n'a pas besoin d'être à la seconde, et l'écran acheteur
+n'affiche « il reste N heures » qu'à l'heure près.
+
+Elle **n'annule rien** : un groupage sous son objectif de participants se
+clôture comme les autres et peut aboutir. L'annulation reste une décision,
+prise à l'écran 16.
 
 ## La base de données
 
@@ -161,6 +195,32 @@ interdit — nom, numéro, repère, référence à l'acheteur. Un
   de suspension ;
 - **le serveur refait le contrôle que le client a déjà fait.** Un appel direct
   à l'API est bloqué comme le reste.
+
+### La photo d'une demande (écran 11)
+
+- une demande **sans** photo passe : le §1.0 plafonne le formulaire à cinq
+  champs, la photo est un bonus et pas une condition ;
+- les **octets ne partent jamais dans la liste** des demandes. Le sérialiseur
+  ne rend qu'une `photo_url` ; cent demandes sérialisées avec leurs octets
+  feraient trente mégaoctets de réponse pour des images que l'écran
+  n'affichera peut-être pas (§18.1) ;
+- un fichier qui **se déclare** image sans en être une est refusé. C'est le
+  contrôle qui compte : le `Content-Type` du formulaire vient du client, seuls
+  les premiers octets ne mentent pas ;
+- une photo trop lourde est **refusée, pas ignorée**. L'acheteur a attendu son
+  téléversement sur un forfait compté : le laisser croire sa demande partie
+  avec la photo serait un mensonge que rien à l'écran ne corrigerait ;
+- la photo d'un autre acheteur répond **404, et non 403** — « interdit »
+  confirmerait que la demande existe.
+
+⚠️ **Les octets sont en base, et c'est provisoire.** Le §18 du cahier des
+charges laisse le stockage des médias « à définir » et le §10.5 explique
+pourquoi `MEDIA_ROOT` serait le mauvais endroit : poser un `ImageField`
+aurait tranché à la place de l'utilisateur. Le plafond de 300 ko
+(`domaine.PHOTO_DEMANDE_MAX_OCTETS`) est ce qui rend l'attente tenable — mille
+demandes pèsent alors 300 Mo, ce qui se sauvegarde encore. Le jour où le
+stockage objet existe, `photo` et `photo_type` deviennent une référence et le
+reste de la chaîne ne change pas.
 
 ### Le KYC (§10.5)
 

@@ -20,10 +20,29 @@ import { appeler } from "./client";
  * partagé — que quelqu'un voie ses commandes — n'est pas du même ordre que de
  * donner à un inconnu l'annuaire des groupeurs.
  *
- * ⚠️ **Ce n'est toujours pas un mot de passe.** Qui a l'appareil déverrouillé
- * a le compte. C'est le compromis assumé d'un produit dont le §1.5 interdit le
- * mur d'authentification : on ne peut pas à la fois ne rien demander à
- * l'entrée et exiger un secret à chaque visite.
+ * ⚠️ **Le jeton n'est pas un mot de passe, même depuis qu'il existe un mot de
+ * passe.** Qui a l'appareil déverrouillé a le compte : le mot de passe sert à
+ * **entrer** sur un appareil neuf, pas à garder la porte fermée sur celui-ci.
+ * C'est le compromis assumé d'un produit dont le §1.5 interdit le mur
+ * d'authentification — on ne peut pas à la fois ne rien demander à l'entrée et
+ * exiger un secret à chaque visite.
+ *
+ * La seule conséquence pratique est dans `definirLeMotDePasse` : changer de mot
+ * de passe exige **l'ancien**, justement parce que la session seule ne prouve
+ * pas qu'on est le titulaire.
+ *
+ * ## Les deux voies d'entrée
+ *
+ * | | Code SMS | Mot de passe |
+ * |---|---|---|
+ * | Disponible | **Toujours** | S'il en a posé un |
+ * | Crée le compte | **oui** | non, jamais |
+ * | Verrouillable | non | 5 échecs, 15 minutes |
+ *
+ * ⚠️ **Le code SMS est la voie de récupération, et il lève le verrou.** C'est
+ * pour cela qu'il n'y a **aucun parcours « mot de passe oublié »** à écrire :
+ * pas de lien à durée de vie, pas de courriel à attendre — et le courriel est
+ * justement facultatif sur ce marché. On redemande un code, et c'est tout.
  */
 
 const CLE = "groupachat.jeton-acheteur";
@@ -61,9 +80,31 @@ export interface Profil {
   id: number;
   telephone: string;
   nom: string;
+  /**
+   * Facultatif, et jamais demandé pour commander — il ne se renseigne que
+   * depuis l'écran de profil. Une partie du public à Lomé n'a pas d'adresse
+   * de messagerie consultée mais répond au téléphone.
+   *
+   * ⚠️ **Il n'identifie pas le compte.** C'est le numéro, et lui seul.
+   */
+  courriel: string;
   /** La **dernière** adresse de livraison, pour pré-remplir la suivante. */
   quartier: string;
   repere: string;
+  /**
+   * ⚠️ **Un booléen, et le serveur n'en dira jamais plus.** L'empreinte du
+   * mot de passe ne sort pas de l'API : la publier offrirait de quoi
+   * l'attaquer hors ligne, sans limite d'essais ni verrou. Ce booléen suffit
+   * à l'écran, qui n'a qu'un choix à faire — écrire « Définir » ou
+   * « Modifier ».
+   */
+  a_un_mot_de_passe: boolean;
+}
+
+/** Ce que `preparerLaConnexion` apprend sur un numéro. */
+export interface VoiesDeConnexion {
+  compte_existe: boolean;
+  a_un_mot_de_passe: boolean;
 }
 
 export interface CodeEnvoye {
@@ -112,12 +153,125 @@ export function ouvrirUneSession(
     telephone: string;
     code: string;
     nom?: string;
+    courriel?: string;
+    /**
+     * ⚠ **Rempli par l'inscription, jamais par une reconnexion.**
+     *
+     * L'inscription classique récolte tout en un écran, puis vérifie le
+     * numéro par un code : le mot de passe voyage donc avec le code. Le
+     * serveur ne l'accepte **qu'à la création** du compte et refuse un
+     * numéro déjà inscrit — sinon le code SMS deviendrait une remise à
+     * zéro silencieuse du mot de passe, là où en changer exige l'ancien.
+     */
+    mot_de_passe?: string;
     quartier?: string;
     repere?: string;
   },
   signal?: AbortSignal,
 ): Promise<SessionOuverte> {
   return appeler("/comptes/session/", {
+    methode: "POST",
+    corps: entree,
+    signal,
+  });
+}
+
+/**
+ * Le formulaire d'inscription est-il bon ? **Aucun compte, aucun SMS.**
+ *
+ * ⚠️ **À appeler avant `demanderUnCode`, et ce n'est pas un luxe.** Sans
+ * elle, un mot de passe trop court n'est refusé qu'à l'ouverture de session,
+ * c'est-à-dire **après** l'envoi du code : l'acheteur a reçu un SMS, il est
+ * devant les quatre cases, et il doit revenir corriger un champ. C'est la
+ * façon sûre de faire abandonner une inscription.
+ *
+ * Elle refuse aussi un numéro **déjà inscrit**, et l'écran bascule alors sur
+ * la connexion : c'est le prix du modèle classique, où deux parcours
+ * distincts existent et où il faut dire lequel est le bon.
+ *
+ * ⚠️ **Elle ne remplace aucun contrôle du serveur**, qui revérifie tout à
+ * l'ouverture de session. Un contrôle qui ne vit que dans l'écran se
+ * contourne par un appel direct.
+ */
+export function controlerLInscription(
+  entree: {
+    telephone: string;
+    nom: string;
+    courriel?: string;
+    /** Facultatif : le formulaire d'inscription n'en demande plus. */
+    mot_de_passe?: string;
+  },
+  signal?: AbortSignal,
+): Promise<{ valide: boolean }> {
+  return appeler("/comptes/inscription/controler/", {
+    methode: "POST",
+    corps: entree,
+    signal,
+  });
+}
+
+/**
+ * **Par quelle voie ce numéro peut-il entrer ?** N'envoie aucun SMS.
+ *
+ * ⚠️ **À appeler avant `demanderUnCode`, pas après.** Sans elle, la feuille
+ * devait envoyer un SMS **pour savoir quoi afficher** : quelqu'un qui a posé
+ * un mot de passe et s'en souvient recevait un code dont il n'avait aucun
+ * besoin. Le jour où un fournisseur sera branché (§18.2), ce serait un SMS
+ * facturé à chaque ouverture de la feuille.
+ */
+export function preparerLaConnexion(
+  telephone: string,
+  signal?: AbortSignal,
+): Promise<VoiesDeConnexion> {
+  return appeler("/comptes/preparer/", {
+    methode: "POST",
+    corps: { telephone },
+    signal,
+  });
+}
+
+/**
+ * La seconde voie d'entrée. **Elle ne crée aucun compte.**
+ *
+ * C'est la différence de fond avec `ouvrirUneSession`, et elle n'est pas
+ * négociable : un compte naît d'un numéro **prouvé** par un code SMS. Un mot
+ * de passe qui créerait le compte permettrait d'en ouvrir un sur le numéro de
+ * quelqu'un d'autre, et de recevoir à sa place ses notifications de livraison.
+ *
+ * Un numéro inconnu et un compte sans mot de passe rendent **la même erreur**,
+ * parce que l'écran doit faire la même chose dans les deux cas : basculer sur
+ * le code SMS.
+ */
+export function ouvrirUneSessionParMotDePasse(
+  entree: { telephone: string; mot_de_passe: string },
+  signal?: AbortSignal,
+): Promise<SessionOuverte> {
+  return appeler("/comptes/session-mot-de-passe/", {
+    methode: "POST",
+    corps: entree,
+    signal,
+  });
+}
+
+/**
+ * Poser un mot de passe, ou en changer. **Appel authentifié.**
+ *
+ * ⚠️ **`ancien_mot_de_passe` est exigé dès qu'il y en a un**, et il faut
+ * résister à la tentation de l'omettre : la session est déjà ouverte, donc
+ * techniquement elle suffirait. Mais le jeton vit dans le `localStorage` et
+ * survit à la fermeture de l'onglet (voir l'en-tête). La différence est celle
+ * entre **voir** les commandes de quelqu'un et **lui prendre son compte
+ * définitivement** : sans l'ancien mot de passe, un téléphone prêté cinq
+ * minutes suffit à verrouiller son propriétaire dehors pour de bon.
+ *
+ * À la première définition, rien d'autre n'est demandé : la session a été
+ * ouverte par un code SMS, donc le numéro a été prouvé.
+ */
+export function definirLeMotDePasse(
+  entree: { mot_de_passe: string; ancien_mot_de_passe?: string },
+  signal?: AbortSignal,
+): Promise<Profil> {
+  return appeler("/comptes/moi/mot-de-passe/", {
     methode: "POST",
     corps: entree,
     signal,
@@ -159,7 +313,12 @@ export async function seDeconnecter(): Promise<void> {
  * decouvrir son adresse perdue au moment de commander.
  */
 export function completerMonProfil(
-  champs: { nom?: string; quartier?: string; repere?: string },
+  champs: {
+    nom?: string;
+    courriel?: string;
+    quartier?: string;
+    repere?: string;
+  },
   signal?: AbortSignal,
 ): Promise<Profil> {
   return appeler("/comptes/moi/profil/", {

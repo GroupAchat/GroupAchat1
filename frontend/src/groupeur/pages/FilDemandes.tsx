@@ -125,12 +125,22 @@ export default function FilDemandes({
               </Bouton>
             </div>
 
-            <button
-              type="button"
-              className="mt-2 min-h-12 text-sm font-medium text-confiance"
-            >
-              Voir les {demande.personnes} demandes
-            </button>
+            {/*
+              ⚠️ **« Voir les N demandes » a été retiré, et il ne doit pas
+              revenir.**
+
+              Le bouton ne faisait rien, et le brancher aurait été une faute :
+              il promettait la liste des demandes une par une, alors qu'une
+              demande individuelle porte le numéro de celui qui l'a déposée.
+              La servir au groupeur lui donnerait exactement le fichier de
+              clients que l'anonymat lui refuse partout ailleurs — et c'est
+              ce qui protège le modèle contre la désintermédiation.
+
+              L'API s'y refuse d'ailleurs explicitement : la route `demandes`
+              **n'agrège que par produit et quartier**. « 14 personnes à Agoè
+              veulent du riz » est tout ce qu'il y a à savoir pour décider de
+              lancer un groupage, et c'est déjà affiché sur cette carte.
+            */}
           </li>
         ))}
       </ul>

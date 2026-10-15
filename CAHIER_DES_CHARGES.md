@@ -75,18 +75,26 @@ L'acheteur ne juge donc pas un groupeur : il fait confiance à Group Achat. C'es
 
 ## 7. Règles générales
 
-1. **Aucune authentification au premier contact.** À la première ouverture, l'utilisateur arrive directement sur le fil des campagnes. Pas d'écran de connexion, pas de tutoriel bloquant, pas d'invitation à créer un compte.
+1. **Aucune authentification au premier contact.** À la première ouverture, l'utilisateur arrive directement sur le fil des campagnes. Pas d'écran de connexion, pas de tutoriel bloquant.
+
+   ⚠️ **Cette règle disait aussi « pas d'invitation à créer un compte ».** Il en existe une désormais, mais elle ne se déclenche **jamais à l'ouverture** : seulement quand l'utilisateur engage quelque chose, et elle explique pourquoi avant d'ouvrir le formulaire. La distinction est tout ce qui sépare une porte d'un péage.
 
 2. **La connexion est déclenchée par l'opération, jamais par l'ouverture.** Elle n'est demandée qu'au moment où l'utilisateur engage quelque chose.
 
    | Reste libre, sans compte | Exige un compte |
    |---|---|
-   | Faire défiler le fil, chercher, filtrer | **Payer** une commande |
+   | Faire défiler le fil, chercher, filtrer | **Rejoindre** un groupage |
    | Consulter une campagne, son prix, son délai | **Envoyer** une demande de produit |
    | Lire les questions et les réponses | **Poser** une question |
    | Choisir sa quantité et voir son total | Suivre ses commandes et ses demandes |
 
-   Le compte se crée par **numéro de téléphone + code SMS**. Pas de mot de passe, pas d'e-mail, pas d'inscription distincte de la connexion : si le numéro est inconnu, le compte se crée à la validation du code.
+   ⚠️ **« Rejoindre » signifie l'ouverture de l'écran de commande, pas le bouton « Payer ».** Le compte est demandé un écran plus tôt qu'avant. Ce que ça coûte, franchement : quelqu'un venu d'un lien WhatsApp qui voudrait seulement *voir* les variantes et les frais de livraison vers son quartier doit maintenant se connecter d'abord. Ce que ça rend : l'écran de commande affiche des frais et pré-remplit une adresse, deux choses qui appartiennent à un compte — les demander à un inconnu, puis lui réclamer un code à l'écran suivant, faisait saisir son adresse avant de savoir qu'un compte serait nécessaire.
+
+   **L'inscription est classique** : nom, numéro, courriel facultatif, mot de passe, puis vérification du numéro par code SMS. Un acheteur qui a déjà un compte entre par son mot de passe, ou par un code SMS s'il l'a oublié.
+
+   ⚠️ **Ce paragraphe disait : « Le compte se crée par numéro de téléphone + code SMS. Pas de mot de passe, pas d'e-mail, pas d'inscription distincte de la connexion. »** C'est faux depuis que l'utilisateur a tranché pour l'inscription classique. La phrase est reproduite pour que personne ne la restaure en croyant réparer une régression — elle se trouve encore, sous d'autres formes, dans des commentaires du code.
+
+   **La vérification du numéro par SMS reste, et il ne faut pas la retirer pour « faire plus classique ».** Le numéro *est* l'identifiant du compte, et c'est par lui que partent les notifications de livraison : sans preuve, n'importe qui s'inscrit sur le numéro d'un voisin, choisit le mot de passe, et reçoit à sa place l'annonce que son colis est arrivé.
 
 3. **Rien de ce qui a été saisi n'est perdu.** Après connexion, l'action interrompue reprend d'elle-même, avec la quantité, l'adresse et le contenu des formulaires conservés. Une connexion abandonnée ramène à l'écran d'origine intact.
 
@@ -99,6 +107,8 @@ L'acheteur ne juge donc pas un groupeur : il fait confiance à Group Achat. C'es
 6. **Le groupeur est maître de sa campagne.** Il choisit le produit, le prix, la quantité par part, la durée, et c'est lui qui décide, à la clôture, si la commande passe ou non. La plateforme n'impose **aucun minimum de participants**.
 
 7. **Un acheteur peut être servi seul**, si le groupeur l'autorise. Il n'y a pas de seuil imposé par la plateforme.
+
+7 bis. **Le groupeur déclare combien de personnes il veut réunir**, et ce nombre s'affiche aux acheteurs sous forme de barre de progression (§2.5 de la spec des écrans). ⚠️ **Ce n'est ni un plafond ni un minimum** : dépasser est permis, un groupage au-dessous de son objectif peut parfaitement aboutir, et atteindre l'objectif ne déclenche rien. C'est une information, pas une règle — la décision reste celle du point 6.
 
 8. **L'argent passe par la plateforme, mais il appartient au groupeur.** L'acheteur paie dans l'application, jamais le groupeur de la main à la main. La somme s'inscrit aussitôt au **portefeuille du groupeur**, où elle est **détenue jusqu'à la clôture** (§9).
 
@@ -119,6 +129,8 @@ Le mot **campagne** désigne une opération de groupage sur un produit, ouverte 
 - **il annule** : tous les acheteurs sont **remboursés intégralement**, sans aucun frais, et reçoivent une notification expliquant que la campagne n'a pas abouti.
 
 **État alternatif :** *annulée*.
+
+⚠️ **Dès la clôture, le groupage quitte le catalogue.** Il n'apparaît plus ni sur le fil, ni dans la recherche, ni dans les catégories : on ne peut plus le rejoindre, donc l'y laisser occuperait la place d'un groupage auquel on peut encore participer. Sa fiche reste atteignable par son lien, pour que l'acheteur qui a payé garde un chemin vers ce qu'il a acheté. Côté groupeur, rien ne change : il voit tous les siens, clôturés compris.
 
 ### 8.2 Ce qui déclenche chaque étape
 
@@ -274,27 +286,41 @@ Puisque nous recrutons les groupeurs nous-mêmes, nous disposons d'une informati
 
 Un plafond n'empêche pas la fraude, il **borne le montant maximal d'un sinistre** — ce qui, pour une jeune structure, est la différence entre un incident et une fermeture. Il ne coûte rien à mettre en place et remplace utilement la certification abandonnée : la fiabilité se construit en livrant, pas en déposant des pièces.
 
-### 10.4 bis Le compte acheteur — créé au moment de payer
+### 10.4 bis Le compte acheteur — inscription classique, demandée à l'engagement
 
-**On navigue sans compte.** Le §1.5 l'interdit à l'entrée, et pour une raison économique : tout écran placé entre quelqu'un et le produit fait perdre des visiteurs. Le compte est demandé **au moment de rejoindre un groupage**, c'est-à-dire au bouton « Payer » — et pas avant.
+**On navigue sans compte.** Le §1.5 l'interdit à l'entrée, et pour une raison économique : tout écran placé entre quelqu'un et le produit fait perdre des visiteurs. Le fil, le catalogue, les fiches produit et les questions déjà posées se lisent librement.
 
-Le moment compte. À « Commander », l'acheteur n'a encore rien choisi : abandonner ne lui coûte rien. À « Payer », il a choisi sa quantité, sa variante et son adresse : il va au bout. Déplacer la demande plus tôt coûterait des commandes sans rien protéger.
+Le compte est demandé **à l'ouverture de l'écran de commande**, et pour **poser une question**. Un message explique alors pourquoi, puis le formulaire d'inscription s'ouvre.
+
+⚠️ **Ce paragraphe disait que le compte était demandé « au bouton Payer — et pas avant », et l'argumentait ainsi : « À Commander, l'acheteur n'a encore rien choisi : abandonner ne lui coûte rien. À Payer, il a choisi sa quantité, sa variante et son adresse : il va au bout. Déplacer la demande plus tôt coûterait des commandes sans rien protéger. »** L'utilisateur a tranché dans l'autre sens. L'argument n'était pas faux, et le coût est réel : quelqu'un venu d'un lien WhatsApp qui voudrait seulement voir les variantes et les frais vers son quartier doit désormais se connecter d'abord. Ce qu'on gagne en échange : l'écran de commande calcule des frais de livraison et pré-remplit une adresse — deux choses qui appartiennent à un compte. Les demander à un inconnu, puis lui réclamer un code à l'écran suivant, faisait saisir son adresse avant de savoir qu'un compte serait nécessaire.
 
 #### Ce qu'on lui demande, et ce qu'on ne lui demande pas
 
-| Demandé | Pas demandé |
-|---|---|
-| Son **numéro**, vérifié par code SMS | Un mot de passe |
-| Son **nom**, après le code | Une adresse de messagerie |
-| Rien d'autre | Une date de naissance, un genre, une « confirmation » |
+| Demandé | Facultatif | Jamais demandé |
+|---|---|---|
+| Son **nom** — le livreur en a besoin | Un **courriel** | Une date de naissance, un genre |
+| Son **numéro**, vérifié par code SMS | | Une adresse postale à l'inscription |
+| Un **mot de passe**, 8 caractères au moins | | Quoi que ce soit d'autre |
+
+⚠️ **Ce tableau rangeait « un mot de passe » et « une adresse de messagerie » dans la colonne *Pas demandé*.** Les deux existent désormais : le mot de passe est obligatoire, le courriel reste facultatif et il le restera. Une partie du cœur de cible à Lomé n'a pas d'adresse consultée mais répond au téléphone — c'est le même raisonnement qu'au §10.5 pour les groupeurs. **Le courriel ne sert jamais à se connecter** : le numéro identifie le compte, et lui seul.
+
+**Le mot de passe en détail.** Huit caractères au minimum — c'est `AUTH_PASSWORD_VALIDATORS` qui le dit, pas une règle écrite à la main — et le numéro de téléphone est refusé, puisque c'est la valeur que l'attaquant possède déjà. ⚠️ **Un mot de passe entièrement numérique reste accepté**, et c'est un arbitrage assumé : sur un clavier de téléphone d'entrée de gamme (§5 de la spec des écrans), exiger des lettres pousse à l'écrire sur un papier. Huit chiffres valent dix millions de combinaisons, et la voie se **verrouille quinze minutes au bout de cinq échecs** — l'énumération ne passe pas.
+
+⚠️ **Le code SMS lève ce verrou, et c'est structurant.** Prouver qu'on a le téléphone vaut mieux que connaître le mot de passe. Deux conséquences : un mot de passe oublié ou verrouillé **ne ferme jamais un compte**, donc il n'y a **aucun parcours « mot de passe oublié » à écrire** — ni lien à durée de vie, ni courriel à attendre, ce qui tombe bien puisqu'il est facultatif. Et le verrou peut être sévère sans offrir à un tiers le moyen d'enfermer dehors l'acheteur de son choix en se trompant exprès cinq fois sur un numéro qui n'est pas le sien.
+
+**En changer exige l'ancien.** La session seule suffirait techniquement, mais le jeton survit à la fermeture de l'onglet : sans l'ancien mot de passe, un téléphone prêté cinq minutes suffirait à verrouiller son propriétaire dehors pour de bon.
 
 **Son adresse est enregistrée sans être demandée.** Au moment où la feuille de connexion s'ouvre, il vient de saisir son quartier et son repère à l'écran précédent : ils partent avec le code et deviennent son adresse par défaut. Ses commandes suivantes arrivent pré-remplies, modifiables — on se fait livrer ailleurs un jour sur dix.
 
 ⚠️ **L'adresse du compte ne remplace jamais celle de la commande.** Chaque commande garde sa propre copie de la position (§6 du PRD) : le livreur doit voir l'adresse qui valait au moment de la commande, pas celle du compte si l'acheteur déménage entre-temps.
 
-#### Le nom vient après le code, et c'est délibéré
+#### Le formulaire vient avant le code, et il est contrôlé avant l'envoi
 
-Prouver qu'on a le téléphone est la seule chose qui engage. Un formulaire posé avant cette preuve serait rempli par n'importe qui, et le compte ainsi créé ne vaudrait rien. Le code validé ouvre donc la session, **puis** l'écran demande le nom.
+⚠️ **Ce paragraphe disait l'inverse : « Le nom vient après le code, et c'est délibéré. »** C'était la conséquence de l'inscription implicite, qui n'existe plus. Dans un parcours classique, on remplit un formulaire puis on vérifie son numéro.
+
+**Le formulaire est validé avant que le code parte.** Sans ce contrôle, un mot de passe trop court ne serait refusé qu'à la dernière requête : l'acheteur a reçu son SMS, il est devant les quatre cases, et il doit revenir corriger un champ. C'est la façon sûre de faire abandonner une inscription — et, le jour où un fournisseur sera branché (§18.2), de payer un SMS pour rien. Le même contrôle refuse un numéro **déjà inscrit** et renvoie vers la connexion, plutôt que de laisser corriger un champ qui est juste.
+
+⚠️ **Le mot de passe n'est posé qu'à la création du compte.** L'accepter sur un compte existant ferait du code SMS une remise à zéro silencieuse — alors qu'en changer exige l'ancien. Ce serait annuler cette protection par un autre chemin.
 
 #### La session — pourquoi un jeton et pas le numéro
 
@@ -308,7 +334,9 @@ L'acheteur est reconnu à sa visite suivante sans refaire de code. Ce qui le rec
 
 Identifier quelqu'un par son numéro — ce que faisait l'API jusqu'ici — revenait à donner ses commandes à qui connaît ce numéro : un reçu, un répertoire, ou simplement huit chiffres essayés au hasard. C'est le minimum qu'on doive à quelqu'un dont on garde l'adresse et l'historique d'achats.
 
-⚠️ **Ce n'est toujours pas un mot de passe.** Le jeton vit dans le navigateur : qui a l'appareil déverrouillé a le compte. C'est le compromis assumé d'un produit qui interdit le mur d'authentification — on ne peut pas à la fois ne rien demander à l'entrée et exiger un secret à chaque visite.
+⚠️ **Le jeton n'est pas le mot de passe, même depuis qu'un mot de passe existe.** Il vit dans le navigateur et survit à la fermeture de l'onglet : qui a l'appareil déverrouillé a le compte. Le mot de passe sert à **entrer depuis un appareil neuf**, pas à garder la porte fermée sur celui-ci — on ne peut pas à la fois laisser naviguer librement et exiger un secret à chaque visite.
+
+La seule conséquence pratique est celle déjà dite plus haut : **changer de mot de passe exige l'ancien**, justement parce que la session seule ne prouve pas qu'on est le titulaire.
 
 #### Le code SMS
 
@@ -637,9 +665,10 @@ Cela a une conséquence qu'il faut assumer : **toute la confiance repose sur la 
 
 Ce qui remplace la réputation individuelle, côté acheteur :
 
-- une **promesse de plateforme** affichée clairement : groupeurs sélectionnés, argent détenu par Group Achat, livré ou remboursé ;
-- les **questions publiques** sous chaque campagne, qui montrent un groupeur qui répond ;
-- la **mécanique de recours** : contestation à la livraison, arbitrage, remboursement.
+- une **promesse de plateforme** affichée clairement : « vous êtes livré, ou remboursé », et l'argent détenu par Group Achat jusqu'à la clôture. ⚠️ **« Groupeurs sélectionnés par Group Achat » a été retiré de l'interface** — tableau des formulations interdites au §1.7 de la spec des écrans. La vérification des groupeurs reste entière (section 10.5), mais elle n'est plus ce qu'on affiche : « vous êtes livré, ou remboursé » est un engagement que l'acheteur peut nous opposer, là où « groupeurs sélectionnés » lui demandait de nous croire sur parole ;
+- les **questions publiques** sous chaque campagne, qui montrent un groupeur qui répond — et depuis la cloche, l'acheteur **sait** qu'on lui a répondu, au lieu de devoir revenir vérifier de lui-même sur la fiche ;
+- une **cloche de notifications** qui dit où en est chaque groupage rejoint : clôturé, produit arrivé, annulé et remboursé. ⚠️ **C'est la plateforme qui rédige, toujours.** Le groupeur déclenche un fait, il ne rédige pas de message : un champ libre vers ses acheteurs serait une messagerie privée, et un texte partant à trente personnes d'un coup échapperait au filtre de la section 15. La réponse ne lui rend qu'un compte, jamais une liste — §1.10 de la spec des écrans ;
+- la **mécanique de recours** : contestation à la livraison, arbitrage, remboursement. Elle existe désormais pour de vrai côté produit — `POST /api/commandes/{id}/refuser/`, trois motifs et une description, refusable **pendant la livraison seulement**. ⚠️ **Le refus ouvre un litige, il ne rembourse pas** : la commande passe à `litige` et un humain examine sous 48 h. Rembourser sur déclaration se paierait sur notre trésorerie à chaque refus, vrai ou non, puisque le groupeur a déjà retiré son argent à la clôture (section 10.2). Le dépôt de photo attend le stockage de fichiers du VPS : un champ qui perd les photos serait pire que son absence, parce que l'acheteur croirait avoir fourni sa preuve.
 
 **Avis et notes :** retirés de l'interface acheteur, puisqu'il n'y a pas de profil à noter. Mais il serait dommage de ne pas mesurer la fiabilité **en interne** : taux de campagnes livrées, délais, litiges, c'est ce qui alimente les plafonds de 10.4. Affichage public d'un indicateur agrégé : **À définir**
 
@@ -662,6 +691,13 @@ Le filtre technique est la **dernière** ligne, pas la première. Trois choix de
 | **1 — Règles déterministes** | Suites de 8 chiffres (format togolais), chiffres espacés ou ponctués, `+228`, e-mails, URL, `@identifiants`, mots-clés : *whatsapp, telegram, appelle, mon numéro, contacte-moi, en privé* | **Instantané**, avant publication | Nul. Fonctionne hors ligne |
 | **2 — Classifieur IA** | Ce que les règles ne voient pas : numéros **écrits en lettres** (« zéro neuf, un deux, trente-quatre »), descriptions permettant de se reconnaître (« la dame en face de la pharmacie Sodji »), propositions de rendez-vous, langage détourné, mélange français-éwé | Avant publication, sur ce qui a passé le niveau 1 | Faible : quelques questions par campagne, un petit modèle suffit |
 | **3 — Humain** | Bouton « Signaler » + file de modération dans l'admin Django | Après publication | Du temps, et il en faudra |
+
+**Le niveau 3 est en place** : `POST /api/questions/{id}/signaler/`, trois motifs fermés, et la file dans l'admin Django. Il l'a été tard, et c'est instructif — l'icône de drapeau était dessinée sur chaque message depuis le début et **n'allait nulle part**. Le niveau 3 n'avait donc aucun moyen d'être saisi : ce que les deux filtres automatiques laissent passer restait en ligne sans recours, alors que c'est précisément ce que ce niveau existe pour attraper.
+
+Deux règles de ce niveau, qui ne se discutent pas :
+
+- **un signalement ne dépublie rien.** Dépublier sur signalement donnerait à n'importe qui le pouvoir de faire taire n'importe qui : il suffirait de signaler la question gênante — « ce produit est-il garanti ? » — pour l'effacer du seul canal public du produit. Le signalement remplit une file ; un humain tranche ;
+- **un signalement par personne et par question**, garanti par une contrainte en base. Sans elle, un seul lecteur contrarié gonfle le compteur autant qu'il veut et décide seul de ce qu'un humain regarde en premier.
 
 **L'IA a sa place au niveau 2, et nulle part ailleurs.** La mettre en première ligne coûterait plus cher, serait plus lent, et échouerait sur ce qu'une expression régulière attrape en une microseconde. L'inverse est aussi vrai : des règles seules ne verront jamais « appelle le neuf zero douze trente-quatre cinquante-six ». **Les deux, dans cet ordre.**
 
@@ -737,9 +773,11 @@ Un groupeur qui s'y reprend à trois fois ne s'est pas trompé — il essaie. **
 
 ### 16.1 Acheteur
 
-Il ouvre l'application et **fait défiler** les campagnes en plein écran, photo ou vidéo, comme un fil de réseau social. Une campagne l'intéresse : il ouvre le détail, lit le prix, la quantité par part, le délai restant, les questions déjà posées. Il peut en poser une.
+Il ouvre l'application et **fait défiler** les campagnes en plein écran, photo ou vidéo, comme un fil de réseau social. Une campagne l'intéresse : il ouvre le détail, lit le prix, la quantité par part, le délai restant, les questions déjà posées. **Il peut en poser une — et c'est là qu'un compte lui est demandé pour la première fois**, avec un message qui dit pourquoi : c'est par le compte que la réponse du groupeur lui reviendra.
 
-Il choisit sa quantité, voit son total, saisit son adresse de livraison. **C'est en payant que son compte lui est demandé** — numéro, code SMS — et le paiement reprend seul ensuite.
+**C'est en rejoignant le groupage que son compte lui est demandé**, à l'ouverture de l'écran de commande : nom, numéro, courriel facultatif, mot de passe, puis un code SMS pour vérifier le numéro. L'action reprend seule ensuite — il choisit sa quantité, voit son total, saisit son adresse de livraison, et paie.
+
+⚠️ **Cette phrase disait : « C'est en payant que son compte lui est demandé — numéro, code SMS. »** Le compte est désormais demandé un écran plus tôt, et l'inscription est classique (§10.4 bis).
 
 Il suit sa commande : *payée*, puis *campagne clôturée*, puis *commande en cours chez le groupeur*, puis *en cours de livraison*. Le livreur se présente, **il vérifie sa commande devant lui** et accepte, ou refuse si ce n'est pas du tout ce qu'il a commandé.
 

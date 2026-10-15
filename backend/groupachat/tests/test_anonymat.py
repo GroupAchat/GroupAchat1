@@ -49,6 +49,7 @@ class SocleTest(TestCase):
             contenu_part="1 écouteur filaire avec micro, garantie 3 mois",
             categorie=Campagne.Categorie.ELECTRONIQUE,
             prix_part=Decimal("4000"),
+            objectif_participants=40,
             date_fin=timezone.now() + timedelta(days=2),
         )
 
@@ -212,3 +213,80 @@ class PasDeMurTest(SocleTest):
             format="json",
         )
         self.assertEqual(reponse.status_code, 201, reponse.data)
+
+
+class LeCatalogueNeMontreQueLOuvert(SocleTest):
+    """⚠️ **Un groupage clôturé n'est plus sur la plateforme.**
+
+    Ni sur le fil, ni dans la recherche, ni dans une catégorie. On ne peut plus
+    le rejoindre, donc l'afficher occuperait la place d'un groupage auquel on
+    peut encore participer, et mènerait à une fiche dont le bouton est mort.
+
+    **Le filtre est côté serveur, et ces tests sont là pour qu'il y reste.** Un
+    écran qui masquerait les clôturés ne protégerait de rien : l'API les
+    servirait encore, et le compteur de résultats les compterait toujours.
+    """
+
+    def cloturer(self) -> None:
+        """Pousse la date dans le passé, comme le fait le temps."""
+        Campagne.objects.filter(pk=self.campagne.pk).update(
+            date_fin=timezone.now() - timedelta(hours=1)
+        )
+
+    def lister(self):
+        reponse = self.client.get("/api/campagnes/")
+        self.assertEqual(reponse.status_code, 200)
+        donnees = reponse.data
+        return donnees["results"] if "results" in donnees else donnees
+
+    def test_un_groupage_ouvert_est_au_catalogue(self) -> None:
+        """Le témoin : sans lui, les tests suivants passeraient à vide."""
+        self.assertEqual(len(self.lister()), 1)
+
+    def test_un_groupage_dont_la_date_est_passee_sort_du_catalogue(self) -> None:
+        self.cloturer()
+        self.assertEqual(self.lister(), [])
+
+    def test_un_groupage_cloture_sort_du_catalogue(self) -> None:
+        """Le statut suffit, même si la date n'est pas encore passée.
+
+        C'est le cas du groupeur qui clôture à la main avant l'échéance.
+        """
+        self.campagne.statut = Campagne.Statut.EN_COURS
+        self.campagne.save(update_fields=["statut"])
+        self.assertEqual(self.lister(), [])
+
+    def test_un_groupage_annule_sort_du_catalogue(self) -> None:
+        self.campagne.statut = Campagne.Statut.ANNULEE
+        self.campagne.save(update_fields=["statut"])
+        self.assertEqual(self.lister(), [])
+
+    def test_le_filtre_par_categorie_ne_ramene_pas_les_clotures(self) -> None:
+        """⚠️ **Le piège de ce genre de filtre.**
+
+        Un filtre posé après coup sur la vue de liste serait contourné par
+        n'importe quel paramètre de recherche. On le vérifie donc par les deux
+        chemins que l'interface emploie réellement.
+        """
+        self.cloturer()
+        for parametres in ({"categorie": "electronique"}, {"q": "écouteurs"}):
+            with self.subTest(parametres=parametres):
+                reponse = self.client.get("/api/campagnes/", parametres)
+                donnees = reponse.data
+                lignes = (
+                    donnees["results"] if "results" in donnees else donnees
+                )
+                self.assertEqual(lignes, [])
+
+    def test_la_fiche_reste_atteignable_par_son_lien(self) -> None:
+        """⚠️ **Et ce n'est pas une inconséquence.**
+
+        Un acheteur qui a payé garde un chemin vers ce qu'il a acheté. Le lui
+        refuser en 404 lui ferait croire que sa commande a disparu — ce qui est
+        exactement la panique qu'on veut éviter sur un produit qui tient
+        l'argent des autres. Il ne le trouve simplement plus en parcourant.
+        """
+        self.cloturer()
+        reponse = self.client.get(f"/api/campagnes/{self.campagne.pk}/")
+        self.assertEqual(reponse.status_code, 200)
+        self.assertEqual(reponse.data["titre"], "Écouteurs filaires avec micro")

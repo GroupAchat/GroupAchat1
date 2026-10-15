@@ -290,7 +290,7 @@ feuille ramène à l'écran **intact**.
 | Chemin | Rôle |
 |---|---|
 | `src/index.css` | Les jetons de couleur du §1.2, en variables Tailwind v4. Aucune couleur n'est écrite en dur ailleurs |
-| `src/domaine/format.ts` | Montants (« 4 000 F CFA »), dates, et temps restant (« RESTE 2 JOURS ») avec les seuils d'urgence du §2.4 |
+| `src/domaine/format.ts` | Montants (« 4 000 F CFA »), dates, et temps restant (« Il reste 2 jours ») avec les seuils d'urgence du §2.4 |
 | `src/domaine/livraison.ts` | Frais de livraison et code de livraison. La fonction de frais **renvoie 1 000 F pour toute position** — c'est écrit tel quel dans la spec, et c'est la seule constante à changer le jour du vrai calcul |
 | `src/donnees/groupages.ts` | Les **seize** groupages fictifs. C1 à C4 sont ceux du jeu canonique du §3, chiffres compris ; C6 à C17 sont des ajouts |
 | `src/ui/` | Le design system, qui ne connaît aucune notion métier : `Bouton` (§2.7), `Champ` (§2.9), `Encart` (§2.11), `Statut` (§2.8), `FriseEtapes` (§2.13), `EtatVide` (§2.12), `Carrousel`, `FeuilleRemontante`, `Icones`, `Logo`, `chrome.ts` |

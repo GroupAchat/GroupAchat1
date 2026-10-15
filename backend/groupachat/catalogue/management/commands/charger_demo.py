@@ -230,6 +230,8 @@ class Command(BaseCommand):
         self._charger_les_questions(catalogue, par_identifiant)
         self._charger_les_demandes()
         self._creer_les_etats_de_fin(par_identifiant)
+        self._donner_ses_commandes_a_la_demonstration(par_identifiant)
+        self._amorcer_la_cloche()
 
         self.stdout.write(
             self.style.SUCCESS(
@@ -262,6 +264,11 @@ class Command(BaseCommand):
                 "contenu_part": donnees["contenuPart"],
                 "categorie": donnees["categorie"],
                 "prix_part": Decimal(str(donnees["prixPart"])),
+                # Le denominateur de la barre de progression (§2.5). Pas de
+                # `.get` avec un repli : un groupage du catalogue qui
+                # l'oublierait doit faire echouer le chargement bruyamment,
+                # plutot que d'afficher une barre inventee.
+                "objectif_participants": donnees["objectifParticipants"],
                 "medias": _medias(donnees),
                 "caracteristiques": donnees.get("caracteristiques", []),
                 "variante_libelle": variante.get("libelle", ""),
@@ -280,6 +287,28 @@ class Command(BaseCommand):
         )
 
         if not creee:
+            # ⚠️ **L'objectif se remet a jour meme sur une ligne existante.**
+            # Les groupages d'avant ont recu un objectif deduit de leurs
+            # commandes par la migration 0004, et cette reprise arrondit vers
+            # le haut : aucun groupage ne pouvait donc **depasser** son
+            # objectif, alors que c'est precisement le cas que la barre doit
+            # savoir montrer. On repose la valeur du catalogue, qui fait foi.
+            a_poser = {}
+            if campagne.objectif_participants != donnees["objectifParticipants"]:
+                a_poser["objectif_participants"] = donnees["objectifParticipants"]
+
+            # ⚠️ **Les medias aussi.** Ils sont dans `defaults`, donc une ligne
+            # deja en base gardait son unique photo, et les photos
+            # supplementaires du catalogue n'arrivaient jamais : la galerie de
+            # l'ecran 3 n'affichait pas ses vignettes, et on croyait a un
+            # defaut d'interface alors que c'est la donnee qui manquait.
+            medias = _medias(donnees)
+            if campagne.medias != medias:
+                a_poser["medias"] = medias
+
+            if a_poser:
+                Campagne.objects.filter(pk=campagne.pk).update(**a_poser)
+                campagne.refresh_from_db(fields=list(a_poser))
             return campagne
 
         for numero in range(donnees["acheteursConfirmes"]):
@@ -495,6 +524,217 @@ class Command(BaseCommand):
             livre.commandes.update(statut="livree")
 
     # ── Les dossiers KYC en attente ─────────────────────────────────────────
+
+    def _donner_ses_commandes_a_la_demonstration(
+        self, par_identifiant: dict
+    ) -> None:
+        """Attribue à Akosua Doe des commandes du fil rouge.
+
+        ## ⚠️ Le défaut que ceci répare
+
+        **L'acheteuse du §3 n'avait aucune commande.** Les commandes de
+        démonstration étaient réparties sur des acheteurs générés
+        (« Acheteur 54 »), et le compte avec lequel on se connecte pour
+        montrer le produit n'en possédait pas une seule. Conséquence :
+
+        - l'**écran 8** (« Mes commandes ») était vide ;
+        - l'**écran 9** — suivi, `FriseEtapes`, **code de livraison**, refus du
+          colis — était donc inatteignable, alors que c'est l'écran qui porte
+          toute la promesse de livraison ;
+        - le code `K7M-4PQ` que le §3 annonce **n'existait pas en base** ;
+        - et les notifications de commande n'avaient personne à prévenir.
+
+        ## ⚠️ On réassigne, on ne crée pas
+
+        Les additions du §3 doivent tomber juste : un jury vérifie. Ajouter une
+        commande à C1 ferait 33 commandes et 132 000 F collectés au lieu de
+        128 000 F. On **reprend donc des commandes existantes** et on change
+        leur propriétaire : les comptes restent exacts, et l'une d'elles
+        devient simplement la sienne.
+
+        Idempotent : on ne touche qu'aux groupages où elle n'a encore rien.
+        """
+        acheteuse, _ = Acheteur.objects.get_or_create(
+            telephone="+22890000000",
+            defaults={"nom": "Akosua Doe", "quartier": "Tokoin"},
+        )
+        # Son quartier est celui du §3, et il sert de valeur par défaut au
+        # formulaire de commande : un compte de démonstration sans adresse
+        # ferait ressaisir le repère à chaque passage.
+        if not acheteuse.quartier:
+            acheteuse.quartier = "Tokoin"
+            acheteuse.repere = acheteuse.repere or "Face à la pharmacie Sodji"
+            acheteuse.save(update_fields=["quartier", "repere"])
+
+        #: Le groupage clôturé où l'on pose la commande **en livraison**.
+        #:
+        #: ⚠️ **C'est la seule façon d'afficher le code de livraison.**
+        #: L'écran 9 ne le montre que pendant la livraison : sur une commande
+        #: « payée », le `K7M-4PQ` du §3 existerait en base et ne
+        #: s'afficherait nulle part. Il porte aussi le refus du colis, qui
+        #: n'apparaît que dans cet état.
+        #:
+        #: Choisi dynamiquement : quel groupage est clôturé dépend du JSON du
+        #: catalogue, et le coder en dur ici ferait un second endroit à
+        #: corriger le jour où ce JSON change.
+        en_cours = next(
+            (
+                campagne
+                for campagne in par_identifiant.values()
+                if campagne.statut == Campagne.Statut.EN_COURS
+            ),
+            None,
+        )
+
+        #: Les quatre états de l'écran 8 qu'on veut pouvoir montrer.
+        #: ``(campagne, code à poser ou None, statut à poser ou None)``
+        a_reprendre = [
+            # En attente de clôture : c'est la détention des fonds qui
+            # rassure, pas encore la garantie (§1.7).
+            (par_identifiant.get("C1"), None, None),
+            # Livré : la frise est complète et le code a disparu.
+            (par_identifiant.get("C14"), None, None),
+            # Annulé : remboursement intégral, livraison comprise.
+            (par_identifiant.get("C9"), None, None),
+        ]
+        if en_cours is not None:
+            a_reprendre.insert(
+                0, (en_cours, "K7M-4PQ", Commande.Statut.EN_LIVRAISON)
+            )
+
+        for campagne, code, statut in a_reprendre:
+            if campagne is None:
+                continue
+            if campagne.commandes.filter(acheteur=acheteuse).exists():
+                continue
+
+            commande = (
+                campagne.commandes.exclude(acheteur=acheteuse)
+                .order_by("id")
+                .first()
+            )
+            if commande is None:
+                continue
+
+            commande.acheteur = acheteuse
+            commande.telephone = acheteuse.telephone
+            commande.quartier = "Tokoin"
+            commande.repere = "Face à la pharmacie Sodji"
+            if code is not None:
+                # ⚠️ Le code est unique en base : on ne l'écrase que s'il est
+                # libre, sinon une seconde exécution sur une base à moitié
+                # chargée tomberait sur une violation de contrainte.
+                if not Commande.objects.filter(code_livraison=code).exists():
+                    commande.code_livraison = code
+            champs = [
+                "acheteur",
+                "telephone",
+                "quartier",
+                "repere",
+                "code_livraison",
+            ]
+            if statut is not None:
+                commande.statut = statut
+                champs.append("statut")
+
+            # ⚠️ ``update_fields`` : ``save()`` complet repasserait par
+            # ``full_clean``, qui recalcule les frais de livraison sur le
+            # barème **du jour**. Une commande ancienne parfaitement valable
+            # deviendrait alors impossible à enregistrer.
+            commande.save(update_fields=champs)
+
+        self.stdout.write(
+            f"  {Commande.objects.filter(acheteur=acheteuse).count()} commandes "
+            "pour le compte de démonstration"
+        )
+
+    def _amorcer_la_cloche(self) -> None:
+        """Donne des notifications au compte de démonstration.
+
+        ⚠️ **Nécessaire, et pour une raison instructive.** Les notifications
+        sont produites par les transitions — ``cloturer_campagne``,
+        ``annuler_campagne``, la réponse à une question. Or cette commande est
+        idempotente : sur une base déjà chargée, elle **saute** ces
+        transitions, puisque les retraits existent déjà. La cloche restait
+        donc vide précisément là où on veut la montrer.
+
+        On rejoue donc la rédaction pour le compte de démonstration — en
+        passant par les **mêmes fonctions** que le produit, pas par des textes
+        écrits ici. Deux rédactions du même message divergeraient en une
+        semaine, et c'est la démonstration qui afficherait l'ancienne.
+
+        Idempotent lui aussi : on ne crée que ce qui manque, par nature.
+        """
+        from groupachat.echanges.models import (
+            Notification,
+            prevenir_de_l_annulation,
+            prevenir_de_l_arrivee,
+            prevenir_de_la_cloture,
+        )
+
+        acheteuse = Acheteur.objects.filter(telephone="+22890000000").first()
+        if acheteuse is None:
+            return
+
+        def manque(nature) -> bool:
+            return not Notification.objects.filter(
+                destinataire=acheteuse, nature=nature
+            ).exists()
+
+        #: Ses commandes sur des groupages déjà clôturés : c'est de celles-là
+        #: que parlent les notifications les plus utiles.
+        commandes = list(
+            Commande.objects.filter(acheteur=acheteuse)
+            .select_related("campagne", "campagne__groupeur")
+            .order_by("-passee_le")
+        )
+
+        cloturees = [
+            commande
+            for commande in commandes
+            if commande.campagne.statut
+            in (Campagne.Statut.EN_COURS, Campagne.Statut.LIVREE)
+        ]
+
+        if cloturees:
+            campagne = cloturees[0].campagne
+            if manque(Notification.Nature.GROUPAGE_CLOTURE):
+                prevenir_de_la_cloture(campagne)
+            if manque(Notification.Nature.PRODUIT_ARRIVE):
+                prevenir_de_l_arrivee(campagne)
+                # Le garde-fou du double envoi doit refléter ce qui vient de
+                # partir, sinon l'écran 15 proposerait de l'annoncer encore.
+                if campagne.arrivee_annoncee_le is None:
+                    campagne.arrivee_annoncee_le = timezone.now()
+                    campagne.save(update_fields=["arrivee_annoncee_le"])
+
+        annulees = [
+            commande
+            for commande in commandes
+            if commande.campagne.statut == Campagne.Statut.ANNULEE
+        ]
+        if annulees and manque(Notification.Nature.GROUPAGE_ANNULE):
+            prevenir_de_l_annulation(annulees[:1])
+
+        # La réponse du groupeur à une de ses questions. ⚠️ On ne la rédige
+        # pas : c'est ``prevenir_d_une_reponse`` qui le fait, à partir de la
+        # réponse réellement enregistrée.
+        if manque(Notification.Nature.REPONSE_QUESTION):
+            from groupachat.echanges.models import prevenir_d_une_reponse
+
+            question = (
+                Question.objects.filter(auteur=acheteuse)
+                .exclude(reponse="")
+                .select_related("campagne", "campagne__groupeur")
+                .first()
+            )
+            if question is not None:
+                prevenir_d_une_reponse(question)
+
+        self.stdout.write(
+            f"  {Notification.objects.filter(destinataire=acheteuse).count()} "
+            "notifications pour le compte de démonstration"
+        )
 
     def _charger_les_demandes(self) -> None:
         """Ce que les acheteurs réclament — écrans 11, 12 et 19.

@@ -61,7 +61,12 @@ from .commandes.models import (
     cloturer_campagne,
 )
 from .comptes.models import Groupeur
-from .echanges.models import Demande, Question
+from .echanges.models import (
+    Demande,
+    Question,
+    prevenir_d_une_reponse,
+    prevenir_de_l_arrivee,
+)
 
 
 def groupeur_depuis_la_requete(request) -> Groupeur:
@@ -130,6 +135,8 @@ class CampagneDuGroupeurSerializer(serializers.ModelSerializer):
     )
     heures_restantes = serializers.IntegerField(read_only=True)
     photo = serializers.CharField(source="media", read_only=True)
+    objectif_participants = serializers.IntegerField(read_only=True)
+    progression = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Campagne
@@ -140,9 +147,17 @@ class CampagneDuGroupeurSerializer(serializers.ModelSerializer):
             "prix_part",
             "commandes",
             "collecte",
+            "objectif_participants",
+            "progression",
             "heures_restantes",
             "statut",
             "photo",
+            # ⚠️ Sert à **éteindre le bouton d'annonce**, pas à afficher une
+            # date. L'arrivée est un fait unique : sans ce champ, l'écran
+            # proposerait de l'annoncer une seconde fois et le serveur
+            # répondrait « déjà annoncé » — un bouton qui ne fait rien, ce
+            # qu'on vient justement de corriger partout.
+            "arrivee_annoncee_le",
         )
 
 
@@ -160,6 +175,15 @@ class CreationCampagneSerializer(serializers.ModelSerializer):
     #: l'interface à la calculer, et à gérer le fuseau de Lomé.
     duree_heures = serializers.IntegerField(min_value=1, max_value=24 * 30)
 
+    #: Combien de personnes il veut reunir. **Obligatoire**, et c'est voulu :
+    #: la barre de progression des cartes n'a pas de denominateur sans lui.
+    #:
+    #: ⚠️ **Le maximum n'est pas une limite de produit**, c'est un garde-fou de
+    #: saisie. Un objectif a 100 000 viendrait d'un doigt qui a glisse sur le
+    #: pave numerique, et la barre afficherait 0 % pendant toute la vie du
+    #: groupage — ce qui ressemble a une panne.
+    objectif_participants = serializers.IntegerField(min_value=1, max_value=5000)
+
     class Meta:
         model = Campagne
         fields = (
@@ -175,6 +199,7 @@ class CreationCampagneSerializer(serializers.ModelSerializer):
             "quartier_remise",
             "point_remise",
             "remise_le",
+            "objectif_participants",
             "duree_heures",
         )
 
@@ -733,4 +758,72 @@ class GroupeurViewSet(viewsets.GenericViewSet):
         except DjangoValidationError as erreur:
             raise ValidationError(erreur.message_dict) from erreur
 
+        # ⚠️ **Prévenir l'auteur, et c'est tout l'intérêt de répondre.**
+        # Sans cette notification, une réponse n'était lue que par quelqu'un
+        # qui revenait de lui-même sur la fiche du produit : autant dire
+        # presque personne. Le groupeur répondait dans le vide, et le seul
+        # canal entre les deux côtés (§1.7) ne fonctionnait qu'à moitié.
+        prevenir_d_une_reponse(question)
+
         return Response({"id": question.pk, "reponse": question.reponse})
+
+    # ── Écran 15 — annoncer que le produit est arrivé ───────────────────────
+
+    @action(detail=True, methods=["post"], url_path="annoncer-l-arrivee")
+    def annoncer_l_arrivee(self, request, pk=None):
+        """Le groupeur annonce à ses participants qu'il a reçu la marchandise.
+
+        **C'est le groupeur qui déclenche ; c'est la plateforme qui écrit.**
+        Il n'y a aucun champ de texte dans cette route, et c'est la condition
+        qui rend cette fonctionnalité compatible avec le produit :
+
+        - **pas de messagerie privée** — un champ libre vers ses acheteurs
+          serait une messagerie, quel que soit le nom qu'on lui donne ;
+        - **l'anonymat tient** — il ne sait pas à qui part la notification. La
+          réponse ne lui renvoie **qu'un compte**, jamais une liste ;
+        - **rien à modérer** — il n'y a pas de texte libre, donc pas de filtre
+          du §15 à brancher sur un envoi groupé, ce qui est précisément le
+          genre de filtre qu'on oublie.
+
+        ⚠️ **Une seule fois par groupage.** L'arrivée est un fait unique, et
+        une cloche qui répète le même message perd le droit d'être regardée.
+        Un second appel répond 200 avec ``prevenus: 0`` plutôt qu'une erreur :
+        du point de vue du groupeur, l'annonce est bien faite.
+
+        ⚠️ **Après la clôture seulement.** « Le produit est arrivé » avant la
+        clôture n'a pas de sens — la commande n'est pas passée — et le dire
+        ferait croire à une livraison imminente sur un groupage encore ouvert.
+        """
+        groupeur = groupeur_depuis_la_requete(request)
+        campagne = Campagne.objects.filter(pk=pk, groupeur=groupeur).first()
+        if campagne is None:
+            raise NotFound("Ce groupage n'est pas le vôtre.")
+
+        if campagne.statut not in (
+            Campagne.Statut.EN_COURS,
+            Campagne.Statut.A_DECIDER,
+        ):
+            raise ValidationError(
+                "Vous pourrez l'annoncer une fois le groupage clôturé."
+            )
+
+        if campagne.arrivee_annoncee_le is not None:
+            return Response(
+                {
+                    "prevenus": 0,
+                    "deja_annonce": True,
+                    "annonce_le": campagne.arrivee_annoncee_le,
+                }
+            )
+
+        prevenus = prevenir_de_l_arrivee(campagne)
+        campagne.arrivee_annoncee_le = timezone.now()
+        campagne.save(update_fields=["arrivee_annoncee_le"])
+
+        return Response(
+            {
+                "prevenus": prevenus,
+                "deja_annonce": False,
+                "annonce_le": campagne.arrivee_annoncee_le,
+            }
+        )

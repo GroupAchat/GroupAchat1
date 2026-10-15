@@ -20,6 +20,7 @@ export default function Champ({
   erreur,
   type = "text",
   inputMode,
+  autoComplete,
   prefixe,
   aide,
   desactive = false,
@@ -30,13 +31,31 @@ export default function Champ({
   onChanger: (valeur: string) => void;
   exemple?: string;
   erreur?: string;
-  type?: "text" | "tel" | "email";
+  type?: "text" | "tel" | "email" | "password";
   /**
    * `email` ouvre le clavier avec l'arobase et le point, sans espace. Sur un
    * telephone, c'est la difference entre saisir une adresse et se battre avec
    * le clavier.
    */
   inputMode?: "text" | "tel" | "numeric" | "email";
+  /**
+   * Ce que le navigateur doit comprendre du champ.
+   *
+   * ⚠️ **Indispensable sur un mot de passe, et pas pour le confort.** Sans
+   * `autoComplete="new-password"`, aucun gestionnaire ne propose d'en
+   * enregistrer un — et un mot de passe de huit caractères que rien ne retient
+   * finit écrit sur un papier, ou choisi assez faible pour tenir de mémoire.
+   * Les deux valeurs ne sont pas interchangeables : `current-password` sur un
+   * champ de création fait proposer l'ancien, `new-password` sur un champ de
+   * connexion empêche de proposer celui qu'on a enregistré.
+   */
+  autoComplete?:
+    | "new-password"
+    | "current-password"
+    | "email"
+    | "tel"
+    | "name"
+    | "given-name";
   /** Prefixe fige a gauche, par exemple `+228` sur le numero (ecran 4). */
   prefixe?: string;
   /** Mention 12 px sous le champ, quand elle n'est pas une erreur. */
@@ -56,7 +75,7 @@ export default function Champ({
         className={`mt-1.5 flex h-13 items-center rounded-[10px] border bg-white px-3 focus-within:border-2 ${
           erreur
             ? "border-danger focus-within:border-danger"
-            : "border-bordure focus-within:border-primaire"
+            : "border-bordure-champ focus-within:border-primaire"
         } ${desactive ? "border-bordure bg-surface-douce" : ""}`}
       >
         {prefixe ? (
@@ -66,6 +85,7 @@ export default function Champ({
           id={id}
           type={type}
           inputMode={inputMode}
+          autoComplete={autoComplete}
           value={valeur}
           disabled={desactive}
           autoFocus={autoFocus}

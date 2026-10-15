@@ -73,7 +73,7 @@ export default function ChoixProfil({
         <button
           type="button"
           onClick={onAcheteur}
-          className="flex w-full items-center gap-4 rounded-2xl bg-primaire p-5 text-left text-white active:bg-primaire-presse"
+          className="flex w-full items-center gap-4 rounded-xl bg-primaire p-5 text-left text-white active:bg-primaire-presse"
         >
           {/* L'illustration est a gauche, avant le texte : elle explique le
               mecanisme a quelqu'un qui ne connait pas encore le mot
@@ -97,7 +97,7 @@ export default function ChoixProfil({
         <button
           type="button"
           onClick={onGroupeur}
-          className="flex w-full items-center gap-4 rounded-2xl border-[1.5px] border-confiance p-5 text-left active:bg-confiance-fond"
+          className="flex w-full items-center gap-4 rounded-xl border-[1.5px] border-confiance p-5 text-left active:bg-confiance-fond"
         >
           <IllustrationGroupeur className="size-20 shrink-0 text-confiance sm:size-24" />
 
@@ -124,7 +124,7 @@ export default function ChoixProfil({
         <IconeBouclier taille={20} className="mt-0.5 shrink-0" />
         <p>
           <strong className="font-semibold">
-            Groupeurs sélectionnés par Group Achat.
+            Vous êtes livré, ou remboursé.
           </strong>{" "}
           Vous êtes livré, ou remboursé. Les groupeurs passent une vérification
           d&apos;identité et collectent jusqu&apos;à{" "}

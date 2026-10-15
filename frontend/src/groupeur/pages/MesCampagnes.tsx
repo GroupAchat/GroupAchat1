@@ -3,6 +3,7 @@ import { useEspaceGroupeur } from "../../api/EspaceGroupeurContexte";
 import { formaterFrancs } from "../../domaine/format";
 import { LIBELLE_CAMPAGNE, type Campagne } from "../../domaine/groupeur";
 import Vignette from "../../composants/Vignette";
+import JaugeParticipants from "../../composants/JaugeParticipants";
 import Bouton from "../../ui/Bouton";
 import EtatVide from "../../ui/EtatVide";
 import { ErreurReseau, ListeEnChargement } from "../../ui/EtatReseau";
@@ -141,7 +142,7 @@ export default function MesCampagnes({
           {visibles.map((campagne) => (
             <li
               key={campagne.id}
-              className="border-b border-bordure last:border-b-0 lg:rounded-xl lg:border lg:border-bordure"
+              className="border-b border-filet last:border-b-0 lg:rounded-xl lg:border lg:border-bordure"
             >
               <button
                 type="button"
@@ -160,11 +161,22 @@ export default function MesCampagnes({
                     {campagne.produit}
                   </p>
                   <p className="text-sm text-texte-secondaire">
-                    {campagne.commandes} commande
-                    {campagne.commandes > 1 ? "s" : ""}
-                    <span aria-hidden="true"> · </span>
                     {LIBELLE_CAMPAGNE[campagne.statut] ?? campagne.statut}
                   </p>
+                  {/* ⚠️ **La barre seulement sur un groupage en cours.** Sur un
+                      groupage livre ou annule, elle montrerait un objectif
+                      qu'il n'y a plus rien a atteindre — et sur un annule,
+                      elle ressemblerait a un reproche. */}
+                  {terminee(campagne) ? null : (
+                    <div className="mt-1">
+                      <JaugeParticipants
+                        acheteursConfirmes={campagne.commandes}
+                        objectif={campagne.objectifParticipants}
+                        progression={campagne.progression}
+                        taille="compacte"
+                      />
+                    </div>
+                  )}
                 </div>
                 <p className="shrink-0 font-semibold text-texte">
                   {formaterFrancs(campagne.collecte)}

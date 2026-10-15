@@ -8,6 +8,7 @@ sérialiseurs ne traduisent pas, c'est l'interface qui écrit le mot visible.
 
 from __future__ import annotations
 
+import math
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
@@ -43,11 +44,26 @@ TYPES_MEDIA = (TYPE_IMAGE, TYPE_VIDEO)
 class Campagne(models.Model):
     """Une campagne de groupage.
 
-    ⚠️ **Il n'y a ni plafond de participants ni minimum**, et c'est une
-    décision de produit, pas un oubli. Le modèle n'a donc aucun champ
-    ``objectif`` ou ``places`` — s'il en avait un, une jauge finirait par
-    apparaître dans l'interface, et le §2.5 l'interdit faute de dénominateur
-    réel.
+    ## ⚠️ ``objectif_participants`` est un but, pas un plafond ni un minimum
+
+    Le groupeur déclare **combien de personnes il veut** pour son groupage, et
+    ce nombre est obligatoire : c'est ce qui donne un dénominateur à la barre
+    de progression des cartes (§2.5).
+
+    Trois choses qu'il **ne fait pas**, et qui doivent rester vraies :
+
+    - il **ne limite pas** les commandes. Dépasser l'objectif est permis et
+      normal — une campagne à 24 sur 20 continue de prendre des commandes.
+      Aucun écran ne doit donc écrire « places disponibles » ni « complet » ;
+    - il **n'impose aucun minimum**. La plateforme n'en impose pas (§7 du
+      cahier des charges) : à la clôture, c'est le groupeur qui décide de
+      maintenir ou d'annuler, objectif atteint ou non. Un groupage à 14 sur 20
+      peut parfaitement aboutir ;
+    - il **ne déclenche rien automatiquement**. Atteindre l'objectif ne clôture
+      pas le groupage ; seule la date le fait.
+
+    Autrement dit, c'est une information, pas une règle. Le jour où elle
+    devient une règle, c'est le §7 qu'il faut rouvrir d'abord.
 
     ⚠️ **Aucun champ « prix de détail ».** Il n'y a aucun prix barré dans
     l'application (§3), et le meilleur moyen de ne pas en afficher un est de ne
@@ -88,6 +104,16 @@ class Campagne(models.Model):
         max_digits=12,
         decimal_places=0,
         validators=[MinValueValidator(Decimal("1"))],
+    )
+
+    #: Combien de personnes le groupeur veut reunir. **Obligatoire.**
+    #:
+    #: ⚠️ C'est le denominateur de la barre de progression, et **rien d'autre**
+    #: — ni plafond, ni minimum, ni declencheur. Voir le docstring de la
+    #: classe, qui dit les trois choses que ce champ ne fait pas.
+    objectif_participants = models.PositiveIntegerField(
+        "objectif de participants",
+        validators=[MinValueValidator(1)],
     )
 
     #: Les medias de la fiche, **dans l'ordre d'affichage**.
@@ -180,6 +206,52 @@ class Campagne(models.Model):
         « confirmés » dit que ces gens ont payé, c'est rassurant, et c'est vrai.
         """
         return self.commandes.filter(statut__in=Statut_PAYANTS).count()
+
+    #: Quand le groupeur a annoncé que le produit était arrivé (écran 15).
+    #:
+    #: ⚠️ **C'est un garde-fou, pas une date d'affichage.** L'arrivée est un
+    #: fait unique : un groupeur qui appuie deux fois ne doit pas envoyer deux
+    #: notifications. Une cloche qui répète le même message perd en une
+    #: semaine le droit d'être regardée, et c'est le genre de dégât qu'on ne
+    #: répare pas en retirant la répétition ensuite.
+    arrivee_annoncee_le = models.DateTimeField(
+        "arrivée annoncée le", null=True, blank=True
+    )
+
+    @property
+    def progression(self) -> int:
+        """Où en est le groupage, en pourcentage de son objectif, **plafonné à 100**.
+
+        ⚠️ **Le plafond est dans l'affichage, pas dans le compte.** Une barre
+        remplie à 120 % déborderait de sa gouttière, alors qu'un groupage qui
+        dépasse son objectif est une bonne nouvelle. La barre s'arrête donc à
+        plein, et le nombre écrit à côté continue de monter : « 24 personnes
+        sur 20 ». C'est la seule façon de montrer un dépassement sans laisser
+        croire à une limite.
+
+        Un objectif à zéro ne devrait pas exister — le champ le refuse — mais
+        la division est protégée quand même : une ancienne ligne mal reprise ne
+        doit pas faire tomber le fil entier.
+        """
+        if not self.objectif_participants:
+            return 0
+        part = self.acheteurs_confirmes / self.objectif_participants
+        # ⚠️ **Arrondi vers le bas, pas au plus proche.** Une barre ne doit
+        # jamais surestimer : afficher 100 % à 39 acheteurs sur 40 ferait
+        # croire l'objectif atteint alors qu'il manque quelqu'un. Et
+        # `round` de Python arrondit 2,5 à **2** (arrondi au pair), là où le
+        # `Math.round` de JavaScript donne 3 : les deux côtés auraient affiché
+        # des pourcentages differents sur le meme groupage.
+        return min(100, math.floor(part * 100))
+
+    @property
+    def objectif_atteint(self) -> bool:
+        """L'objectif est-il atteint ?
+
+        ⚠️ **Ne conditionne rien.** Sert à écrire « objectif atteint » sur une
+        carte, pas à autoriser ou refuser quoi que ce soit.
+        """
+        return self.acheteurs_confirmes >= self.objectif_participants
 
     @property
     def collecte_sur_les_parts(self) -> Decimal:
@@ -357,8 +429,8 @@ class Campagne(models.Model):
         rien déclencher — c'est-à-dire que :
 
         - un groupeur **dont le dossier KYC n'est pas validé** peut lancer un
-          groupage, ce qui vide de son sens la phrase « groupeurs sélectionnés
-          par Group Achat » affichée à l'acheteur sur presque chaque écran ;
+          groupage, et nous garantirions alors « vous êtes livré, ou
+          remboursé » sur l'argent de quelqu'un dont nous ne savons rien ;
         - son **plafond de collecte** (§10.4) ne borne plus rien, alors que son
           seul rôle est de limiter le montant maximal d'un sinistre.
 

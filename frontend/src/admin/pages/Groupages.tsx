@@ -103,7 +103,7 @@ export default function Groupages({
         <div className="mt-4 overflow-hidden rounded-xl border border-bordure bg-white">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-bordure text-left text-texte-secondaire">
+              <tr className="border-b border-filet text-left text-texte-secondaire">
                 <th className="px-5 py-3 font-medium">Produit</th>
                 <th className="px-5 py-3 font-medium">Groupeur</th>
                 <th className="px-5 py-3 text-right font-medium">Acheteurs</th>
@@ -126,7 +126,7 @@ export default function Groupages({
 
 function Ligne({ groupage }: { groupage: GroupageAdmin }) {
   return (
-    <tr className="border-b border-bordure last:border-b-0">
+    <tr className="border-b border-filet last:border-b-0">
       <td className="px-5 py-3">
         <span className="font-medium text-texte">{groupage.titre}</span>
       </td>

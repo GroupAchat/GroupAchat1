@@ -70,6 +70,7 @@ class SocleArgent(TestCase):
             contenu_part="Une paire",
             categorie=Campagne.Categorie.ELECTRONIQUE,
             prix_part=Decimal("4000"),
+            objectif_participants=40,
             date_fin=timezone.now() + timedelta(days=2),
         )
         # Le fil rouge du §3 : 32 commandes à 4 000 F.
@@ -124,6 +125,7 @@ class LeMontantEstArreteALaCloture(SocleArgent):
             contenu_part="Un sac",
             categorie=Campagne.Categorie.ALIMENTAIRE,
             prix_part=Decimal("14500"),
+            objectif_participants=40,
             date_fin=timezone.now() + timedelta(days=2),
         )
         # Huit parts : 116 000 F, sous le plafond de 150 000 F du niveau
@@ -520,6 +522,7 @@ class LePlafondDeCollecte(TestCase):
             contenu_part="Un sac",
             categorie=Campagne.Categorie.ALIMENTAIRE,
             prix_part=Decimal("50000"),
+            objectif_participants=40,
             date_fin=timezone.now() + timedelta(days=3),
         )
 

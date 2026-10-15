@@ -61,9 +61,9 @@ import { IconeCoche, IconeDepot } from "../../ui/Icones";
  * ⚠️ **Le tableau de bord s'ouvre, mais la creation de groupage reste
  * fermee** jusqu'a la validation. C'est le point d'equilibre : le faire
  * attendre devant une porte close lui ferait oublier le produit, mais le
- * laisser creer un groupage avant examen viderait de son sens la phrase
- * « groupeurs selectionnes par Group Achat » affichee a l'acheteur. Voir
- * `domaine/recrutement.ts`.
+ * laisser creer un groupage avant examen nous ferait garantir « vous etes
+ * livre, ou rembourse » sur le compte de quelqu'un dont nous ne savons rien.
+ * Voir `domaine/recrutement.ts`.
  */
 type Etape = 1 | 2 | 3 | 4 | "depose";
 

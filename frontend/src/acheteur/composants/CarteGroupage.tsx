@@ -1,6 +1,7 @@
 import { type Groupage } from "../../domaine/groupage";
 import { formaterFrancs } from "../../domaine/format";
 import CompteurTemps from "./CompteurTemps";
+import JaugeParticipants from "../../composants/JaugeParticipants";
 import { IconeVerifie } from "../../ui/Icones";
 
 /**
@@ -69,20 +70,28 @@ export default function CarteGroupage({
           {/* `mt-auto` : les compteurs s'alignent en bas de toutes les cartes
               de la rangee, quelle que soit la longueur des titres. */}
           <div className="mt-auto pt-3">
-            <CompteurTemps heuresRestantes={groupage.heuresRestantes} />
+            {/* La barre avant le compteur de temps : elle dit ou en est le
+                groupage, le temps dit combien il en reste. On lit l'etat
+                avant l'echeance. */}
+            <JaugeParticipants
+              acheteursConfirmes={groupage.acheteursConfirmes}
+              objectif={groupage.objectifParticipants}
+              progression={groupage.progression}
+            />
 
+            <div className="mt-2.5">
+              <CompteurTemps heuresRestantes={groupage.heuresRestantes} />
+            </div>
+
+            {/* ⚠️ **Le compte n'est plus repete ici.** Il est dans la barre
+                juste au-dessus, et l'ecrire deux fois sur une carte de 280 px
+                de haut faisait lire deux chiffres pour une seule
+                information. */}
             <p className="mt-2 flex items-center gap-1.5 text-sm text-texte-secondaire">
-              <span className="font-medium text-texte">
+              <span className="truncate font-medium text-texte">
                 {groupage.groupeur}
               </span>
               <IconeVerifie taille={13} className="shrink-0 text-confiance" />
-              <span aria-hidden="true">·</span>
-              <span>
-                <strong className="font-semibold text-texte">
-                  {groupage.acheteursConfirmes}
-                </strong>{" "}
-                confirmés
-              </span>
             </p>
           </div>
         </div>

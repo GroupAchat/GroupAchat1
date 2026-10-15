@@ -77,6 +77,15 @@ export interface Demande {
   /** Facultatif, en francs CFA. */
   budgetMaximum?: number;
   precisions?: string;
+  /**
+   * L'adresse de la photo jointe, s'il y en a une.
+   *
+   * ⚠️ **Une adresse, jamais les octets.** Le serveur ne sert la photo que
+   * sur demande, par une route authentifiee : c'est ce qui permet a l'ecran 12
+   * de lister trente demandes sans telecharger trente images sur un forfait
+   * limite (§18.1). L'image ne part que si le navigateur l'affiche.
+   */
+  photoUrl?: string;
   deposeeLe: string;
   statut: StatutDemande;
   /** Explication montree sous le statut, variable selon celui-ci. */

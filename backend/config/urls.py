@@ -14,6 +14,7 @@ from groupachat.api import (
     CampagneViewSet,
     CommandeViewSet,
     DemandeViewSet,
+    NotificationViewSet,
     QuestionViewSet,
 )
 from groupachat.api_admin import AdministrationViewSet
@@ -28,6 +29,9 @@ routeur.register("comptes", CompteViewSet, basename="compte")
 routeur.register("campagnes", CampagneViewSet, basename="campagne")
 routeur.register("commandes", CommandeViewSet, basename="commande")
 routeur.register("questions", QuestionViewSet, basename="question")
+routeur.register(
+    "notifications", NotificationViewSet, basename="notification"
+)
 routeur.register("demandes", DemandeViewSet, basename="demande")
 
 # Le recrutement des groupeurs (§10.5). Deux routes et deux publics :

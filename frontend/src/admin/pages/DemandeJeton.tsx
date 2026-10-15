@@ -84,7 +84,7 @@ export default function DemandeJeton({
           Ouvrir l&apos;administration
         </button>
 
-        <p className="mt-6 border-t border-bordure pt-4 text-xs text-texte-secondaire">
+        <p className="mt-6 border-t border-filet pt-4 text-xs text-texte-secondaire">
           {/* Dit franchement, parce que quelqu'un lira cet ecran et en
               conclura que l'administration est protegee. */}
           <strong className="font-semibold">

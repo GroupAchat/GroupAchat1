@@ -1,8 +1,13 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Vignette from "../../composants/Vignette";
 import { type Commande, estEnCours } from "../../domaine/commande";
 import { formaterFrancs } from "../../domaine/format";
-import { adapterCommande, listerMesCommandes } from "../../api/campagnes";
+import {
+  adapterCommande,
+  listerMesCommandes,
+  lireUnGroupage,
+} from "../../api/campagnes";
+import type { Groupage } from "../../domaine/groupage";
 import { useCatalogue } from "../../api/CatalogueContexte";
 import { useRequete } from "../../api/useRequete";
 import { ErreurReseau, ListeEnChargement } from "../../ui/EtatReseau";
@@ -56,15 +61,70 @@ export default function MesCommandes({
     connecte,
   );
 
+  /**
+   * Les groupages de ses commandes **qui ne sont plus au catalogue**.
+   *
+   * ⚠️ **Sans eux, une commande disparaissait de cet ecran des que son
+   * groupage se cloturait** — et c'etait un vrai defaut, pas un detail
+   * d'affichage. Le catalogue ne sert que de l'ouvert (regle produit), donc
+   * `adapterCommande` ne trouvait plus le groupage et la ligne etait ecartee.
+   * Elle disparaissait precisement au mauvais moment : apres la cloture
+   * viennent la commande chez le groupeur, la livraison et le **code de
+   * livraison**, c'est-a-dire tout ce pour quoi on ouvre cet ecran. On payait,
+   * et sa commande s'evaporait.
+   *
+   * Le commentaire d'origine disait qu'elles reapparaitraient « quand l'API
+   * saura servir les campagnes closes ». Elle le sait : `retrieve` repond sur
+   * un groupage cloture, c'est `list` seul qui filtre. Il manquait l'appel.
+   */
+  const [complement, setComplement] = useState<readonly Groupage[]>([]);
+
+  const manquants = useMemo(() => {
+    const connus = new Set([
+      ...groupages.map((groupage) => groupage.id),
+      ...complement.map((groupage) => groupage.id),
+    ]);
+    return [
+      ...new Set(
+        (requete.donnees ?? [])
+          .map((brute) => String(brute.campagne))
+          .filter((identifiant) => !connus.has(identifiant)),
+      ),
+    ];
+  }, [requete.donnees, groupages, complement]);
+
+  useEffect(() => {
+    if (manquants.length === 0) {
+      return;
+    }
+    const abandon = new AbortController();
+    /* `allSettled` : un groupage supprime ne doit pas faire disparaitre les
+       autres commandes avec lui. */
+    Promise.allSettled(
+      manquants.map((identifiant) => lireUnGroupage(identifiant, abandon.signal)),
+    ).then((resultats) => {
+      const trouves = resultats
+        .filter(
+          (resultat): resultat is PromiseFulfilledResult<Groupage> =>
+            resultat.status === "fulfilled",
+        )
+        .map((resultat) => resultat.value);
+      if (trouves.length > 0) {
+        setComplement((avant) => [...avant, ...trouves]);
+      }
+    });
+    return () => abandon.abort();
+  }, [manquants]);
+
   const commandes = useMemo(
     () =>
       (requete.donnees ?? [])
-        .map((brute) => adapterCommande(brute, groupages))
-        /* Une commande dont le groupage n'est plus au catalogue est ecartee
-           plutot que dessinee a moitie. Elle reapparaitra quand l'API saura
-           servir les campagnes closes. */
+        .map((brute) => adapterCommande(brute, [...groupages, ...complement]))
+        /* Reste le cas d'un groupage vraiment introuvable — supprime, ou dont
+           la relecture n'est pas encore revenue. On l'ecarte plutot que de le
+           dessiner a moitie, et il apparaitra au tour suivant. */
         .filter((commande): commande is Commande => commande !== undefined),
-    [requete.donnees, groupages],
+    [requete.donnees, groupages, complement],
   );
 
   const enCours = commandes.filter((c) => estEnCours(c.statut));
@@ -122,7 +182,7 @@ export default function MesCommandes({
     <div
       role="tablist"
       aria-label="Filtrer mes commandes"
-      className="flex gap-1 border-b border-bordure"
+      className="flex gap-1 border-b border-filet"
     >
       {(
         [
@@ -152,7 +212,7 @@ export default function MesCommandes({
   if (estBureau) {
     return (
       <>
-        <div className="mx-auto max-w-[1280px] px-4 py-8 lg:px-8">
+        <div className="largeur-page py-8">
           <h1 className="text-2xl font-semibold text-texte lg:text-3xl">
             Mes commandes
           </h1>
@@ -192,7 +252,7 @@ function LigneCommande({
       className={
         encadree
           ? "rounded-xl border border-bordure"
-          : "border-b border-bordure last:border-b-0"
+          : "border-b border-filet last:border-b-0"
       }
     >
       <button

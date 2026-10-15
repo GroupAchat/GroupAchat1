@@ -47,6 +47,7 @@ class SocleGroupeur(TestCase):
             contenu_part="Une paire",
             categorie=Campagne.Categorie.ELECTRONIQUE,
             prix_part=Decimal("4000"),
+            objectif_participants=40,
             date_fin=timezone.now() + timedelta(days=2),
         )
 
@@ -218,6 +219,10 @@ class CreationDeCampagne(SocleGroupeur):
             "contenu_part": "1 sac de 25 kg",
             "categorie": "alimentaire",
             "prix_part": "13500",
+            # ⚠️ **Obligatoire** : c'est le dénominateur de la barre de
+            # progression des cartes (§2.5), et sans lui la barre n'a rien à
+            # remplir. Un test ci-dessous vérifie que l'API le réclame.
+            "objectif_participants": 20,
             "quartier_remise": "Agoe",
             "point_remise": "Marché d'Agoè, entrée nord",
             "duree_heures": 72,
@@ -247,6 +252,53 @@ class CreationDeCampagne(SocleGroupeur):
         )
         self.assertEqual(reponse.status_code, 400)
         self.assertIn("KYC", str(reponse.data))
+
+    def test_l_objectif_de_participants_est_obligatoire(self) -> None:
+        """⚠️ **Sans objectif, pas de barre de progression** (§2.5).
+
+        Le champ n'a **aucune valeur par défaut**, ni dans le modèle ni dans le
+        sérialiseur, et c'est délibéré : un objectif posé d'office serait
+        publié aux acheteurs sans que le groupeur l'ait choisi, et la barre
+        afficherait un but qui n'est pas le sien.
+        """
+        corps = self.corps()
+        del corps["objectif_participants"]
+
+        reponse = self.client.post(
+            "/api/espace-groupeur/campagnes/", corps, format="json"
+        )
+        self.assertEqual(reponse.status_code, 400)
+        self.assertIn("objectif_participants", reponse.data)
+
+    def test_un_objectif_a_zero_est_refuse(self) -> None:
+        """Zéro personne n'est pas un objectif, c'est une division par zéro."""
+        reponse = self.client.post(
+            "/api/espace-groupeur/campagnes/",
+            self.corps(objectif_participants=0),
+            format="json",
+        )
+        self.assertEqual(reponse.status_code, 400)
+
+    def test_la_progression_part_avec_le_groupage(self) -> None:
+        """La carte a besoin des deux chiffres, pas seulement du numérateur.
+
+        Les faire calculer au client obligerait quatre écrans — le fil, la
+        carte, la ligne et le détail — à refaire le même arrondi chacun à sa
+        façon, et deux d'entre eux finiraient par ne plus dire la même chose.
+        """
+        reponse = self.client.get(
+            "/api/espace-groupeur/campagnes/", self.numero()
+        )
+        premiere = reponse.data[0]
+        self.assertEqual(premiere["objectif_participants"], 40)
+        # Le socle pose **un** acheteur confirmé sur un objectif de 40.
+        self.assertEqual(premiere["commandes"], 1)
+        # ⚠️ 1 / 40 = 2,5 %, et l'arrondi est **vers le bas** : une barre ne
+        # doit jamais surestimer. C'est aussi ce qui met le serveur et le client
+        # d'accord — `round` de Python donnerait 2, le `Math.round` de
+        # JavaScript 3, et les deux côtés afficheraient des chiffres
+        # différents sur le même groupage.
+        self.assertEqual(premiere["progression"], 2)
 
     def test_le_groupeur_ne_peut_pas_lancer_au_nom_d_un_autre(self) -> None:
         """``groupeur`` n'est pas un champ d'entrée, et ne doit pas le devenir.

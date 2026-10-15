@@ -195,7 +195,7 @@ function Ligne({
         </div>
 
         <div className="shrink-0 text-right">
-          <p className="text-[22px] font-bold text-texte">
+          <p className="text-prix font-bold text-texte">
             {formaterFrancs(Number(retrait.net))}
           </p>
           <p className="text-xs text-texte-secondaire">
@@ -214,7 +214,7 @@ function Ligne({
       </p>
 
       {retrait.devis ? (
-        <div className="mt-4 rounded-lg bg-surface-douce px-3 py-2.5 text-sm">
+        <div className="mt-4 rounded-[10px] bg-surface-douce px-3 py-2.5 text-sm">
           <p className="font-semibold text-texte">Devis fournisseur</p>
           <p className="mt-0.5 text-texte-secondaire">
             {retrait.devis.fournisseur} —{" "}
@@ -223,7 +223,7 @@ function Ligne({
           </p>
         </div>
       ) : retrait.etat !== "annule" ? (
-        <p className="mt-4 flex items-start gap-2 rounded-lg bg-primaire-fond px-3 py-2.5 text-sm text-primaire-texte-sur-fond">
+        <p className="mt-4 flex items-start gap-2 rounded-[10px] bg-primaire-fond px-3 py-2.5 text-sm text-primaire-texte-sur-fond">
           <IconeAlerte taille={16} className="mt-0.5 shrink-0" />
           <span>
             <strong className="font-semibold">
@@ -237,18 +237,18 @@ function Ligne({
       ) : null}
 
       {retrait.etat === "effectue" ? (
-        <p className="mt-4 flex items-center gap-2 rounded-lg bg-succes-fond px-3 py-2 text-sm text-succes">
+        <p className="mt-4 flex items-center gap-2 rounded-[10px] bg-succes-fond px-3 py-2 text-sm text-succes">
           <IconeCoche taille={16} />
           Transfert fait le{" "}
           {formaterDateCourte(retrait.libere_le?.slice(0, 10) ?? "")} par{" "}
           {retrait.libere_par}
         </p>
       ) : retrait.etat === "annule" ? (
-        <p className="mt-4 rounded-lg bg-surface-douce px-3 py-2 text-sm text-texte-secondaire">
+        <p className="mt-4 rounded-[10px] bg-surface-douce px-3 py-2 text-sm text-texte-secondaire">
           Groupage annulé — aucun frais, rien n&apos;est parti.
         </p>
       ) : retrait.etat === "retirable" ? (
-        <p className="mt-4 rounded-lg bg-surface-douce px-3 py-2.5 text-sm text-texte-secondaire">
+        <p className="mt-4 rounded-[10px] bg-surface-douce px-3 py-2.5 text-sm text-texte-secondaire">
           <strong className="font-semibold text-texte">
             Le groupeur n&apos;a pas encore demandé son retrait.
           </strong>{" "}

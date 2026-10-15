@@ -25,11 +25,16 @@ import { IconeAlerte, IconeCoche, IconeRetour } from "../../ui/Icones";
  * Ecran A2 — Recrutement : examiner les dossiers KYC. §10.5 et §13.6.
  *
  * **C'est le seul ecran du produit ou une decision humaine engage la promesse
- * faite a l'acheteur.** « Groupeurs selectionnes par Group Achat » s'affiche
- * sur presque chaque ecran acheteur, et c'est cette phrase qui le decide a
- * payer d'avance quelqu'un qu'il ne connait pas. Elle ne vaut rien comme
- * formule : elle vaut comme **dossier constitue, examine par un humain, et
- * opposable le jour d'un litige**.
+ * faite a l'acheteur.** « Vous etes livre, ou rembourse » s'affiche sur
+ * presque chaque ecran acheteur, et c'est cette phrase qui le decide a payer
+ * d'avance quelqu'un qu'il ne connait pas.
+ *
+ * ⚠️ **C'est nous qui remboursons**, et c'est ce qui rend cet examen
+ * obligatoire. Le groupeur retire l'argent a la cloture, donc **avant la
+ * livraison** (§10.2) : si le colis n'arrive jamais, nous payons l'acheteur et
+ * nous nous retournons contre le groupeur. Il faut donc, ce jour-la, un
+ * **dossier constitue, examine par un humain, et opposable**. Sans lui, la
+ * garantie est une phrase que personne ne peut honorer.
  *
  * ## Il lit et ecrit sur l'API
  *
@@ -168,12 +173,12 @@ export default function DossiersKyc({
 
   return (
     <div className="min-h-dvh bg-surface-douce">
-      <header className="border-b border-bordure bg-white">
+      <header className="border-b border-filet bg-white">
         <div className="mx-auto flex max-w-[1280px] items-center gap-4 px-8 py-4">
           <button
             type="button"
             onClick={onRetour}
-            className="flex items-center gap-2 rounded-lg px-2 py-1 text-sm text-texte-secondaire hover:bg-surface-douce"
+            className="flex items-center gap-2 rounded-[10px] px-2 py-1 text-sm text-texte-secondaire hover:bg-surface-douce"
           >
             <IconeRetour taille={18} />
             Tableau de bord
@@ -484,7 +489,7 @@ function Fiche({
         </div>
 
         {dossier.courriel === "" ? (
-          <p className="mt-4 rounded-lg bg-surface-douce px-3 py-2 text-sm text-texte-secondaire">
+          <p className="mt-4 rounded-[10px] bg-surface-douce px-3 py-2 text-sm text-texte-secondaire">
             Aucun courriel au dossier : la décision ne peut lui être annoncée
             que <strong className="font-semibold">par téléphone</strong>. Ce
             n&apos;est pas un dossier incomplet — une partie des groupeurs
@@ -529,7 +534,7 @@ function Fiche({
         </dl>
 
         {dossier.concordance_noms ? null : (
-          <p className="mt-3 rounded-lg bg-danger-fond px-3 py-2 text-sm text-danger">
+          <p className="mt-3 rounded-[10px] bg-danger-fond px-3 py-2 text-sm text-danger">
             <strong className="font-semibold">
               La procédure s&apos;arrête.
             </strong>{" "}
@@ -573,7 +578,7 @@ function Fiche({
         </ul>
 
         {/* ⚠️ Le point le plus facile a « ameliorer » par erreur. */}
-        <p className="mt-4 rounded-lg bg-surface-douce px-3 py-2 text-xs text-texte-secondaire">
+        <p className="mt-4 rounded-[10px] bg-surface-douce px-3 py-2 text-xs text-texte-secondaire">
           <strong className="font-semibold">
             Les images ne s&apos;affichent pas ici, et ce n&apos;est pas une
             étape manquante.
@@ -587,7 +592,7 @@ function Fiche({
         </p>
 
         {dossier.pieces.length < 3 ? (
-          <p className="mt-3 rounded-lg bg-primaire-fond px-3 py-2 text-sm text-primaire-texte-sur-fond">
+          <p className="mt-3 rounded-[10px] bg-primaire-fond px-3 py-2 text-sm text-primaire-texte-sur-fond">
             Dossier incomplet. Renvoyez-le{" "}
             <strong className="font-semibold">à compléter</strong> plutôt que de
             le refuser : le reste du dossier est conservé, et refuser une pièce
@@ -682,7 +687,7 @@ function ResultatEnvoi({ resultat }: { resultat: ResultatDecision }) {
       <p className="mt-2 text-sm text-texte-secondaire">
         Objet : {resultat.sujet}
       </p>
-      <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded-lg bg-surface-douce px-4 py-3 text-sm text-texte">
+      <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded-[10px] bg-surface-douce px-4 py-3 text-sm text-texte">
         {resultat.corps}
       </pre>
     </section>
@@ -723,14 +728,14 @@ function AnnonceAFaire({
       </p>
 
       {script ? (
-        <pre className="mt-3 whitespace-pre-wrap rounded-lg bg-surface-douce px-4 py-3 text-sm text-texte">
+        <pre className="mt-3 whitespace-pre-wrap rounded-[10px] bg-surface-douce px-4 py-3 text-sm text-texte">
           {script}
         </pre>
       ) : decision.canal === "appel" ? (
         /* Le script vient avec la reponse a la decision. En rechargeant la
            page, il n'est plus la : on le dit, plutot que d'en reconstituer un
            qui pourrait differer de celui que le serveur compose. */
-        <p className="mt-3 rounded-lg bg-surface-douce px-4 py-3 text-sm text-texte-secondaire">
+        <p className="mt-3 rounded-[10px] bg-surface-douce px-4 py-3 text-sm text-texte-secondaire">
           Le script d&apos;appel s&apos;affiche au moment de la décision. Motif
           retenu : <strong>{decision.libelle_motif || "validation"}</strong>.
         </p>
@@ -825,7 +830,7 @@ function FormulaireDecision({
       </fieldset>
 
       {issue === "valide" ? (
-        <p className="mt-4 rounded-lg bg-confiance-fond px-3 py-2 text-sm text-confiance">
+        <p className="mt-4 rounded-[10px] bg-confiance-fond px-3 py-2 text-sm text-confiance">
           Niveau <strong className="font-semibold">Entrée</strong> : il pourra
           collecter jusqu&apos;à 150 000 F par groupage. Le plafond passe à
           600 000 F après trois groupages livrés sans litige.
@@ -901,7 +906,7 @@ function FormulaireDecision({
           texte integral arrive du serveur juste apres la decision, et c'est
           celui qui a ete envoye. */}
       {issue !== "valide" && motif ? (
-        <p className="mt-4 rounded-lg bg-surface-douce px-4 py-3 text-sm text-texte">
+        <p className="mt-4 rounded-[10px] bg-surface-douce px-4 py-3 text-sm text-texte">
           {canal === "courriel" ? "Il recevra" : "Vous lui direz"} :{" "}
           {MOTIFS[motif].public}.{" "}
           <span className="text-texte-secondaire">
@@ -943,7 +948,7 @@ function Historique({ dossier }: { dossier: DossierApi }) {
         {dossier.decisions_kyc.map((decision) => (
           <li
             key={decision.id}
-            className="flex items-baseline gap-3 border-b border-bordure pb-2 last:border-b-0 last:pb-0"
+            className="flex items-baseline gap-3 border-b border-filet pb-2 last:border-b-0 last:pb-0"
           >
             <span className="w-24 shrink-0 text-texte-secondaire">
               {decision.decide_le.slice(0, 10)}

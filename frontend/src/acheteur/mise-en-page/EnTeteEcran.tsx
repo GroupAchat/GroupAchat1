@@ -31,7 +31,7 @@ export default function EnTeteEcran({
 }) {
   return (
     <header
-      className={`${collant ? "sticky top-0 z-10" : ""} flex h-14 items-center gap-1 border-b border-bordure bg-white px-2`}
+      className={`${collant ? "sticky top-0 z-10" : ""} flex h-14 items-center gap-1 border-b border-filet bg-white px-2`}
     >
       {onRetour ? (
         <button

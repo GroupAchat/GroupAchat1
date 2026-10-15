@@ -16,8 +16,20 @@ interface ProprietesIcone {
 function Svg({
   taille = 24,
   className,
+  epaisseur = 1.5,
   children,
-}: ProprietesIcone & { children: React.ReactNode }) {
+}: ProprietesIcone & {
+  /**
+   * L'epaisseur du trait. **1,5 px partout, sauf exception justifiee.**
+   *
+   * ⚠️ Ce n'est pas un reglage de confort : le §1.0 fixe 1,5 px pour toute la
+   * famille, et c'est cette constante qui fait qu'une barre d'icones se lit
+   * comme un ensemble. Chaque icone qui s'en ecarte doit dire pourquoi dans
+   * son propre commentaire, sinon la famille se defait une icone a la fois.
+   */
+  epaisseur?: number;
+  children: React.ReactNode;
+}) {
   return (
     <svg
       width={taille}
@@ -25,7 +37,7 @@ function Svg({
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth={1.5}
+      strokeWidth={epaisseur}
       strokeLinecap="round"
       strokeLinejoin="round"
       className={className}
@@ -85,6 +97,23 @@ export function IconeHorloge(proprietes: ProprietesIcone) {
     <Svg {...proprietes}>
       <circle cx="12" cy="12" r="9" />
       <path d="M12 7.5V12l3 2" />
+    </Svg>
+  );
+}
+
+/**
+ * Un cadenas ferme : le mot de passe du compte, ecran de profil.
+ *
+ * Distincte d'`IconeBouclier`, qui porte la promesse du produit (« livre ou
+ * rembourse »). Les deux disent « protege » mais pas la meme chose, et les
+ * confondre ferait lire le bloc du mot de passe comme une garantie
+ * commerciale.
+ */
+export function IconeVerrou(proprietes: ProprietesIcone) {
+  return (
+    <Svg {...proprietes}>
+      <rect x="4.8" y="10.5" width="14.4" height="9.7" rx="1.8" />
+      <path d="M8.4 10.5V7.6a3.6 3.6 0 017.2 0v2.9" />
     </Svg>
   );
 }
@@ -215,11 +244,54 @@ export function IconeCarton(proprietes: ProprietesIcone) {
   );
 }
 
+/**
+ * La cloche de notifications. **Seule icone du jeu a s'ecarter des 1,5 px.**
+ *
+ * ## Pourquoi cette exception
+ *
+ * Elle est la seule icone posee **seule**, sans libelle, a cote d'un bouton
+ * plein — « Demander », en orange. A 1,5 px elle paraissait fine au point
+ * qu'on ne la voyait pas, et c'est un defaut signale a l'usage, pas une
+ * preference : un controle qu'on ne trouve pas est un controle qui n'existe
+ * pas.
+ *
+ * Deux choses la rendent plus franche, et il fallait les deux :
+ *
+ * 1. **le trait passe a 2,25 px.** A 1,5 px, un dessin isole sur du blanc
+ *    disparait la ou le meme trait tient tres bien dans une barre de
+ *    navigation, ou quatre icones se soutiennent ;
+ * 2. **le dessin occupe tout le cadre.** L'ancien allait de 5 a 19 sur
+ *    24 — il laissait un quart du carre vide de chaque cote, donc il se
+ *    presentait toujours plus petit que les icones voisines. Celui-ci va de 3
+ *    a 21, et la jupe evasee lui donne une silhouette qu'on reconnait a
+ *    distance, ce que l'arc ferme de l'ancien ne faisait pas.
+ *
+ * ⚠️ **Elle reste un trait, elle n'est pas pleine** (§1.0). Si elle devait
+ * l'etre un jour, ce serait une decision sur **toute** la famille : une seule
+ * icone pleine au milieu d'icones en trait ne se lit pas comme une
+ * emphase, elle se lit comme une erreur.
+ */
 export function IconeCloche(proprietes: ProprietesIcone) {
   return (
-    <Svg {...proprietes}>
-      <path d="M6.5 10a5.5 5.5 0 0111 0c0 4 1.5 5.5 1.5 5.5h-14S6.5 14 6.5 10z" />
-      <path d="M10.3 19a2 2 0 003.4 0" />
+    <Svg {...proprietes} epaisseur={2.25}>
+      <path d="M6 8a6 6 0 0112 0c0 7 3 9 3 9H3s3-2 3-9" />
+      <path d="M10.3 21a1.94 1.94 0 003.4 0" />
+    </Svg>
+  );
+}
+
+/**
+ * Les trois barres du menu. Trait a 2 px, entre les 1,5 px de la famille et
+ * les 2,25 px de la cloche : comme elle, c'est une icone **posee seule** dans
+ * une barre, sans libelle a cote pour la soutenir — mais elle n'a pas a lutter
+ * contre un bouton plein voisin.
+ */
+export function IconeMenu(proprietes: ProprietesIcone) {
+  return (
+    <Svg {...proprietes} epaisseur={2}>
+      <path d="M4 7h16" />
+      <path d="M4 12h16" />
+      <path d="M4 17h16" />
     </Svg>
   );
 }

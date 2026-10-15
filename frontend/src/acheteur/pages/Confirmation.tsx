@@ -25,11 +25,14 @@ export default function Confirmation({
   estBureau,
   onSuivre,
   onFermer,
+  onModifierAdresse,
 }: {
   commande: Commande;
   estBureau: boolean;
   onSuivre: () => void;
   onFermer: () => void;
+  /** Vers le suivi de la commande, ou l'adresse se corrige (ecran 9). */
+  onModifierAdresse: () => void;
 }) {
   const { groupage, quantite, total, position } = commande;
 
@@ -64,7 +67,7 @@ export default function Confirmation({
             Vous êtes la {groupage.acheteursConfirmes + 1}
             <sup>e</sup> personne à commander ce groupage.
           </p>
-          <p className="mt-3 text-[22px] font-bold text-texte">
+          <p className="mt-3 text-prix font-bold text-texte">
             {formaterFrancs(total)} payés
           </p>
           <p className="text-texte-secondaire">
@@ -136,7 +139,11 @@ export default function Confirmation({
           <p className="mt-2 text-texte">
             {LIBELLE_QUARTIER[position.quartier]} — {position.repere}
           </p>
-          <button type="button" className="mt-1 text-sm font-medium text-primaire">
+          <button
+            type="button"
+            onClick={onModifierAdresse}
+            className="mt-1 text-sm font-medium text-primaire"
+          >
             Modifier
           </button>
         </section>

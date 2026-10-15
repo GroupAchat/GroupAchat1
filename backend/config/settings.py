@@ -327,10 +327,12 @@ CORS_ALLOW_HEADERS = (
 #: produit à quelqu'un ; ce n'est pas ce qu'il faut en ligne.
 #:
 #: ⚠️ **Ce qu'il suspend est le contrôle central du modèle.** Le §10.5 pose
-#: trois vérifications, et la phrase « groupeurs sélectionnés par Group Achat »
-#: s'affiche à l'acheteur sur presque chaque écran. Allumé en production, ce
-#: réglage transformerait cette phrase en mensonge — et c'est sur elle que
-#: repose l'acceptation de payer d'avance.
+#: trois vérifications, et « vous êtes livré, ou remboursé » s'affiche à
+#: l'acheteur sur presque chaque écran. C'est **nous** qui remboursons : le
+#: groupeur retire l'argent à la clôture, donc avant la livraison, et le seul
+#: recours qui reste ce jour-là est un dossier opposable. Allumé en
+#: production, ce réglage ferait garantir des sommes au nom de gens dont
+#: personne n'a rien vérifié.
 #:
 #: D'où le défaut : **éteint, et il faut l'écrire pour l'allumer**. Le faire
 #: suivre ``DEBUG`` semblait pratique et c'était un piège — la suite de tests

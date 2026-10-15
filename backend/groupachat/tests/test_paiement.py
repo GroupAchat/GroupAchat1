@@ -48,6 +48,8 @@ def _campagne(groupeur: Groupeur, **extra) -> Campagne:
         "contenu_part": "1 écouteur filaire avec micro",
         "categorie": Campagne.Categorie.ELECTRONIQUE,
         "prix_part": Decimal("4000"),
+        # Le fil rouge du §3 : 32 acheteurs pour un objectif de 40.
+        "objectif_participants": 40,
         "date_fin": timezone.now() + timedelta(days=2),
     }
     valeurs.update(extra)

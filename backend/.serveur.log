@@ -1,0 +1,86 @@
+Performing system checks...
+
+System check identified no issues (0 silenced).
+October 13, 2026 - 15:13:46
+Django version 5.2.18, using settings 'config.settings'
+Starting development server at http://127.0.0.1:8000/
+Quit the server with CTRL-BREAK.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/5.2/howto/deployment/
+Performing system checks...
+
+System check identified no issues (0 silenced).
+October 13, 2026 - 15:14:36
+Django version 5.2.18, using settings 'config.settings'
+Starting development server at http://127.0.0.1:8000/
+Quit the server with CTRL-BREAK.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/5.2/howto/deployment/
+Performing system checks...
+
+System check identified no issues (0 silenced).
+October 13, 2026 - 18:29:24
+Django version 5.2.18, using settings 'config.settings'
+Starting development server at http://127.0.0.1:8000/
+Quit the server with CTRL-BREAK.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/5.2/howto/deployment/
+Performing system checks...
+
+System check identified no issues (0 silenced).
+October 13, 2026 - 18:30:36
+Django version 5.2.18, using settings 'config.settings'
+Starting development server at http://127.0.0.1:8000/
+Quit the server with CTRL-BREAK.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/5.2/howto/deployment/
+Performing system checks...
+
+System check identified no issues (0 silenced).
+October 13, 2026 - 18:32:05
+Django version 5.2.18, using settings 'config.settings'
+Starting development server at http://127.0.0.1:8000/
+Quit the server with CTRL-BREAK.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/5.2/howto/deployment/
+Performing system checks...
+
+System check identified no issues (0 silenced).
+
+You have 1 unapplied migration(s). Your project may not work properly until you apply the migrations for app(s): comptes.
+Run 'python manage.py migrate' to apply them.
+October 13, 2026 - 18:37:04
+Django version 5.2.18, using settings 'config.settings'
+Starting development server at http://127.0.0.1:8000/
+Quit the server with CTRL-BREAK.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/5.2/howto/deployment/
+Performing system checks...
+
+System check identified no issues (0 silenced).
+
+You have 2 unapplied migration(s). Your project may not work properly until you apply the migrations for app(s): comptes, echanges.
+Run 'python manage.py migrate' to apply them.
+October 13, 2026 - 21:34:46
+Django version 5.2.18, using settings 'config.settings'
+Starting development server at http://127.0.0.1:8000/
+Quit the server with CTRL-BREAK.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/5.2/howto/deployment/
+Performing system checks...
+
+System check identified no issues (0 silenced).
+October 13, 2026 - 21:45:57
+Django version 5.2.18, using settings 'config.settings'
+Starting development server at http://127.0.0.1:8000/
+Quit the server with CTRL-BREAK.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/5.2/howto/deployment/

@@ -164,7 +164,7 @@ export default function QuestionsRecues({ onRetour }: { onRetour: () => void }) 
                     </p>
 
                     {question.reponse ? (
-                      <div className="mt-2 rounded-lg bg-surface-douce p-2.5">
+                      <div className="mt-2 rounded-[10px] bg-surface-douce p-2.5">
                         <p className="text-xs font-semibold text-texte">
                           Votre réponse
                         </p>

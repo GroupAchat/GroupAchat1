@@ -78,7 +78,7 @@ export function BarreNavGroupeur({
   return (
     <nav
       aria-label="Navigation groupeur"
-      className="fixed inset-x-0 bottom-0 z-20 mx-auto h-18 max-w-[430px] border-t border-bordure bg-white md:hidden"
+      className="fixed inset-x-0 bottom-0 z-20 mx-auto h-18 max-w-[430px] border-t border-filet bg-white md:hidden"
     >
       <ul className="flex h-full">
         {ONGLETS.map(({ cle, libelle, Icone }) => {
@@ -102,7 +102,7 @@ export function BarreNavGroupeur({
                 }`}
               >
                 <Icone taille={24} />
-                <span className="text-center text-[11px] leading-tight font-medium">
+                <span className="text-center text-xs leading-tight font-medium">
                   {libelle}
                 </span>
               </button>

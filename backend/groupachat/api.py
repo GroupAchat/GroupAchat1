@@ -16,10 +16,12 @@ groupeur.
 from __future__ import annotations
 
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.http import HttpResponse
 from django.db.models import Count, Prefetch, Q
-from rest_framework import serializers, status, viewsets
+from django.utils import timezone
+from rest_framework import parsers, serializers, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.response import Response
 
 from . import domaine
@@ -31,7 +33,12 @@ from .commandes.models import (
 )
 from .comptes.sessions import AuthentificationSession, acheteur_de_la_requete
 from .comptes.models import Groupeur
-from .echanges.models import Demande, Question
+from .echanges.models import (
+    Demande,
+    Notification,
+    Question,
+    SignalementQuestion,
+)
 
 
 # ── Catalogue ───────────────────────────────────────────────────────────────
@@ -46,6 +53,18 @@ class CampagneSerializer(serializers.ModelSerializer):
 
     groupeur = serializers.CharField(source="groupeur.pseudonyme", read_only=True)
     acheteurs_confirmes = serializers.IntegerField(read_only=True)
+    #: Le denominateur de la barre de progression des cartes (§2.5).
+    #:
+    #: ⚠️ **Ni plafond ni minimum** : c'est le nombre de personnes que le
+    #: groupeur veut reunir, et le depasser est permis. Aucun ecran ne doit
+    #: s'en servir pour ecrire « places disponibles » ou « complet ».
+    objectif_participants = serializers.IntegerField(read_only=True)
+    #: Le pourcentage, **plafonne a 100** cote serveur — voir
+    #: ``Campagne.progression`` pour la raison. Servi calcule plutot que
+    #: laisse au client : les cartes, le fil, la liste et le detail
+    #: l'affichent, et quatre ecrans ne doivent pas refaire le meme arrondi
+    #: chacun a sa facon.
+    progression = serializers.IntegerField(read_only=True)
     heures_restantes = serializers.IntegerField(read_only=True)
     #: Les questions **publiées** seulement : celles qui attendent la
     #: modération ne sont visibles que de leur auteur (§1.5), et une question
@@ -90,6 +109,8 @@ class CampagneSerializer(serializers.ModelSerializer):
             "statut",
             "groupeur",
             "acheteurs_confirmes",
+            "objectif_participants",
+            "progression",
             "heures_restantes",
             "frais_livraison_a_partir_de",
             "caracteristiques",
@@ -133,7 +154,29 @@ class CampagneSerializer(serializers.ModelSerializer):
 
 
 class CampagneViewSet(viewsets.ReadOnlyModelViewSet):
-    """Le catalogue. **Lisible sans compte** (§1.5)."""
+    """Le catalogue. **Lisible sans compte** (§1.5).
+
+    ## ⚠️ Un groupage clôturé n'est plus au catalogue
+
+    La liste ne sert que les groupages **ouverts et dont la date n'est pas
+    passée**. Un groupage clôturé, livré ou annulé n'a plus rien à y faire : on
+    ne peut plus le rejoindre, donc l'afficher ne fait que trois choses, toutes
+    mauvaises — il occupe la place d'un groupage auquel on peut encore
+    participer, il donne l'impression d'un catalogue plus fourni qu'il ne
+    l'est, et il mène à une fiche dont le bouton est mort.
+
+    ⚠️ **Le filtre est ici, pas dans l'interface.** Un écran qui masquerait les
+    clôturés ne protégerait de rien : l'API les servirait encore, et la
+    recherche, les filtres et le compteur de résultats les compteraient
+    toujours.
+
+    ## Pourquoi `retrieve` ne filtre pas, lui
+
+    La fiche d'un groupage clôturé reste accessible **par son identifiant**.
+    C'est voulu : un acheteur qui a payé garde un lien vers ce qu'il a acheté,
+    et le lui refuser en 404 lui ferait croire que sa commande a disparu. Il ne
+    le trouve simplement plus en parcourant.
+    """
 
     serializer_class = CampagneSerializer
 
@@ -177,6 +220,15 @@ class CampagneViewSet(viewsets.ReadOnlyModelViewSet):
             )
             .order_by("date_fin")
         )
+
+        # ⚠️ **Seulement en liste.** `retrieve` doit continuer de servir un
+        # groupage cloture, par son identifiant — voir le docstring de la
+        # classe. D'ou ce test sur l'action plutot qu'un filtre pose sur tout
+        # le queryset.
+        if self.action == "list":
+            queryset = queryset.filter(
+                statut=Campagne.Statut.OUVERTE, date_fin__gt=timezone.now()
+            )
 
         categorie = self.request.query_params.get("categorie")
         if categorie:
@@ -328,6 +380,44 @@ class CommandeViewSet(viewsets.GenericViewSet):
         serializer = self.get_serializer(self.get_queryset(), many=True)
         return Response(serializer.data)
 
+    @action(detail=True, methods=["post"], url_path="refuser")
+    def refuser(self, request, pk=None):
+        """L'acheteur refuse le colis à la remise. Écran 9.
+
+        Le bouton « Refuser le colis » était dessiné, visible pendant la seule
+        livraison, et **ne faisait rien** : quelqu'un à qui on présentait un
+        produit qui n'était pas le sien appuyait dessus et n'obtenait aucune
+        trace. C'est le pire endroit du produit pour un bouton mort, parce que
+        c'est le moment où la garantie « vous êtes livré, ou remboursé » est
+        mise à l'épreuve pour de vrai.
+
+        ⚠️ **Le refus ouvre un litige ; il ne rembourse pas.** La spec de
+        l'écran 9 promet exactement ceci : « Group Achat examine votre dossier
+        sous 48 h et vous rembourse **si le refus est justifié** ». Et il faut
+        l'assumer : le groupeur a déjà retiré son argent à la clôture, donc un
+        remboursement automatique se paierait sur notre trésorerie, à chaque
+        refus déclaré, vrai ou non.
+
+        ⚠️ **Pas de photo.** La spec en prévoit, et elles seraient utiles pour
+        instruire le dossier — mais le stockage de fichiers est reporté au
+        déploiement sur le VPS, par décision explicite. Un champ de dépôt qui
+        perd les photos serait pire que son absence : l'acheteur croirait
+        avoir fourni sa preuve. Le motif et la description partent, la photo
+        suivra avec le stockage.
+        """
+        commande = self.get_object()
+        try:
+            commande.refuser_le_colis(
+                motif=request.data.get("motif", ""),
+                description=request.data.get("description", ""),
+            )
+        except DjangoValidationError as erreur:
+            raise ValidationError(
+                erreur.message_dict if hasattr(erreur, "message_dict") else erreur.messages
+            ) from erreur
+
+        return Response(self.get_serializer(commande).data)
+
     @action(detail=False, methods=["post"], url_path="payer")
     def payer(self, request):
         """Encaisse une commande.
@@ -455,8 +545,160 @@ class QuestionViewSet(viewsets.ModelViewSet):
             self.get_serializer(question).data, status=status.HTTP_201_CREATED
         )
 
+    @action(detail=True, methods=["post"], url_path="signaler")
+    def signaler(self, request, pk=None):
+        """Signale une question déjà publiée. §15, niveau 3.
+
+        L'icône de drapeau de l'écran 10 n'allait nulle part : le filtre
+        automatique du §15 couvre les niveaux 1 et 2, et le niveau 3 — **un
+        humain, après publication** — n'avait aucun moyen d'être saisi. Un
+        message qui passe le filtre et qu'un lecteur voit pourtant comme un
+        numéro de téléphone déguisé restait donc en ligne sans recours.
+
+        ⚠️ **La question reste publiée.** Dépublier sur signalement donnerait
+        à n'importe qui le pouvoir de faire taire n'importe qui — il
+        suffirait de signaler la question gênante pour l'effacer du seul
+        canal public du produit. On remplit une file ; un administrateur
+        tranche dans l'admin Django, comme le prévoit le §15.
+
+        ⚠️ **Elle répond 200 et non 201 sur un second signalement du même
+        lecteur.** La contrainte d'unicité l'empêche d'en déposer deux, mais
+        le lui dire par une erreur serait absurde : de son point de vue le
+        geste a réussi la première fois, et il ne doit pas croire que son
+        signalement n'a pas été pris.
+        """
+        acheteur = acheteur_de_la_requete(request)
+        question = self.get_object()
+
+        motif = request.data.get("motif")
+        if motif not in SignalementQuestion.Motif.values:
+            raise ValidationError(
+                {
+                    "motif": "Choisissez un motif parmi ceux proposés.",
+                }
+            )
+
+        _, cree = SignalementQuestion.objects.get_or_create(
+            question=question, auteur=acheteur, defaults={"motif": motif}
+        )
+        return Response(
+            {
+                "signale": True,
+                # Ce que l'écran affiche : on ne promet pas une suppression,
+                # on promet un examen.
+                "message": (
+                    "Votre signalement est enregistré. Group Achat examine ce "
+                    "message."
+                ),
+            },
+            status=status.HTTP_201_CREATED if cree else status.HTTP_200_OK,
+        )
+
+
+class NotificationSerializer(serializers.ModelSerializer):
+    """Ce que la cloche affiche, et de quoi ouvrir le bon écran au clic."""
+
+    #: ⚠️ **Le titre du groupage n'est pas dans ``corps``.** Le corps est figé
+    #: à l'envoi ; ce champ-ci est relu à chaque affichage et sert à la ligne
+    #: secondaire de la liste. Les deux ne disent pas la même chose : si le
+    #: groupeur renomme son groupage, le corps garde l'ancien nom — qui est ce
+    #: qu'on a réellement annoncé ce jour-là — et cette ligne montre le nom
+    #: actuel, qui est celui qu'on retrouvera au catalogue.
+    campagne_titre = serializers.CharField(
+        source="campagne.titre", read_only=True, default=""
+    )
+    lue = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Notification
+        fields = (
+            "id",
+            "nature",
+            "titre",
+            "corps",
+            "campagne",
+            "campagne_titre",
+            "commande",
+            "question",
+            "creee_le",
+            "lue",
+        )
+
+    def get_lue(self, notification) -> bool:
+        return notification.lue_le is not None
+
+
+class NotificationViewSet(viewsets.ViewSet):
+    """La cloche de l'acheteur.
+
+    ## Pourquoi cette route existe
+
+    La cloche était dessinée dans les deux en-têtes acheteur, **pastille
+    comprise**, et ne faisait rien : le compteur était la constante ``1``
+    écrite dans le routeur. Elle promettait donc en permanence une
+    information qui n'existait pas.
+
+    ## ⚠️ Lire ses notifications exige une session
+
+    Elles portent ce qu'on a commandé et combien on a été remboursé. Un
+    paramètre d'URL — un numéro de téléphone, un identifiant — rendrait la
+    liste devinable, et c'est le trou qu'on vient de fermer ailleurs
+    (``api_comptes.py``). La réponse est **401 et non 403** quand la session
+    manque : l'écran doit rouvrir la feuille de connexion, pas afficher
+    « accès refusé » à quelqu'un dont la session a simplement expiré.
+    """
+
+    authentication_classes = [AuthentificationSession]
+    serializer_class = NotificationSerializer
+
+    def list(self, request):
+        """Ses cinquante dernières notifications, les plus récentes d'abord.
+
+        ⚠️ **Pas de pagination, une borne.** Une cloche ne se parcourt pas :
+        on la regarde pour voir ce qu'on a manqué, et ce qui a plus de
+        cinquante notifications d'âge ne sera pas lu. Le plafond évite surtout
+        qu'un compte ancien fasse descendre une liste de plusieurs centaines
+        de lignes sur un forfait de données limité (§5).
+        """
+        acheteur = acheteur_de_la_requete(request)
+        notifications = (
+            Notification.objects.filter(destinataire=acheteur)
+            .select_related("campagne")
+            .order_by("-creee_le")[:50]
+        )
+        return Response(NotificationSerializer(notifications, many=True).data)
+
+    @action(detail=False, methods=["post"], url_path="tout-lu")
+    def tout_lu(self, request):
+        """Marque tout comme lu — c'est le seul geste de lecture offert.
+
+        ⚠️ **Tout, et pas une par une.** Marquer chaque ligne séparément
+        demanderait un appel par notification à l'ouverture du panneau, ce qui
+        est exactement le contraire de ce qu'on veut sur un réseau lent. Et le
+        geste réel est celui-là : on ouvre la cloche, on voit, c'est lu.
+
+        Renvoie le nombre de lignes qui viennent de passer à lu, ce qui permet
+        à l'écran de ne rien faire quand il n'y avait rien.
+        """
+        acheteur = acheteur_de_la_requete(request)
+        lues = Notification.objects.filter(
+            destinataire=acheteur, lue_le__isnull=True
+        ).update(lue_le=timezone.now())
+        return Response({"lues": lues, "non_lues": 0})
+
 
 class DemandeSerializer(serializers.ModelSerializer):
+    """Ce que l'écran 11 envoie et ce que l'écran 12 relit.
+
+    ⚠️ **``photo`` n'est pas dans ``fields``**, et c'est voulu : les octets ne
+    doivent jamais partir dans une liste JSON. Cent demandes sérialisées
+    feraient trente mégaoctets de réponse, et le navigateur n'en a pas
+    l'usage — il veut une adresse d'image, qu'il demandera si elle entre dans
+    le cadre. D'où ``photo_url``, qui ne pèse rien.
+    """
+
+    photo_url = serializers.SerializerMethodField()
+
     class Meta:
         model = Demande
         fields = (
@@ -466,11 +708,24 @@ class DemandeSerializer(serializers.ModelSerializer):
             "quartier",
             "budget_maximum",
             "precisions",
+            "photo_url",
             "statut",
             "campagne",
             "deposee_le",
         )
         read_only_fields = ("statut", "campagne", "deposee_le")
+
+    def get_photo_url(self, demande: Demande) -> str | None:
+        """L'adresse de la photo, ou ``None`` s'il n'y en a pas.
+
+        ``photo_type`` sert de test de présence : le lire ne charge pas les
+        octets, contrairement à ``demande.photo``.
+        """
+        if not demande.photo_type:
+            return None
+        requete = self.context.get("request")
+        chemin = f"/api/demandes/{demande.pk}/photo/"
+        return requete.build_absolute_uri(chemin) if requete else chemin
 
 
 class DemandeViewSet(viewsets.ModelViewSet):
@@ -495,14 +750,88 @@ class DemandeViewSet(viewsets.ModelViewSet):
         # Comme les commandes : la session, jamais un numéro en URL.
         return Demande.objects.filter(acheteur=acheteur_de_la_requete(self.request))
 
+    #: ⚠️ **Nécessaire pour recevoir la photo.** Sans ``MultiPartParser``, DRF
+    #: ne lit que du JSON et ``request.FILES`` reste vide : le dépôt
+    #: répondrait 201 en jetant la photo en silence, ce qui est pire qu'une
+    #: erreur. ``JSONParser`` reste, parce qu'une demande sans photo n'a
+    #: aucune raison de passer en multipart.
+    parser_classes = [parsers.MultiPartParser, parsers.JSONParser]
+
     def create(self, request, *args, **kwargs):
         acheteur = acheteur_de_la_requete(request)
         entree = self.get_serializer(data=request.data)
         entree.is_valid(raise_exception=True)
-        demande = Demande.objects.create(acheteur=acheteur, **entree.validated_data)
+
+        octets, nature = self._lire_la_photo(request)
+
+        demande = Demande.objects.create(
+            acheteur=acheteur,
+            photo=octets,
+            photo_type=nature,
+            **entree.validated_data,
+        )
         return Response(
             self.get_serializer(demande).data, status=status.HTTP_201_CREATED
         )
+
+    @staticmethod
+    def _lire_la_photo(request) -> tuple[bytes | None, str]:
+        """Valide le fichier joint. Facultatif ; invalide, il est **refusé**.
+
+        ⚠️ **Deux contrôles, et le second est le vrai.** La taille d'abord,
+        parce qu'on refuse avant de lire. La **signature** ensuite : le
+        ``Content-Type`` du formulaire est déclaré par le client, donc
+        n'importe quel fichier peut se présenter comme une image. Seuls les
+        premiers octets ne mentent pas.
+
+        Une photo invalide n'est pas ignorée en silence : l'acheteur a attendu
+        son téléversement sur un forfait limité, et le laisser croire sa
+        demande partie avec la photo alors qu'elle est partie sans serait un
+        mensonge que rien à l'écran ne corrigerait.
+        """
+        fichier = request.FILES.get("photo")
+        if fichier is None:
+            return None, ""
+
+        if fichier.size > domaine.PHOTO_DEMANDE_MAX_OCTETS:
+            maximum = domaine.PHOTO_DEMANDE_MAX_OCTETS // 1024
+            raise ValidationError(
+                {
+                    "photo": (
+                        f"La photo dépasse {maximum} ko. "
+                        "Choisissez-en une plus légère."
+                    )
+                }
+            )
+
+        octets = fichier.read()
+        nature = domaine.nature_de_la_photo(octets)
+        if nature is None:
+            raise ValidationError(
+                {"photo": "Ce fichier n'est pas une image JPEG, PNG ou WebP."}
+            )
+        return octets, nature
+
+    @action(detail=True, methods=["get"])
+    def photo(self, request, pk=None):
+        """Sert les octets de la photo.
+
+        ⚠️ **``get_object`` passe par ``get_queryset``**, qui filtre sur
+        l'acheteur de la session : la photo d'un autre renvoie donc 404, et
+        non 403. C'est la réponse correcte — répondre « interdit »
+        confirmerait que la demande existe.
+        """
+        demande = self.get_object()
+        if not demande.photo_type:
+            raise NotFound("Cette demande n'a pas de photo.")
+
+        reponse = HttpResponse(bytes(demande.photo), content_type=demande.photo_type)
+        # Les octets ne changent jamais : une demande déposée ne se modifie
+        # pas. Un cache long est donc sans risque, et il compte sur un forfait
+        # limité — la vignette de l'écran 12 ne se retélécharge pas à chaque
+        # visite. `private` parce que la réponse est propre à une session.
+        reponse["Cache-Control"] = "private, max-age=86400"
+        return reponse
 
 
 # ── Groupeurs ───────────────────────────────────────────────────────────────

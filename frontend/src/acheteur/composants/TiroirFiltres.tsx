@@ -113,7 +113,7 @@ export default function TiroirFiltres({
         tabIndex={-1}
         className="relative flex h-full w-full max-w-sm flex-col bg-white shadow-[-8px_0_32px_rgba(29,25,22,0.18)] outline-none"
       >
-        <div className="flex items-center justify-between border-b border-bordure px-5 py-4">
+        <div className="flex items-center justify-between border-b border-filet px-5 py-4">
           <h2 className="text-lg font-semibold text-texte">Filtrer</h2>
           <button
             type="button"
@@ -136,7 +136,7 @@ export default function TiroirFiltres({
           />
         </div>
 
-        <div className="border-t border-bordure p-4">
+        <div className="border-t border-filet p-4">
           {/* Le nombre est dans le libelle : on sait ce qu'on va trouver avant
               de fermer, donc on n'ouvre pas le tiroir deux fois pour verifier. */}
           <Bouton onClick={onFermer}>

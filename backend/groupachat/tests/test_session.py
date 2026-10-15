@@ -276,6 +276,7 @@ class CeQueLeJetonProtege(SocleCompte):
             contenu_part="Une paire",
             categorie=Campagne.Categorie.ELECTRONIQUE,
             prix_part=Decimal("4000"),
+            objectif_participants=40,
             date_fin=timezone.now() + timedelta(days=2),
         )
 

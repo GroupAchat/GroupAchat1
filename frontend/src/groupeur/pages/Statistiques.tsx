@@ -1,8 +1,9 @@
 import { useState } from "react";
+import { construireCsv, telechargerCsv } from "../../domaine/export";
 import { formaterFrancs } from "../../domaine/format";
 import { LIBELLE_QUARTIER, type Quartier } from "../../domaine/groupage";
 import { useEspaceGroupeur } from "../../api/EspaceGroupeurContexte";
-import type { Statistiques } from "../../domaine/groupeur";
+import { LIBELLE_CAMPAGNE, type Statistiques } from "../../domaine/groupeur";
 import { EnTeteGroupeur } from "../mise-en-page/ChromeGroupeur";
 import Encart from "../../ui/Encart";
 import EtatVide from "../../ui/EtatVide";
@@ -86,6 +87,34 @@ export default function Statistiques({
     (total, campagne) => total + campagne.collecte,
     0,
   );
+
+  /**
+   * « Exporter » : un CSV de ses groupages, ligne par ligne.
+   *
+   * ⚠️ **Il n'exporte que ce que l'ecran affiche.** On aurait pu y mettre les
+   * commandes une a une — c'est ce qu'un export de marchand contient
+   * d'habitude — mais le groupeur ne voit legitimement d'une commande qu'un
+   * code, une quantite, un montant et un quartier. Un fichier est precisement
+   * l'endroit ou cette limite se perdrait sans que personne ne le remarque.
+   *
+   * ⚠️ **Aucune variation, aucune tendance.** Elles valent zero a l'ecran
+   * faute d'historique cote API ; les ecrire dans un fichier qu'on relira dans
+   * six mois, hors de son contexte, serait inventer un chiffre.
+   */
+  const exporter = () => {
+    const contenu = construireCsv(
+      ["Produit", "Statut", "Commandes", "Objectif", "Collecté (F CFA)"],
+      CAMPAGNES.map((campagne) => [
+        campagne.produit,
+        LIBELLE_CAMPAGNE[campagne.statut] ?? campagne.statut,
+        campagne.commandes,
+        campagne.objectifParticipants,
+        campagne.collecte,
+      ]),
+    );
+    const jour = new Date().toISOString().slice(0, 10);
+    telechargerCsv(`group-achat-mes-groupages-${jour}.csv`, contenu);
+  };
 
   /**
    * Les constats — **des faits relus des chiffres ci-dessus**, rien d'autre.
@@ -241,6 +270,7 @@ export default function Statistiques({
         action={
           <button
             type="button"
+            onClick={exporter}
             className="min-h-11 px-2 text-sm font-medium text-white/85"
           >
             Exporter
@@ -266,7 +296,7 @@ export default function Statistiques({
               type="button"
               aria-pressed={periode === cle}
               onClick={() => setPeriode(cle)}
-              className={`min-h-10 flex-1 rounded-lg text-sm font-medium ${
+              className={`min-h-10 flex-1 rounded-[10px] text-sm font-medium ${
                 periode === cle
                   ? "bg-white text-confiance shadow-[0_1px_2px_rgba(29,25,22,0.08)]"
                   : "text-texte-secondaire"
@@ -278,7 +308,7 @@ export default function Statistiques({
         </div>
 
         {/* La carte maitresse : ce qu'il a touche. */}
-        <div className="rounded-2xl bg-confiance p-5 text-white">
+        <div className="rounded-xl bg-confiance p-5 text-white">
           <p className="text-sm text-white/85">Vos revenus — 30 jours</p>
           <p className="mt-1 text-3xl font-bold">
             {formaterFrancs(s.verse)}{" "}
@@ -401,7 +431,7 @@ export default function Statistiques({
           </h2>
           <table className="mt-3 w-full text-sm">
             <thead>
-              <tr className="border-b border-bordure text-left text-texte-secondaire">
+              <tr className="border-b border-filet text-left text-texte-secondaire">
                 <th className="py-2 font-medium">Quartier</th>
                 <th className="py-2 text-right font-medium">Commandes</th>
                 <th className="py-2 text-right font-medium">Part</th>
@@ -411,7 +441,7 @@ export default function Statistiques({
               {s.parQuartier.map((ligne) => (
                 <tr
                   key={ligne.quartier}
-                  className="border-b border-bordure last:border-b-0"
+                  className="border-b border-filet last:border-b-0"
                 >
                   <td className="py-2 text-texte">
                     {LIBELLE_QUARTIER[ligne.quartier]}
@@ -474,7 +504,7 @@ function Tuile({
   return (
     <div className="rounded-xl border border-bordure p-3">
       <p className="text-sm font-medium text-texte-secondaire">{libelle}</p>
-      <p className="mt-1 text-[22px] font-bold text-texte">{valeur}</p>
+      <p className="mt-1 text-prix font-bold text-texte">{valeur}</p>
       {/* Pas de « + 0 % » quand il n'y a pas de periode precedente. */}
       {variation ? (
         <p className={`text-xs ${couleur}`}>{variation}</p>

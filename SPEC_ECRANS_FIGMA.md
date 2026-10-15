@@ -93,13 +93,31 @@ Le téléphone reste la référence — on dessine à 390 px et on monte. Mais l
 |---|---|---|
 | **< 768 px** | Le fil plein écran, barre de navigation en bas, colonne de 430 px | Colonne de 430 px, barre de navigation en bas |
 | **768 à 1023 px** | Le catalogue en grille à 2 colonnes, filtres en puces | Colonne latérale bleue, contenu large |
-| **≥ 1024 px** | Catalogue, colonne de filtres latérale, fiche sur 2 colonnes | Colonne latérale bleue, contenu borné à 1 100 px |
+| **≥ 1024 px** | Catalogue, colonne de filtres latérale, fiche sur 2 colonnes, **page bornée à 1 600 px** | Colonne latérale bleue, contenu borné à 1 180 px |
 
 ⚠️ **Aucun écran n'est dédoublé.** Ce sont les mêmes composants dans les trois cas ; seules la largeur et la navigation changent. Écrire une version bureau séparée doublerait le travail à chaque correction, et les deux divergeraient en quelques semaines.
 
-⚠️ **Le contenu est borné à 1 100 px** même sur un écran de 1 920. Au-delà, les lignes de texte deviennent trop longues pour être lues confortablement, et un tableau étalé sur toute la largeur oblige à balayer l'écran des yeux pour relier une ligne à sa colonne.
+#### ⚠️ Une seule largeur de page, et elle s'appelle `largeur-page`
 
-**Les formulaires gardent leur colonne étroite** quelle que soit la largeur : un champ de 1 000 px ne se remplit pas mieux, il se lit moins bien.
+Côté acheteur, **l'en-tête, le pied de page et tous les écrans partagent le même plafond et la même gouttière** : la classe `largeur-page` de `index.css`. Plafond **1 600 px**, gouttière qui grandit avec l'écran (16 px, 32 px à partir de 1 024, 48 px à partir de 1 536).
+
+C'est une correction, et le défaut vaut d'être raconté parce qu'il se reproduira sinon. Les largeurs avaient été posées écran par écran : l'en-tête et le pied allaient **d'un bord à l'autre**, le catalogue aussi — on lui avait retiré son plafond exprès — mais la fiche produit, les commandes, les demandes et le profil restaient dans une colonne centrée de **1 280 px**. Sur un écran de 1 920, passer du catalogue à une fiche faisait donc **sauter toute la page** : le contenu rentrait de 320 px de chaque côté pendant que l'en-tête, lui, restait collé aux bords. Les deux ne se sont jamais alignés.
+
+**Pourquoi 1 600 et pas 1 280.** À 1 280, un écran de 1 920 laisse 320 px de vide de chaque côté — c'est exactement ce qui avait fait retirer le plafond du catalogue, et à raison. À 1 600, le même écran laisse 160 px, ce qui se lit comme une marge et non comme un trou. Et un écran de 2 560 cesse d'étaler une barre de recherche sur deux mètres.
+
+**Ce qui doit toucher les bords se pose en dehors du conteneur** et met son propre contenu dedans : la bannière partenaires, un lavis de fond. Une image qui touche les bords est une image ; une image avec 48 px de blanc autour est une vignette.
+
+**À l'intérieur du plafond, trois mesures restent bornées**, parce qu'un conteneur large ne veut pas dire un contenu large :
+
+| Bloc | Mesure | Pourquoi |
+|---|---|---|
+| Colonnes de texte de la fiche | 672 px | Au-delà d'environ 70 caractères, l'œil ne retrouve plus le début de la ligne suivante |
+| Bloc d'achat de la fiche | 576 px | Sans plafond il recevait 880 px, et un bouton « Commander » large comme une table ne se lit plus comme un bouton |
+| Formulaires | 672 px | Un champ de 1 000 px ne se remplit pas mieux, il se lit moins bien |
+
+⚠️ **Les paliers de colonnes se calent sur le conteneur, pas sur l'écran.** La grille du catalogue passait à cinq colonnes à 1 800 px alors que le conteneur s'arrête à 1 600 : la cinquième colonne ne gagnait aucune place, elle **rétrécissait les cartes** de 376 à 300 px. Des vignettes qui maigrissent quand l'écran grandit sont l'inverse de ce qu'on attend. Le dernier palier tombe donc là où le conteneur cesse de croître.
+
+Le côté groupeur garde ses propres largeurs — 760 px à une colonne, 1 180 px à deux — parce que ses écrans sont des outils de gestion et non un catalogue.
 
 ### 1.2 Couleurs
 
@@ -298,22 +316,34 @@ Jamais de texte sous 12 px. Sur les médias du fil, tout texte blanc est posé s
 
 > **À la première ouverture, l'utilisateur arrive directement sur le fil. Le compte n'est demandé qu'au moment où il engage quelque chose.**
 
-Trois choses à ne jamais dessiner : **écran « Connexion / Inscription » au lancement**, **tutoriel bloquant**, **pop-up « créez un compte »**.
+Deux choses à ne jamais dessiner : **écran « Connexion / Inscription » au lancement** et **tutoriel bloquant**.
+
+⚠️ **La liste en comptait trois** : s'y ajoutait la **pop-up « créez un compte »**. Il en existe une désormais — le message qui précède l'inscription — et ce qui la sauve de l'interdit tient à trois choses, qui sont des conditions, pas des commentaires. Si l'une saute, elle redevient le mur que ce paragraphe interdit :
+
+- **elle ne vient jamais à l'ouverture**, seulement sur une opération ;
+- **elle dit pourquoi**, et la raison change selon l'opération : « votre code de livraison et le suivi de votre colis » pour un groupage, « c'est par là que la réponse du groupeur vous revient » pour une question. « Pour sécuriser nos services » ne répond à rien ;
+- **elle se ferme sans rien casser** — croix, Échap, voile — et l'opération reprend après l'inscription.
 
 | Libre, sans compte | Exige un compte |
 |---|---|
-| Faire défiler le fil, chercher, filtrer | **Payer** une commande |
+| Faire défiler le fil, chercher, filtrer | **Rejoindre** un groupage |
 | Ouvrir une campagne, voir prix et délai | **Envoyer** une demande de produit |
 | Lire les questions et réponses | **Poser** une question |
 | Choisir sa quantité, saisir son adresse | Suivre ses commandes et ses demandes |
 
-**Le déclencheur est le bouton « Payer » de l'écran 5**, pas avant. Choisir une quantité n'engage rien ; payer engage.
+**Le déclencheur est le bouton « Commander » de l'écran 3**, qui ouvre l'écran 5. Le contrôle au paiement **reste** malgré tout, et pas par prudence décorative : une session expire, et elle peut expirer entre l'écran 5 et le clic sur « Payer ». Sans lui, le paiement partirait sans jeton et échouerait en 401 devant quelqu'un qui n'aurait aucun moyen de comprendre pourquoi.
+
+⚠️ **Ce paragraphe disait : « Le déclencheur est le bouton Payer de l'écran 5, pas avant. Choisir une quantité n'engage rien ; payer engage. »** L'utilisateur a déplacé la porte d'un écran. L'argument n'était pas faux et le coût est réel — voir §10.4 bis du cahier des charges, qui le chiffre.
 
 **La connexion est une feuille remontante, pas une page.** Elle monte par-dessus l'écran en cours, qui reste visible derrière sous un voile sombre. L'utilisateur voit qu'il n'a pas quitté son parcours ; fermer la feuille le ramène à son écran **intact** ; après le code, la feuille redescend et **l'action reprend seule**.
 
 **Ce qui doit survivre à la connexion :** la campagne, la quantité, **l'adresse de livraison saisie**, le contenu du formulaire de demande, la position dans le fil.
 
-**Pas d'inscription distincte.** Numéro, puis code SMS. Si le numéro est inconnu, le compte se crée. **Ne dessine jamais deux boutons « Se connecter » et « Créer un compte ».**
+**L'inscription est classique, et distincte de la connexion.** Un formulaire — nom, numéro, courriel facultatif, mot de passe et sa confirmation — puis une vérification du numéro par code SMS. Deux étapes, un indicateur de progression.
+
+⚠️ **Ce paragraphe disait : « Pas d'inscription distincte. Numéro, puis code SMS. Si le numéro est inconnu, le compte se crée. Ne dessine jamais deux boutons Se connecter et Créer un compte. »** L'utilisateur a tranché pour l'inscription classique, et **les deux boutons sont donc désormais permis** — c'est ce que « classique » veut dire. Ce que la règle protégeait tient autrement, et il faut le tenir : **l'inscription est en bouton plein, la connexion en lien discret.** Quelqu'un qui ne sait pas s'il a déjà un compte suit le bouton plein, et le formulaire le renvoie vers la connexion si son numéro est déjà pris.
+
+**La vérification du numéro par SMS reste**, et ce n'est pas une étape de trop : le numéro *est* l'identifiant du compte, et c'est par lui que partent les notifications de livraison. Sans preuve, n'importe qui s'inscrit sur le numéro d'un voisin et reçoit à sa place l'annonce que son colis est arrivé.
 
 **Les onglets protégés n'affichent pas un mur.** Un visiteur qui touche « Mes commandes » voit :
 
@@ -322,6 +352,8 @@ Trois choses à ne jamais dessiner : **écran « Connexion / Inscription » au l
 > **[ Voir les campagnes ]** · *J'ai déjà un compte — me connecter*
 
 À décliner pour **Mes commandes**, **Mes demandes** et **Profil**.
+
+⚠️ **L'onglet Profil fait exception depuis l'inscription classique** : son action est « **Créer mon compte** », pas « Voir les campagnes ». L'ancienne formulation — *« votre compte se crée au moment de payer »* — décrivait un parcours qui n'existe plus, et envoyer au catalogue quelqu'un qui vient de demander un compte serait un détour.
 
 ### 1.6 Le fil vidéo — contrainte technique à intégrer dès la maquette
 
@@ -372,8 +404,9 @@ Appliqué : l'écran 15 liste les commandes **par code de livraison**, pas par n
 
 Ce qui porte la confiance à la place, et qui doit être visible sur le fil comme sur le détail, c'est la **promesse de plateforme** :
 
-> 🛡️ **Groupeurs vérifiés par Group Achat**
-> Vous êtes livré, ou remboursé.
+> 🛡️ **Vous êtes livré, ou remboursé.**
+
+⚠️ **« Groupeurs vérifiés / sélectionnés par Group Achat » a été retiré du produit**, partout. La promesse tient maintenant en une ligne, et c'est un progrès : « vous êtes livré, ou remboursé » est un **engagement vérifiable**, là où « groupeurs sélectionnés » demandait de nous croire sur parole. Le bandeau garde son bouclier, son bleu et sa place.
 
 C'est le seul signal de confiance de l'application : il doit être présent, court, et répété.
 
@@ -384,7 +417,7 @@ Ce qui est vrai, et qui suffit :
 | ✅ À écrire | ❌ À ne jamais écrire |
 |---|---|
 | « Vous êtes livré, ou remboursé » | « Votre argent est bloqué jusqu'à la livraison » |
-| « Groupeurs vérifiés par Group Achat » | « Le groupeur n'est payé qu'après votre livraison » |
+| « Vous êtes livré, ou remboursé » | « Groupeurs vérifiés / sélectionnés par Group Achat », « Le groupeur n'est payé qu'après votre livraison » |
 | « Si le groupage n'aboutit pas, vous êtes remboursé intégralement » | « Votre paiement est protégé jusqu'à la remise » |
 | « Votre paiement est détenu **jusqu'à la clôture** » | « …jusqu'à la livraison » |
 
@@ -469,6 +502,80 @@ Dépose-les dans [medias/](medias/) en suivant la convention de nommage qui y es
 
 ---
 
+### 1.9 Le lien d'un groupage, et le partage
+
+**Un groupage a une adresse : `?groupage={id}`.** Ouvrir cette adresse affiche la fiche du groupage (écran 3), directement.
+
+⚠️ **Cette adresse est ce qui rend les boutons « Partager » utilisables.** Quatre étaient dessinés — sur le fil, sur la fiche, dans la gestion de campagne — et aucun ne faisait rien. Ce n'était pas une négligence d'implémentation : il n'y avait **rien à partager**, puisque l'application ne savait pas ouvrir une fiche depuis une adresse. Un lien collé dans WhatsApp ramenait sur le catalogue.
+
+⚠️ **Et c'est la moitié manquante d'une règle non négociable.** « Un groupage clôturé quitte le catalogue, mais **sa fiche reste atteignable par son lien** » : le filtre serveur était bien en place — `retrieve` répond encore sur un groupage fermé, `list` seul filtre — mais **personne ne pouvait fabriquer ce lien**. La règle n'existait qu'à moitié, la moitié serveur.
+
+**Ce que fait le bouton, selon l'appareil**
+
+| | |
+|---|---|
+| Téléphone | La feuille de partage du système, qui ouvre WhatsApp — c'est là que se partage réellement un bon plan à Lomé |
+| Ordinateur | Le lien va dans le presse-papier, et **l'écran dit « Lien copié »** |
+
+⚠️ **Le retour à l'écran n'est pas décoratif.** Une copie est invisible : sans message, le bouton se comporte exactement comme les boutons morts qu'on vient de brancher — on clique, rien ne bouge, on reclique. Fermer la feuille de partage, en revanche, **n'est pas un échec** : on ne reproche pas à quelqu'un d'avoir changé d'avis.
+
+**Un lien de fiche saute l'écran de choix de profil.** C'est le cas où le §1.5 est le plus impératif : on arrive d'une conversation, sur un produit précis, souvent pour la première fois. Demander « voulez-vous acheter ou devenir groupeur ? » devant un produit qu'on vient de nous recommander est exactement le mur que ce paragraphe interdit. Le profil **n'est pas retenu** pour autant : personne n'a choisi, donc rien n'a été décidé.
+
+**Le texte partagé dit ce qu'on partage**, pas « regarde ça » : le destinataire reçoit souvent le lien seul. Le prix y figure, parce que c'est lui qui décide d'ouvrir ou non. ⚠️ Pas de prix barré, pas de « au lieu de » — la règle vaut aussi dans un message WhatsApp, qui est pourtant l'endroit où la tentation est la plus forte.
+
+---
+
+### 1.10 La cloche de l'acheteur, et ce qui la remplit
+
+**La cloche était dessinée dans les deux en-têtes acheteur, pastille comprise, et ne faisait rien.** Le compteur était la constante `1` écrite dans le routeur — à sept endroits. Elle annonçait donc en permanence une notification non lue, pour une notification qui n'existait pas. Une pastille qui mentit est pire qu'une cloche absente : on finit par ne plus la regarder.
+
+#### ⚠️ Ce n'est pas une messagerie, et c'est la règle qui tient tout le reste
+
+**C'est la plateforme qui écrit, toujours.** Le groupeur peut *déclencher* une notification ; il n'en rédige jamais le texte. Trois conséquences, dans cet ordre d'importance :
+
+| | |
+|---|---|
+| **Pas de messagerie privée** | Un champ libre du groupeur vers ses acheteurs serait une messagerie, quel que soit le nom qu'on lui donne |
+| **L'anonymat tient** | Le groupeur ne sait pas à qui part la notification. La réponse ne lui rend qu'un **compte** |
+| **Rien à modérer** | Il n'y a pas de texte libre, donc pas de filtre du §15 à brancher sur un envoi groupé — ce qui est justement le filtre qu'on oublie |
+
+Il n'y a donc **aucun champ de réponse** dans le panneau : il n'y a personne à qui répondre. Une question se pose sur la fiche du produit, en public (§1.7), et c'est là que mène la notification de réponse.
+
+#### Les quatre natures, et d'où chacune vient
+
+| Nature | Déclenchée par | Mène à |
+|---|---|---|
+| **Groupage clôturé** | La clôture elle-même — bouton du groupeur **ou** date échue | Sa commande |
+| **Votre commande est arrivée** | Le groupeur, écran 15 | Sa commande |
+| **Réponse à votre question** | La réponse du groupeur, écran 20 | La fiche du produit |
+| **Groupage annulé — vous êtes remboursé** | L'annulation, écran 16 | Sa commande |
+
+**Chacune mène à ce dont elle parle.** Une cloche dont les lignes ne sont pas cliquables est une cloche qu'on lit une fois : on y apprend que le groupage est clôturé, puis on doit retrouver sa commande à la main. La commande d'abord quand la notification en désigne une — c'est là que vivent le suivi et le **code de livraison**, donc ce qu'on cherche après « votre commande est arrivée ».
+
+⚠️ **Elles passent par l'API, pas par le catalogue déjà chargé.** Une notification parle presque toujours d'un groupage **clôturé** — c'est la clôture qui la déclenche — et le catalogue ne sert que de l'ouvert. Le chercher en mémoire échouerait donc dans le cas le plus courant.
+
+#### Ce que le texte ne doit pas dire
+
+⚠️ **Le corps est figé à l'envoi**, côté serveur, et **jamais reformaté à l'affichage**. Une notification décrit un événement daté : « vos 5 000 F vous ont été remboursés » doit continuer à dire 5 000 F si le prix de la part change ensuite. Les formulations vivent toutes dans `notifications_acheteur.py`, pour qu'on puisse les relire d'un coup.
+
+Deux formulations interdites, qui s'ajoutent au tableau du §1.7 :
+
+| On écrit | Jamais |
+|---|---|
+| « Group Achat garantit votre livraison » *(après la clôture)* | « Votre argent est bloqué jusqu'à la livraison » — à la clôture, le groupeur a déjà été payé |
+| « Votre livraison est en préparation » | « Livraison demain », ou toute date : le groupeur sait que le produit est chez lui, pas quand la tournée passera (§6) |
+
+#### Le panneau
+
+Même mécanique que le panneau des questions (écran 10) : **feuille basse sur téléphone, carte de 384 px dans l'angle à partir de `sm`**, pas de voile, Échap ferme. Un panneau de 384 px dans un coin de 390 px n'est pas un coin.
+
+- **Ouvrir vaut lire.** La pastille s'éteint à l'ouverture, sans attendre le serveur — l'attendre la ferait clignoter une demi-seconde après, davantage sur un réseau lent. Les lignes gardent leur point de non-lu **dans ce panneau-ci**, pour qu'on voie d'un coup d'œil ce qu'on n'avait pas vu, et l'auront perdu à la prochaine ouverture.
+- **Une seule nature en orange d'alerte** : « groupage annulé », parce que c'est la seule qui annonce quelque chose qui ne s'est pas passé comme prévu. Les quatre en orange feraient de la couleur un ornement, ce que le §1.2 interdit.
+
+⚠️ **Aucune interrogation répétée du serveur.** On relit à l'ouverture de l'application et après un geste qui a pu en produire une. C'est une décision de produit : le §5 pose un forfait de données limité, et une cloche qui interroge toutes les trente secondes consomme toute la journée pour un événement qui arrive deux fois par semaine. Le jour où il faudra du temps réel, ce sera une **poussée du serveur**, pas une boucle dans le navigateur.
+
+---
+
 ## 2. Composants à créer avant les écrans
 
 ### 2.1 `CarteFil` — la carte plein écran du fil
@@ -505,17 +612,70 @@ Variantes : `ouverte`, `derniers-jours` (le `CompteurTemps` passe en orange, **s
 Ce choix allège aussi le rendu : une liste de lignes défile mieux qu'une liste de cartes ombrées sur un téléphone d'entrée de gamme.
 
 ### 2.4 `CompteurTemps`
-Puce avec icône horloge. **Le temps restant est le seul élément de pression de l'application** — il n'y a ni minimum ni places limitées, donc c'est lui qui crée l'urgence.
-Variantes :
-- `large` — « Plus que 6 jours », `texte-secondaire` sur fond blanc
-- `proche` — « Plus que 2 jours », `primaire-texte-sur-fond` sur `primaire-fond`
-- `derniere-heure` — « Plus que 4 h », `danger` sur `danger-fond`
-- `terminee` — « Campagne clôturée », `texte-secondaire` sur `surface-douce`
 
-Sur le fil, où le compteur est posé sur un média sombre, il devient un aplat **`marque` avec texte `#1D1916`** : c'est son usage le plus visible dans toute l'application, et celui où l'orange de la marque travaille le mieux.
+**Un badge** : fond teinté, liseré de la même famille, icône horloge, et une phrase — « **Il reste 3 jours** ». **Le temps restant est le principal élément de pression de l'application** — il n'y a ni minimum ni places limitées, donc c'est lui qui crée l'urgence.
 
-### 2.5 `CompteurParticipants`
-« 32 personnes ont commandé ». Jamais de fraction ni de jauge : **il n'y a pas de plafond ni de minimum**, donc rien à remplir. Un nombre qui monte suffit, et il rassure.
+⚠️ **C'était une puce nue, et c'est maintenant un badge.** L'état `large` était posé sur fond blanc *sans liseré* : sur une carte blanche, il n'existait pas — un texte gris parmi d'autres textes gris. L'information qui fait commander aujourd'hui plutôt que la semaine prochaine était la moins visible de la carte. Chaque état porte donc un fond et un liseré, ce qui le détache du blanc **sans ombre ni cadre gris** (le §1.0 interdit les deux).
+
+⚠️ **Plus de capitales.** Le libellé était « RESTE 2 JOURS ». Les capitales se justifiaient quand le compteur était posé nu sur une photo ; le badge porte désormais son propre fond, donc la lisibilité vient de son contraste et non de la casse. Les capitales ne faisaient plus que durcir le ton sur un produit qui vend la confiance.
+
+La barre de progression du §2.5 en ajoute un second, plus doux : un groupage proche de son objectif donne envie d'y entrer. ⚠️ Elle ne doit **jamais** être tournée en rareté — ce ne sont pas des places, et le §2.5 dit en entier ce qu'elle n'est pas.
+Quatre états, **et les contrastes sont calculés** :
+
+| État | Libellé | Texte sur fond | Rapport |
+|---|---|---|---|
+| `large` | « Il reste 6 jours » | `texte` sur `surface-douce` | 16,49:1 |
+| `proche` | « Il reste 2 jours » | `primaire-texte-sur-fond` sur `primaire-fond` | 4,87:1 |
+| `derniere-heure` | « Il reste 4 h » | `danger` sur `danger-fond` | 4,67:1 |
+| `terminee` | « Groupage clôturé » | `texte-secondaire` sur `surface-douce` | 7,01:1 |
+
+Le liseré reprend la couleur du texte, très transparent (`primaire/25`, `danger/30`, `bordure` pour les deux états neutres).
+
+⚠️ Les deux plus serrés — `proche` et `derniere-heure` — ont **moins de 0,4 de marge** au-dessus de 4,5:1. Changer l'un de ces jetons oblige à refaire ce calcul, pas à l'estimer.
+
+**Sous un jour, on compte en heures**, jamais en jours : « il reste 0 jour » ne veut rien dire, et « il reste 1 jour » pour cinq heures serait faux dans le sens qui coûte — l'acheteur remettrait sa commande au lendemain.
+
+⚠️ **L'acheteur ne voit jamais l'état `terminee`.** Le catalogue ne sert plus que les groupages ouverts dont la date n'est pas passée (voir l'écran 2). L'état reste décrit ici parce que **le groupeur** voit les siens, clôturés compris, sur ses propres écrans.
+
+Sur le fil, où le badge est posé sur un média sombre, il devient un aplat **`marque` avec texte `#1D1916`** (6,08:1) : c'est son usage le plus visible dans toute l'application, et celui où l'orange de la marque travaille le mieux. Le texte y est sombre, **jamais blanc** — blanc sur `marque` ne tient qu'à 2,87:1.
+
+### 2.5 `JaugeParticipants`
+
+**Une barre de progression vers l'objectif du groupeur**, avec le chiffre écrit à côté : « **32** sur 40 acheteurs ».
+
+Ce composant remplace le `CompteurParticipants`, qui n'affichait qu'un nombre. La raison du changement est que **le groupeur déclare désormais combien de personnes il veut réunir** : le dénominateur existe, donc la barre est honnête. Elle apparaît sur le fil (1), les cartes et les lignes du catalogue (2), le détail (3), et sur ses propres écrans (13, « Mes campagnes »).
+
+#### ⚠️ Les trois choses que cette barre ne dit pas
+
+Elles ne sont pas des précautions de rédaction, ce sont des règles. L'ancienne version de ce paragraphe interdisait toute jauge, et son argument était juste : une jauge laisse croire à une limite.
+
+| Ce n'est pas | Donc on n'écrit jamais |
+|---|---|
+| **Des places** — dépasser l'objectif est permis et normal | « places disponibles », « complet », « il reste 3 places » |
+| **Un minimum** — un groupage à 14 sur 20 peut aboutir : à la clôture c'est le groupeur qui décide (§7 du cahier des charges) | « il manque 6 personnes pour que le groupage parte » |
+| **Un déclencheur** — atteindre l'objectif ne clôture rien ; seule la date le fait | « objectif atteint, le groupage se clôture » |
+
+#### Le dépassement
+
+La barre **s'arrête à plein** et le nombre écrit continue de monter : « 24 acheteurs » sur un objectif de 20, avec une pastille « Objectif atteint ». Une barre qui déborderait de sa gouttière serait un défaut d'affichage ; plafonner le nombre en silence ferait disparaître une bonne nouvelle.
+
+Une fois l'objectif passé, le dénominateur cesse d'être écrit : ce qui compte est que le but est franchi, pas de combien.
+
+#### Le chiffre est écrit, toujours
+
+La barre seule ne se lit pas — 60 % de quoi ? Le texte porte le sens, la barre ne fait que le rendre immédiat. C'est aussi ce qui la rend lisible aux lecteurs d'écran : `role="progressbar"`, `aria-valuenow`, `aria-valuemax`, et un `aria-label` qui reprend la phrase affichée.
+
+#### Les couleurs
+
+Remplissage **`marque`** (`#FF6A00`), gouttière `surface-douce`. L'orange vif n'est ici qu'un **aplat plein**, jamais du texte : blanc sur `marque` donne 2,87:1, ce qui est interdit (§1.2). La pastille « Objectif atteint » emploie donc le couple déjà calculé `primaire-texte-sur-fond` sur `primaire-fond`.
+
+**Variante `sombre`**, pour le fil et la carte urgente, où la carte est posée sur un média foncé : texte blanc, gouttière `blanc à 25 %`, remplissage `marque` inchangé.
+
+**Deux tailles :** `compacte` (barre de 6 px, texte `Petit`) pour une ligne de liste, `normale` (8 px) pour une carte ou le détail.
+
+#### Le vocabulaire
+
+« **acheteurs confirmés** », jamais « participants » ni « commandes » (§3). Le champ côté serveur s'appelle `objectif_participants`, mais c'est un nom interne : il ne sort pas à l'écran.
 
 ### 2.6 `BandeauConfiance`
 Le bandeau de la promesse de plateforme (§1.7). **C'est le seul élément bleu de l'application** (§1.2) : fond `confiance-fond`, texte `confiance`, icône bouclier `confiance`, coins 12, **pas de bordure ni d'ombre** — le fond teinté suffit à le détacher du blanc.
@@ -651,7 +811,7 @@ Les mots visibles à l'écran ne sont pas ceux des documents internes. **Ce tabl
 | **un groupage** | une campagne | C'est le mot que l'utilisateur emploie déjà. « Campagne » reste le terme interne, dans ce document et le cahier des charges |
 | **32 acheteurs confirmés** | 32 commandes, 32 participants | « Confirmés » dit que ces gens ont payé. C'est rassurant, et c'est vrai |
 | **4 000 F CFA** | 4 000 F | Le prix complet partout où l'utilisateur lit un montant. Le `F` seul reste admis dans les tableaux denses et côté administration |
-| **RESTE 2 JOURS** | Plus que 2 jours | Capitales, court, lisible sur une photo |
+| **Il reste 2 jours** | Plus que 2 jours, RESTE 2 JOURS | Une phrase, pas un cri. Le badge du §2.4 porte son propre fond, donc la lisibilité ne vient plus des capitales |
 | **Par Mama Gro** | Vendu par, Groupeur : | Sobre, et ça ne suggère pas une fiche à ouvrir (§1.7) |
 | **Voir le groupage** | Commander — 4 000 F | Sur le fil, on ouvre ; on ne s'engage pas. L'engagement est à l'écran 3 |
 
@@ -670,6 +830,25 @@ C'est contre-intuitif pour qui vient du e-commerce, et c'est pourtant le bon cho
 **Frais de livraison : calculés selon la position de l'acheteur** (§11.1 du cahier des charges), payés par lui, **sur une ligne distincte** du prix de la part. Le calcul réel n'existe pas encore : **la fonction renvoie 1 000 F pour toute position**. Dans les maquettes, affiche donc 1 000 F — mais **jamais comme un tarif annoncé à l'avance**.
 
 **La commande fil rouge :** C1, 1 part. **4 000 F de part + 1 000 F de livraison = `5 000 F` payés.** Code de livraison **`K7M-4PQ`**.
+
+#### ⚠️ Le compte de démonstration n'avait aucune commande
+
+C'était un défaut du jeu de données, et il rendait trois écrans indémontrables. Les commandes étaient réparties sur des acheteurs générés (« Acheteur 54 ») : **le compte avec lequel on se connecte pour montrer le produit n'en possédait pas une seule.** Donc l'**écran 8** était vide, l'**écran 9** — suivi, frise, code de livraison, refus du colis — inatteignable, le code `K7M-4PQ` **n'existait pas en base**, et les notifications de commande n'avaient personne à prévenir.
+
+Akosua Doe porte maintenant **quatre commandes**, une par état à montrer :
+
+| État | Ce que l'écran 9 doit montrer |
+|---|---|
+| **Payée — en attente de clôture** | Pas de code. C'est la **détention des fonds** qui rassure |
+| **En cours de livraison** | Le code `K7M-4PQ`, son QR, et le bouton « Refuser le colis » |
+| **Livrée** | Frise complète, code et bouton de refus disparus |
+| **Annulée** | Remboursement intégral, livraison comprise |
+
+⚠️ **Deux écarts assumés, à connaître avant de maquetter.**
+
+**Le code `K7M-4PQ` n'est pas sur la commande de C1**, mais sur celle qui est **en cours de livraison**. L'écran 9 n'affiche le code que pendant la livraison : posé sur une commande « payée » de C1 — qui est encore ouverte — il existerait en base et ne s'afficherait **nulle part**. On a préféré la lettre de l'écran à la lettre de ce paragraphe.
+
+**Les commandes sont réassignées, pas ajoutées.** Les additions de cette section doivent tomber juste : un jury vérifie. Ajouter une commande à C1 ferait 33 commandes et 132 000 F au lieu de 128 000 F. On reprend donc des commandes existantes et on change leur propriétaire — les comptes restent exacts, et l'une d'elles devient simplement la sienne.
 
 > **Attention en maquettant :** le montant que l'acheteur paie est **5 000 F**, pas 4 000 F. Le prix de la part (4 000 F) s'affiche sur le fil, la campagne et le sélecteur de quantité ; le **total payé** (5 000 F) s'affiche à partir du récapitulatif de commande, sur le paiement, la confirmation, la liste des commandes et le détail. C'est l'erreur la plus facile à commettre dans cette maquette.
 
@@ -712,7 +891,7 @@ Les additions doivent tomber juste à l'écran : un jury vérifie ce genre de ca
    - ↗️ **Partager**
    - 🔇 **Son** — coupé par défaut (§1.6), seulement si le groupage a une vidéo
 4. **Bloc d'information en bas à gauche**, au-dessus de la barre de navigation :
-   - `CompteurTemps` : « **RESTE 2 JOURS** »
+   - `CompteurTemps` : badge « **Il reste 2 jours** »
    - **Nom du produit** en `Titre-fil` blanc : « **Écouteurs filaires Pro avec micro** »
    - **Prix** : « **4 000 F CFA** » en `Prix` blanc, **seul** — pas de prix barré, pas de pastille de pourcentage (§3). En dessous, en `Petit` : « la part »
    - « **32 acheteurs confirmés** »
@@ -743,7 +922,7 @@ Ce ne sont pas des oublis de dessin, ce sont **deux décisions antérieures que 
 | **Accueil** | Le fil vertical plein écran | 1 |
 | **Groupage** | La même offre en **vue liste**, avec catégories et filtres. C'est là que vont ceux qui cherchent plutôt que ceux qui flânent | 2 |
 | **Commandes** | Mes commandes et leur suivi | 8 |
-| **Profil** | Mes informations, mes demandes, mode économie de données, aide | 12 et réglages |
+| **Profil** | Mes informations *(nom, numéro, **courriel**, adresse)*, **mot de passe**, mes demandes, mode économie de données, aide | 12 et réglages |
 
 **Cartes à dessiner** — au moins trois, pour montrer la variété : **C1** (photo, 2 jours), **C2** (vidéo, robe wax), **C4** (vidéo, 4 h restantes — `CompteurTemps` en `danger`, l'urgence maximale).
 
@@ -762,6 +941,16 @@ Ce ne sont pas des oublis de dessin, ce sont **deux décisions antérieures que 
 
 **Objectif :** servir ceux qui cherchent quelque chose de précis — le fil sert la découverte, pas la recherche.
 
+### ⚠️ Le catalogue ne contient que des groupages ouverts
+
+**Un groupage clôturé n'est plus sur la plateforme.** Ni sur le fil, ni dans les résultats, ni dans une catégorie, ni dans le compteur de résultats. La règle vaut pour tout ce qui est clôturé, livré ou annulé, et pour tout groupage dont la date est passée.
+
+On ne peut plus le rejoindre, donc l'afficher ne fait que trois choses, toutes mauvaises : il occupe la place d'un groupage auquel on peut encore participer, il donne l'impression d'un catalogue plus fourni qu'il ne l'est, et il mène à une fiche dont le bouton est mort.
+
+**Le filtre est côté serveur**, et ce n'est pas un détail d'implémentation : un écran qui masquerait les clôturés laisserait l'API les servir, et la recherche comme le compteur de résultats continueraient de les compter.
+
+**Sa fiche reste accessible par son lien** (écran 3). Un acheteur qui a payé garde un chemin vers ce qu'il a acheté — le lui refuser en « page introuvable » lui ferait croire que sa commande a disparu. Il ne le trouve simplement plus en parcourant.
+
 1. En-tête avec champ de recherche actif : « Rechercher un produit… », retour à gauche.
 2. **Catégories** en puces défilantes : Alimentaire · Vêtements · Chaussures · Hygiène · Maison · Électronique.
 3. **Filtres** en puces : « Se termine bientôt » · « Moins de 10 000 F » · catégorie.
@@ -775,6 +964,31 @@ Ce ne sont pas des oublis de dessin, ce sont **deux décisions antérieures que 
 
 **Objectif :** donner tout ce qu'il faut pour décider de payer.
 
+### ⚠️ Sur ordinateur : la galerie à gauche, collée ; la lecture à droite
+
+À partir de 1 024 px, la fiche se lit en deux colonnes :
+
+| | Contenu | Comportement |
+|---|---|---|
+| **Gauche**, 46 % plafonné à 576 px | La galerie | **`sticky`**, à 96 px du haut — sous l'en-tête, qui en fait 80 |
+| **Droite**, plafonnée à 672 px | Prix, jauge, contenu d'une part, promesse, boutons, **puis** description, caractéristiques, livraison, règles, questions | Défile |
+
+**C'est tout l'intérêt de la colle** : on lit la description et les caractéristiques **sans perdre la photo de vue**. Le détail était auparavant posé *sous* la fiche, sur deux colonnes ; il fallait remonter pour revoir le produit dont on lisait les dimensions.
+
+**L'ordre du document suit l'ordre visuel** : la galerie d'abord, donc à gauche. Entre 768 et 1 023 px la fiche s'empile, et la photo passe naturellement en tête — comme sur téléphone.
+
+⚠️ Le conteneur de la rangée porte `items-start`. Sans lui, un élément de flex s'étire sur toute la hauteur de la rangée et `sticky` n'a plus de place pour glisser : il ne se passe rien, sans message et sans erreur.
+
+### Après la fiche : « Dans la même catégorie »
+
+Quand la colonne de lecture est finie, la galerie se décolle et une dernière section propose **jusqu'à quatre autres groupages**, en pleine largeur de page et non dans la colonne de lecture — une grille de 672 px au milieu d'une page de 1 600 aurait l'air d'un oubli.
+
+Même catégorie d'abord, complétée par le reste du catalogue si elle n'offre pas assez : **une rangée d'une seule carte ressemble à un défaut d'affichage**. Le catalogue ne contenant que des groupages ouverts (écran 2), on ne propose jamais quelque chose qu'on ne peut plus rejoindre.
+
+### ⚠️ Un groupage clôturé ne se commande pas
+
+Sa fiche reste atteignable par son lien, donc ce cas arrive pour de vrai. Le bouton devient **désactivé et intitulé « Groupage clôturé »**. Il restait actif, et il menait à un paiement que le serveur refuse — l'acheteur remplissait son adresse pour rien.
+
 1. **Galerie** pleine largeur, ratio 4:5, flèche de retour à gauche et **icône de partage à droite**. Jusqu'à **4 photos et 2 vidéos** (écran 14), la couverture en premier.
 
    **Les vignettes n'apparaissent qu'à partir de deux médias.** Une galerie d'un seul élément est une galerie qui ment sur ce qu'elle contient, et ses commandes ne mènent nulle part.
@@ -783,10 +997,10 @@ Ce ne sont pas des oublis de dessin, ce sont **deux décisions antérieures que 
 2. **Titre :** « Écouteurs filaires avec micro »
 3. **Prix :** `4 000 F` en `Prix`, seul. En dessous, en `Corps` `texte-secondaire` : « par part ». **Ni prix barré, ni pastille de réduction.**
 4. **`CompteurTemps`** : « 🕐 Plus que 2 jours — se termine le 7 octobre à 23 h 59 ».
-5. **`CompteurParticipants`** : « 32 personnes ont commandé ».
+5. **`JaugeParticipants`** (§2.5) : « **32** sur 40 acheteurs », barre remplie à 80 %.
 6. **Pseudonyme**, non cliquable, sans aucun autre détail : « Proposé par **Mama Gro** ».
 7. **`BandeauConfiance`** version `complet` — **avant le bouton, pas après** :
-   > 🛡️ **Groupeurs sélectionnés par Group Achat**
+   > 🛡️ **Vous êtes livré, ou remboursé**
    > Vous êtes livré, ou remboursé. Si la campagne n'aboutit pas, Group Achat vous rembourse intégralement.
 8. **Ce que contient une part :** « 1 écouteur filaire avec micro, garantie 3 mois », en bloc distinct — c'est la question que tout acheteur se pose en premier.
 9. **Description** sur 4 lignes, avec « Voir plus ».
@@ -829,10 +1043,16 @@ Le lien doit ouvrir **directement la campagne, consultable sans rien installer n
 3. Sous-titre : « Pour sécuriser votre commande et suivre votre livraison. »
 4. Champ : `+228` figé à gauche, puis `90 12 34 56`. Clavier numérique.
 5. Mention 12 px : « Nous ne communiquons jamais votre numéro au groupeur. »
-6. Bouton « Recevoir mon code ».
-7. **Rappel de contexte** : « Vous commandez : Écouteurs filaires avec micro — 1 part, 4 000 F ».
+6. Bouton « **Continuer** ».
+7. **Rappel de contexte** : « Vous rejoignez : Écouteurs filaires avec micro — 4 000 F la part ».
 
-**Aucun second bouton.** Pas de « Créer un compte » à côté de « Se connecter » (§1.5).
+⚠️ **« Continuer » et non « Recevoir mon code ».** À cet instant la feuille **ne sait pas encore** par quelle voie ce numéro entre : le serveur est interrogé d'abord — sans envoyer de SMS — et répond si ce numéro a un mot de passe. Promettre un code à quelqu'un qui verra ensuite un champ de mot de passe le ferait attendre un SMS qui n'arrive pas. C'est aussi ce qui évite un second bouton : un seul chemin, et le serveur choisit.
+
+**Étape A bis — le mot de passe**, si le numéro en a un. Champ masqué, bouton « Se connecter », et en lien discret « **Mot de passe oublié ? Recevoir un code par SMS** ».
+
+⚠️ **Ce lien est tout le parcours « mot de passe oublié », et il tient en une ligne.** Le code SMS ouvre le compte de tout le monde et lève le verrou des cinq échecs : personne ne reste enfermé dehors. Pas de lien à durée de vie à dessiner, pas de courriel à attendre — et le courriel est facultatif sur ce marché.
+
+⚠️ **Ce paragraphe disait : « Aucun second bouton. Pas de Créer un compte à côté de Se connecter (§1.5). »** Voir le §1.5 : la règle a été levée par l'utilisateur, mais la hiérarchie reste — plein pour l'inscription, lien pour la connexion.
 
 **Étape B — code**
 1. Titre : « Entrez le code reçu », sous-titre « Code envoyé au +228 90 12 34 56 » + lien « Modifier ».
@@ -840,7 +1060,25 @@ Le lien doit ouvrir **directement la campagne, consultable sans rien installer n
 3. « Renvoyer le code dans 00:42 », grisé puis actif.
 4. Validation automatique à la quatrième case — pas de bouton.
 
-**Étape C — le nom, facultative**, seulement si le numéro est inconnu. Champ « Votre nom », phrase « Le livreur en a besoin pour vous remettre votre commande », bouton « Continuer », lien « Plus tard ». Rien d'autre : ni e-mail, ni mot de passe. Chaque champ ajouté ici est un acheteur perdu à un écran du paiement.
+**Étape C — le nom, facultative**, pour un compte qui n'en a pas encore. Champ « Votre nom », phrase « Le livreur en a besoin pour vous remettre votre commande », bouton « Continuer », lien « Plus tard ».
+
+⚠️ **Cette étape se terminait par : « Rien d'autre : ni e-mail, ni mot de passe. Chaque champ ajouté ici est un acheteur perdu à un écran du paiement. »** L'argument reste vrai et il est respecté — mais autrement, et c'est le point : **aucun champ n'a été ajouté à ce parcours-ci.** Le courriel et le mot de passe vivent dans la **feuille d'inscription** et dans l'**écran 12** (profil), jamais ici. Cette feuille reste celle de quelqu'un qui *a déjà* un compte.
+
+### La feuille d'inscription — à dessiner, deux étapes
+
+C'est l'autre moitié de l'écran 4, et elle est nouvelle. Elle s'ouvre depuis le message du §1.5, ou depuis « Créer mon compte ».
+
+**Indicateur d'étape** en haut : deux barres de 4 px, la seconde en `bordure` tant qu'on est à la première. ⚠️ **Décoratif pour l'œil, annoncé pour un lecteur d'écran** — deux barres colorées ne disent rien à qui ne les voit pas : « Étape 1 sur 2 » en texte masqué.
+
+**Étape 1 — le formulaire.** Médaillon rond de 56 px en `primaire-fond` avec l'icône de profil en `primaire-texte-sur-fond` (**4,87:1**, calculé), titre « Créer votre compte », sous-titre « Une minute, et c'est fait pour toutes vos commandes ». Puis cinq champs : **nom**, **numéro** (`+228` figé), **courriel (facultatif)**, **mot de passe**, **confirmation**. Bouton « Continuer », puis en lien « Vous avez déjà un compte ? Se connecter ».
+
+⚠️ **Le médaillon n'est pas en `marque` plein** : un disque orange vif de 56 px sous un en-tête déjà orange ferait un second aplat de marque à trois centimètres du premier.
+
+**Si le numéro est déjà pris**, un encart `primaire-fond` sous le champ : « Vous avez déjà un compte avec ce numéro » et un bouton « Se connecter plutôt ». ⚠️ **Pas un simple message d'erreur** : le champ est juste, c'est le parcours qui est le mauvais, et laisser l'erreur seule enverrait l'acheteur modifier un numéro qui est bien le sien.
+
+**Étape 2 — la vérification.** Titre « Vérifions votre numéro », les mêmes quatre cases que l'étape B, le même compte à rebours de renvoi.
+
+**Mention sous le mot de passe** : « Au moins 8 caractères. Votre numéro ne peut pas servir de mot de passe. »
 
 **Après validation :** la feuille redescend, **le paiement reprend seul** (écran 6). **Si l'utilisateur ferme :** retour à l'écran 5 intact, quantité et adresse conservées.
 
@@ -1004,11 +1242,35 @@ La ligne « Remboursée » est à garder : elle montre que la promesse de rembou
 
 **Feuille « Refuser le colis »** : motif (ce n'est pas le produit commandé · produit visiblement abîmé · autre), description, photos, bouton « Refuser et signaler ». Puis : « Votre signalement est enregistré. Group Achat examine votre dossier sous 48 h et vous rembourse si le refus est justifié. »
 
+⚠️ **Branchée sur `POST /api/commandes/{id}/refuser/`.** Le bouton était dessiné et ne faisait rien — c'est le pire endroit du produit pour un bouton mort, puisque c'est là que « vous êtes livré, ou remboursé » est mise à l'épreuve pour de vrai. Trois choses à ne pas récrire :
+
+- **le refus ouvre un litige, il ne rembourse pas.** La commande passe à `litige` et un humain examine. Rembourser sur déclaration se paierait sur notre trésorerie à chaque refus, vrai ou non : le groupeur a déjà retiré son argent à la clôture (§10.2 du cahier des charges) ;
+- **refusable pendant la livraison seulement.** Avant, il n'y a rien à refuser ; après, le code a été donné au livreur, donc c'est une réclamation après réception et non un refus de colis. Le serveur refuse les deux cas ;
+- **le dépôt de photo n'est pas dessiné.** Le stockage de fichiers est reporté au déploiement sur le VPS. Un champ de dépôt qui perd les photos serait **pire que son absence** : l'acheteur croirait avoir fourni sa preuve. Le motif et la description partent ; la photo suivra avec le stockage.
+
 Ne promets pas ici que l'argent « reste détenu » : à ce stade, le groupeur a déjà été payé. Le remboursement est un **engagement de Group Achat**, et c'est ce qu'il faut écrire.
 
 ## Écran 10 — Questions sur une campagne
 
 **Objectif :** obtenir une information manquante sans jamais sortir de la plateforme. C'est ce qui rend l'anonymat du groupeur supportable.
+
+### ⚠️ Sur ordinateur, c'est un panneau posé sur la page, pas un écran
+
+Un **bouton flottant** se tient dans l'angle bas-droit de la fiche produit et suit le défilement. Un clic ouvre un panneau de 384 px **dans le même angle**, par-dessus la page.
+
+**Pourquoi pas un écran plein.** On pose une question **parce qu'on hésite à commander**. Un écran plein remplace le produit par un formulaire, et il faut revenir en arrière pour retrouver le prix ou la photo dont on voulait parler. Le panneau laisse la fiche derrière lui.
+
+| | Règle |
+|---|---|
+| **Pas de voile, `aria-modal="false"`** | Le panneau ne bloque pas la page : on doit pouvoir relire la fiche pendant qu'on écrit |
+| **Échap ferme** | C'est le geste attendu de tout ce qui se pose par-dessus ; son absence se remarque surtout au clavier |
+| **Le focus entre dans le panneau** | Sinon il reste sur le bouton flottant, derrière, et la première tabulation repart dans la page |
+| **Le bouton disparaît** quand le panneau est ouvert | Les deux occupent le même angle |
+| **Le corps défile dans le panneau** | Pas la page derrière |
+
+⚠️ **Le panneau ne réécrit pas le formulaire** : c'est le même composant, en variante. Tout ce qui est délicat — le filtre de modération du §15, la connexion demandée au bouton et non à l'ouverture (§1.5), le refus du serveur affiché sous le champ — n'existe qu'une fois. Un panneau qui dupliquerait ce formulaire finirait par laisser passer un numéro de téléphone que l'écran, lui, bloque encore.
+
+**Sur téléphone, l'écran plein reste.** Un panneau de 384 px dans un coin de 390 px n'est pas un coin : il couvrirait la fiche sans rien laisser voir, pour un résultat moins lisible que l'écran qui existe déjà.
 
 1. En-tête « Questions », retour, rappel de la campagne : vignette 48 + « Écouteurs filaires avec micro ».
 2. **Questions courantes d'abord**, pas le champ libre. Une rangée de pastilles tactiles à 36 px, défilables horizontalement : « Quelle marque ? » · « Quelle origine ? » · « Quand la livraison ? » · « Quelles variantes ? » · « Autre question ». Un appui envoie directement.
@@ -1072,6 +1334,12 @@ Le passage en cause est **surligné en `danger-fond`** dans le champ, pour qu'il
 **b) En vérification** — phase 2, quand le classifieur hésite. La question apparaît dans le fil, **visible de son seul auteur**, avec une pastille `Statut` neutre « En vérification » et la mention « Votre question sera publiée après vérification. »
 
 **c) Signalement** — une icône de drapeau discrète, en `texte-secondaire`, sur chaque message. Un appui ouvre une feuille : « Signaler ce message » avec trois motifs — *coordonnées personnelles*, *proposition de vente hors plateforme*, *contenu inapproprié*. **Pas de champ libre**, pour que la file de modération reste exploitable.
+
+⚠️ **Branché sur `POST /api/questions/{id}/signaler/`.** L'icône n'allait nulle part, et c'est le **niveau 3 du §15** — l'humain, après publication — qui n'avait donc aucun moyen d'être saisi : un message qui passe les deux filtres automatiques et qu'un lecteur voit pourtant comme un numéro déguisé restait en ligne sans recours. La file se tient dans l'admin Django, comme le prévoit le §15.
+
+⚠️ **Le message signalé reste publié**, et la feuille le dit : « Group Achat examine ce message. Il reste visible le temps de cet examen. » Dépublier sur signalement donnerait à n'importe qui le pouvoir de faire taire n'importe qui — il suffirait de signaler la question gênante pour l'effacer du seul canal public du produit. Ne jamais écrire « ce message a été retiré ».
+
+⚠️ **Un signalement par personne et par question**, garanti en base. Sans cette contrainte, un seul lecteur contrarié gonfle le compteur autant qu'il veut et décide seul de ce qu'un humain regarde en premier. Un second envoi du même lecteur répond `200` et non une erreur : de son point de vue, le geste avait réussi.
 
 **État vide :** « Aucune question pour le moment » + « Soyez le premier à poser une question ».
 
@@ -1204,7 +1472,13 @@ Sur le média, une consigne à afficher dans le formulaire : « Une vidéo verti
 
    C'est l'écran qui transforme le formulaire en outil de gestion. Et c'est ce qui alimente les statistiques de l'écran 21 — sans ce champ, aucune marge ne peut y être calculée.
 
-5. **Durée de la campagne** — 3, 7, 14 jours, ou une date.
+5. **Combien de personnes voulez-vous réunir ?** — un entier, **obligatoire**. C'est le dénominateur de la barre de progression que ses acheteurs verront (§2.5).
+
+   ⚠️ **Dire tout de suite ce que ce nombre ne fait pas**, sous le champ et dès qu'il est saisi : « Ce nombre n'est ni une limite ni un minimum. Vous pouvez dépasser 20 personnes, et à la clôture c'est vous qui décidez de maintenir le groupage ou non, même s'il n'est pas atteint. »
+
+   Sans cette phrase, deux erreurs se produisent, et elles sont opposées. Le groupeur qui le prend pour une limite de places le met trop haut « pour avoir de la marge », et sa barre reste au quart pendant toute la campagne. Celui qui le prend pour un minimum le met trop bas, par peur d'une annulation automatique qui n'existe pas.
+
+6. **Durée de la campagne** — 3, 7, 14 jours, ou une date.
 6. **Variantes éventuelles** — tailles, pointures, coloris.
 
 **Pas de champ « prix au détail ».** Il a été retiré : aucun prix barré dans l'application (§3). Un groupeur qui le réclame s'entend répondre que son prix de groupe est l'argument.
@@ -1228,7 +1502,17 @@ Sous ce choix, une mention qui évite un malentendu : « Les frais de livraison 
 
 1. En-tête « Écouteurs filaires avec micro », retour, icône « modifier ».
 2. **Bandeau de synthèse :** « 32 commandes » · « 128 000 F collectés » · `CompteurTemps` « Plus que 2 jours ».
-3. **Actions :** « Partager » · « Clôturer maintenant » · « Prévenir les participants ».
+3. **Actions :** « Partager la campagne » · « Clôturer maintenant » · « Prévenir que le produit est arrivé ».
+
+⚠️ **« Prévenir les participants » est devenu « Prévenir que le produit est arrivé », et ce n'est pas qu'une question de mots.** L'ancien libellé promettait un canal du groupeur vers ses acheteurs, c'est-à-dire une messagerie privée — ce que le produit refuse, et ce que son anonymat interdit. Le nouveau annonce **un fait précis** : `POST /api/espace-groupeur/{id}/annoncer-l-arrivee/`, **sans aucun champ de texte**. La plateforme rédige le message ; le groupeur ne fait que dire que la marchandise est là. Voir §1.10.
+
+Trois bornes à ne pas retirer :
+
+- **il ne rédige rien.** Aucun texte ne traverse cette route, donc rien n'échappe au filtre du §15 — un message libre partant à trente personnes d'un coup est exactement le genre d'envoi sur lequel on oublie de brancher la modération ;
+- **il n'apprend rien sur qui reçoit.** La réponse ne renvoie **qu'un compte** — « 32 personnes prévenues » — jamais une liste. Un nom, un numéro ou un quartier ici lui donnerait le fichier de clients que l'anonymat lui refuse partout ailleurs ;
+- **une seule fois, et après la clôture seulement.** L'arrivée est un fait unique : une cloche qui répète le même message perd en une semaine le droit d'être regardée. Le bouton devient « Arrivée annoncée », désactivé. Avant la clôture il n'apparaît pas — « le produit est arrivé » sur un groupage encore ouvert ferait croire à une livraison imminente à des gens qui viennent de payer.
+
+**« Partager la campagne »** partage **la fiche acheteur**, pas cet écran : recruter des participants, c'est envoyer quelqu'un sur la page où il peut commander. Lien `?groupage={id}` — voir §1.9.
 4. **Liste des commandes**, 32 lignes : **code de livraison** en `Code` (« K7M-4PQ »), quantité, variante choisie, montant, quartier de livraison. **Pas de nom** — le code identifie la commande, et c'est tout ce dont le groupeur a besoin pour emballer et compter.
 5. **Répartition par quartier**, en petit tableau — utile au groupeur pour organiser les tournées, et c'est une information qu'il n'a nulle part ailleurs.
 
@@ -1341,7 +1625,7 @@ La dernière ligne vaut d'être montrée : elle prouve qu'aucun frais n'est pré
 
 Trois autres : Lait en poudre (18, Tokoin) · Charbon (14, Bè) · Couches bébé (9, Adidogomé).
 
-4. Lien discret « Voir les 32 demandes » pour le détail.
+4. ⚠️ **« Voir les 32 demandes » a été retiré, et ne doit pas revenir.** Le lien ne faisait rien, et le brancher aurait été une faute : il promettait les demandes une par une, alors qu'une demande individuelle porte le numéro de celui qui l'a déposée. La servir au groupeur lui donnerait exactement le fichier de clients que l'anonymat lui refuse partout ailleurs. L'API s'y refuse d'ailleurs explicitement — la route `demandes` **n'agrège que par produit et quartier**. « 14 personnes à Agoè veulent du riz » est tout ce qu'il faut pour décider de lancer un groupage, et c'est déjà sur la carte.
 5. **`Encart` `info`** : « Les produits les plus demandés sont ceux où vous avez le moins de concurrence. »
 
 **« Lancer une campagne » ouvre l'écran 14 pré-rempli** : produit, quantité estimée, quartier, prix suggéré. C'est tout l'intérêt de l'écran — à matérialiser dans le prototypage.
@@ -1580,7 +1864,7 @@ Le contenu littéral de chaque écran, dans le format de ta maquette d'accueil. 
 Rechercher un produit...          Demander
                                         7
                                   Partager
-RESTE 2 JOURS
+Il reste 2 jours
 Écouteurs filaires Pro avec micro
 4 000 F CFA
 la part
@@ -1598,11 +1882,11 @@ Accueil   Groupage   Commandes   Profil
 Rechercher un produit...
 Tous   Alimentaire   Électronique   Mode   Maison
 Écouteurs filaires Pro avec micro
-4 000 F CFA · 32 acheteurs confirmés · RESTE 2 JOURS
+4 000 F CFA · 32 acheteurs confirmés · Il reste 2 jours
 Robe wax, taille au choix
-7 500 F CFA · 18 acheteurs confirmés · RESTE 5 JOURS
+7 500 F CFA · 18 acheteurs confirmés · Il reste 5 jours
 Baskets homme, pointures 39-45
-9 800 F CFA · 41 acheteurs confirmés · RESTE 4 H
+9 800 F CFA · 41 acheteurs confirmés · Il reste 4 h
 Vide : Aucun groupage ne correspond. Demander ce produit
 ```
 
@@ -1611,7 +1895,7 @@ Vide : Aucun groupage ne correspond. Demander ce produit
 ```
 Écouteurs filaires Pro avec micro
 4 000 F CFA  par part
-RESTE 2 JOURS · 32 acheteurs confirmés
+Il reste 2 jours · 32 acheteurs confirmés
 Par Mama Gro
 Ce que contient une part
 1 écouteur filaire avec micro, garantie 3 mois
@@ -1836,7 +2120,7 @@ Partager sur WhatsApp
 
 ```
 Écouteurs filaires Pro avec micro
-32 commandes · 128 000 F CFA collectés · RESTE 2 JOURS
+32 commandes · 128 000 F CFA collectés · Il reste 2 jours
 Partager   Clôturer maintenant   Prévenir les participants
 Commandes
 K7M-4PQ   1 part · noir · 4 000 F CFA · Tokoin
@@ -2014,7 +2298,21 @@ Six détails qui font la différence devant un jury :
 - [ ] L'avertissement « vérifiez votre commande devant le livreur » figure sur les écrans 3, 7 et 9.
 - [ ] **Aucun contact de groupeur sur un écran acheteur**, et **aucun numéro d'acheteur sur un écran groupeur**.
 - [ ] **Le pseudonyme du groupeur n'est cliquable nulle part**, et aucune page de profil n'existe.
-- [ ] Aucune mention de « places disponibles », de minimum de participants ou de jauge à remplir.
+- [ ] Le message « créez un compte » **ne s'affiche jamais à l'ouverture** : seulement sur « Rejoindre » et sur « Poser une question », et il dit **pourquoi**, avec une raison propre à chacune (§1.5).
+- [ ] L'inscription est en **bouton plein**, la connexion en **lien discret** — jamais deux boutons pleins côte à côte (§1.5).
+- [ ] La feuille d'inscription a son **indicateur de deux étapes**, et l'étape est aussi annoncée **en texte masqué** pour un lecteur d'écran.
+- [ ] Un **numéro déjà inscrit** ouvre un encart « Se connecter plutôt », et pas un simple message d'erreur sous le champ.
+- [ ] L'étape du mot de passe porte le lien « **Mot de passe oublié ? Recevoir un code par SMS** » — c'est tout le parcours de récupération.
+- [ ] Le **courriel est marqué « (facultatif) »** partout où il apparaît, et il ne sert jamais à se connecter.
+- [ ] L'onglet Profil sans compte propose « **Créer mon compte** », pas « Voir les campagnes ».
+- [ ] **Aucun groupage clôturé, livré ou annulé dans le catalogue** : ni sur le fil, ni dans la recherche, ni dans une catégorie, ni dans le compteur de résultats (écran 2).
+- [ ] Le temps restant est un **badge** — fond teinté, liseré, icône horloge — et son libellé est une phrase : « Il reste 3 jours », **jamais en capitales**.
+- [ ] Sous un jour, le badge compte en **heures** : « Il reste 4 h », jamais « il reste 0 jour ».
+- [ ] Sur écran large, **l'en-tête, le pied de page et le contenu s'alignent sur les mêmes bords** : un seul plafond `largeur-page`, et la page ne saute pas d'un écran à l'autre.
+- [ ] Aucune ligne de texte ne dépasse ~672 px, et aucun bouton ne s'étire sur toute la largeur du conteneur.
+- [ ] La barre de progression du §2.5 est présente sur le fil, les cartes, les lignes et le détail, et elle porte **le chiffre écrit à côté**, jamais la barre seule.
+- [ ] Aucune mention de « places disponibles », de « complet », ni de « il manque N personnes » : l'objectif n'est ni un plafond ni un minimum.
+- [ ] Un groupage qui dépasse son objectif montre une barre **pleine** et le nombre réel — « 24 acheteurs », pas « 24 sur 20 » tronqué à 20.
 - [ ] Le fil a son **état image seule** et son **mode économie de données** dessinés.
 - [ ] Le son des vidéos est **coupé par défaut**, avec son icône visible.
 - [ ] Chaque liste a son état vide, et les onglets protégés leur variante « non connecté ».

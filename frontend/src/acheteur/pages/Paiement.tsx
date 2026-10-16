@@ -222,11 +222,18 @@ export default function Paiement({
           aide="Il peut être différent du numéro de votre compte."
         />
 
-        {/* 6 — Formulation contrainte par §1.7 : « détenu jusqu'à la clôture »,
-            jamais « bloqué jusqu'à la livraison ». */}
+        {/* 6 — ⚠️ **Cette phrase disait : « Votre paiement est détenu par
+            Group Achat jusqu'à la clôture du groupage. »** C'est faux : les
+            fonds vont au **portefeuille du groupeur** dès le paiement (§9.1 du
+            cahier des charges). Group Achat tient son compte, pas les fonds
+            pour son propre compte.
+
+            La contrainte du §1.7 tient toujours sur l'autre moitié : jamais
+            « bloqué jusqu'à la livraison » — le groupeur est payé à la
+            clôture, avant qu'on livre. */}
         <p className="text-sm text-texte-secondaire">
-          Votre paiement est détenu par Group Achat jusqu&apos;à la clôture du
-          groupage.
+          Votre paiement va au portefeuille du groupeur, qui ne peut le retirer
+          qu&apos;à la clôture du groupage.
         </p>
 
         {etat === "echec" ? (

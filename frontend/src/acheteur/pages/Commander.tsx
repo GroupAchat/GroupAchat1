@@ -1,5 +1,4 @@
 import { useState } from "react";
-import BandeauConfiance from "../composants/BandeauConfiance";
 import Bouton, { BoutonAncre } from "../../ui/Bouton";
 import Champ from "../../ui/Champ";
 import Encart from "../../ui/Encart";
@@ -344,9 +343,6 @@ export default function Commander({
             </div>
           </dl>
         </section>
-
-        {/* 7 — Bandeau de confiance, version courte */}
-        <BandeauConfiance />
 
         {/* 8 — Conditions de vente, non cochees par defaut */}
         <label className="flex min-h-12 items-start gap-3 text-texte">

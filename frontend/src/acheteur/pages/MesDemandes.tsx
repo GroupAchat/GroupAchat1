@@ -37,8 +37,13 @@ const STYLES: Record<StatutDemande, string> = {
   "campagne-lancee": "bg-succes-fond text-succes",
   /* Orange : ca avance. */
   "prise-en-charge": "bg-primaire-fond text-primaire-texte-sur-fond",
-  /* Bleu : information neutre, rien ne presse. */
-  "en-attente": "bg-confiance-fond text-confiance",
+  /* ⚠️ **Neutre cercle, et non un second gris plein.**
+     « non-aboutie » ci-dessous est deja en `surface-douce` : y poser
+     « en-attente » aurait fondu deux etats opposes — l'un vit encore, l'autre
+     est clos. La difference se joue donc sur **la forme** et non sur une
+     nuance de gris de plus : contour visible pour ce qui est en cours, aplat
+     muet pour ce qui est termine. `texte` sur blanc : 17,46:1. */
+  "en-attente": "border border-bordure-champ text-texte",
   /* Gris : clos sans suite. Pas rouge — ce n'est l'echec de personne. */
   "non-aboutie": "bg-surface-douce text-texte-secondaire",
 };

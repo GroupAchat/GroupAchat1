@@ -71,7 +71,7 @@ const TEXTES: Record<
     raisons: [
       "Votre code de livraison, à montrer au livreur",
       "Le suivi de votre commande jusqu'à la remise",
-      "Votre argent détenu jusqu'à la clôture, ou remboursé",
+      "Le groupeur n'est payé qu'à la clôture, ou vous êtes remboursé",
     ],
   },
   /**

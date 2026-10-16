@@ -98,11 +98,17 @@ export default function PiedPage() {
           <div className="max-w-xs">
             <Logo variante="couleur" disposition="cote" hauteur={30} />
             <p className="mt-3 text-sm text-texte-secondaire">
-              Le prix de gros, à plusieurs. Votre paiement est détenu
-              jusqu&apos;à la clôture du groupage.
+              Le prix de gros, à plusieurs.
             </p>
-            <p className="mt-4 flex items-start gap-2 text-sm font-medium text-confiance">
-              <IconeBouclier taille={18} className="mt-0.5 shrink-0" />
+            {/* ⚠️ **Cette ligne etait bleue, elle ne l'est plus.** Le bleu est
+                le chrome du cote groupeur (§1.2) ; il n'a pas a reapparaitre
+                par petites touches sur les ecrans acheteur. La promesse, elle,
+                reste — c'est la seule chose qui distingue ce produit d'un
+                groupage WhatsApp. */}
+            <p className="mt-4 flex items-start gap-2 text-sm font-medium text-texte">
+              <span className="mt-0.5 shrink-0 text-primaire">
+                <IconeBouclier taille={18} />
+              </span>
               Vous êtes livré, ou remboursé.
             </p>
           </div>

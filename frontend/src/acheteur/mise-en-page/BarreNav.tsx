@@ -1,6 +1,7 @@
 import {
   IconeAccueil,
   IconeCommandes,
+  IconeDemander,
   IconeGroupage,
   IconeProfil,
 } from "../../ui/Icones";
@@ -25,7 +26,12 @@ import {
  * La pastille de l'onglet Commandes est en `marque` : c'est une pastille
  * pleine, le seul usage de l'orange vif autorise avec ce contraste (§1.2).
  */
-export type OngletAcheteur = "accueil" | "groupage" | "commandes" | "profil";
+export type OngletAcheteur =
+  | "accueil"
+  | "groupage"
+  | "demander"
+  | "commandes"
+  | "profil";
 
 const ONGLETS: {
   cle: OngletAcheteur;
@@ -34,6 +40,12 @@ const ONGLETS: {
 }[] = [
   { cle: "accueil", libelle: "Accueil", Icone: IconeAccueil },
   { cle: "groupage", libelle: "Groupage", Icone: IconeGroupage },
+  /* ⚠️ **Au milieu, et c'est la place qui compte.** « Demander » n'est pas
+     une consultation comme ses voisins : c'est ce qu'on fait quand le
+     catalogue n'a pas ce qu'on cherche. Le poser au centre le met sous le
+     pouce, et juste apres « Groupage » — c'est-a-dire a l'endroit du
+     parcours ou l'echec de recherche se produit (ecran 1, point 2). */
+  { cle: "demander", libelle: "Demander", Icone: IconeDemander },
   { cle: "commandes", libelle: "Commandes", Icone: IconeCommandes },
   { cle: "profil", libelle: "Profil", Icone: IconeProfil },
 ];
@@ -81,7 +93,11 @@ export default function BarreNav({
                     />
                   ) : null}
                 </span>
-                <span className="text-xs font-medium">
+                {/* ⚠️ `truncate` et `px-0.5` : a cinq onglets il reste 78 px
+                    par case sur un ecran de 390. « Commandes » y tient, mais
+                    un libelle plus long deborderait sur son voisin au lieu
+                    d'etre coupe. */}
+                <span className="w-full truncate px-0.5 text-center text-xs font-medium">
                   {libelle}
                   {pastille ? (
                     <span className="sr-only">

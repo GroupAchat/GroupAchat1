@@ -76,18 +76,25 @@ export default function Confirmation({
           </p>
         </div>
 
-        {/* 5 — Le bandeau de confiance, version developpee. Exact et
-            suffisant : ne pas aller au-dela. */}
-        <div className="flex items-start gap-2 rounded-xl bg-confiance-fond px-3 py-3 text-confiance">
-          <IconeBouclier taille={20} className="mt-0.5 shrink-0" />
-          <div className="text-sm">
-            <p className="font-semibold">
-              Vos {formaterFrancs(total)} sont détenus par Group Achat
+        {/* 5 — Ce que devient l'argent, en texte simple.
+
+            ⚠️ **C'etait un encart bleu, retire sur demande** — et son titre
+            etait faux : *« Vos N F sont detenus par Group Achat »*. Ils ne le
+            sont pas. Ils vont au **portefeuille du groupeur** des le paiement ;
+            ce que la plateforme tient, c'est son compte, pas les fonds pour
+            son propre compte. Voir le §9.1 du cahier des charges. */}
+        <div className="flex items-start gap-2 rounded-xl border border-bordure px-3 py-3">
+          <span className="mt-0.5 shrink-0 text-primaire">
+            <IconeBouclier taille={20} />
+          </span>
+          <div className="text-sm text-texte-secondaire">
+            <p className="font-semibold text-texte">
+              Vos {formaterFrancs(total)} vont au portefeuille du groupeur
             </p>
             <p className="mt-1">
-              Ils ne sont versés au groupeur qu&apos;à la clôture du groupage.
-              Si celui-ci n&apos;aboutit pas, vous êtes remboursé
-              intégralement.
+              Il ne peut les retirer qu&apos;à la clôture du groupage, pour
+              commander chez le fournisseur. Si celui-ci n&apos;aboutit pas,
+              vous êtes remboursé intégralement.
             </p>
           </div>
         </div>
@@ -106,7 +113,7 @@ export default function Confirmation({
               etapes={[
                 {
                   libelle: "Paiement reçu",
-                  detail: `${formaterFrancs(total)} détenus par Group Achat`,
+                  detail: `${formaterFrancs(total)} au portefeuille du groupeur`,
                 },
                 {
                   libelle: "Clôture du groupage",

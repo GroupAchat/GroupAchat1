@@ -1151,7 +1151,7 @@ const AIDE: { question: string; reponse: string }[] = [
   {
     question: "Que devient mon argent avant la livraison ?",
     reponse:
-      "Il est détenu par Group Achat jusqu'à la clôture de la campagne. Si la campagne n'aboutit pas, vous êtes remboursé intégralement.",
+      "Il va au portefeuille du groupeur, qui ne peut le retirer qu'à la clôture de la campagne — c'est à ce moment-là qu'il commande chez le fournisseur. Si la campagne n'aboutit pas, vous êtes remboursé intégralement.",
   },
   {
     question: "À quoi sert mon code de livraison ?",

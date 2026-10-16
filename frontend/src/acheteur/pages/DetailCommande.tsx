@@ -277,8 +277,8 @@ function MessageDEtat({
       return (
         <Encart variante="info">
           Votre code apparaîtra ici quand la livraison sera lancée. Vos{" "}
-          {montant} sont détenus par Group Achat jusqu&apos;à la clôture du
-          groupage.
+          {montant} sont au portefeuille du groupeur, qui ne peut les retirer
+          qu&apos;à la clôture du groupage.
         </Encart>
       );
 

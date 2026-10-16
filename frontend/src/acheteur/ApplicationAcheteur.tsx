@@ -462,14 +462,43 @@ function RouteurAcheteur({
         })()
       : [];
 
+  /**
+   * Vrai quand on arrive au catalogue **par la loupe** du fil.
+   *
+   * L'en-tete telephone replie sa recherche derriere une loupe ; cette
+   * intention doit traverser le changement d'ecran, sinon on atterrit sur
+   * l'ecran de recherche avec la recherche fermee.
+   */
+  const [rechercheDemandee, setRechercheDemandee] = useState(false);
+
   const ouvrirCatalogue = () => {
     inscrireLeGroupageDansLAdresse(undefined);
+    setRechercheDemandee(false);
+    setOnglet("groupage");
+    setEcran({ nom: "catalogue" });
+  };
+
+  /**
+   * Le catalogue, **avec le champ de recherche deplie**.
+   *
+   * ⚠️ **Une fonction a part, et non un parametre de `ouvrirCatalogue`.**
+   * Celui-ci est passe tel quel a des `onClick`, et React leur transmet
+   * l'evenement : un premier argument optionnel y serait **toujours vrai**,
+   * donc toute arrivee au catalogue deplierait la recherche.
+   */
+  const ouvrirLaRecherche = () => {
+    inscrireLeGroupageDansLAdresse(undefined);
+    setRechercheDemandee(true);
     setOnglet("groupage");
     setEcran({ nom: "catalogue" });
   };
 
   const ouvrirDemande = () => {
-    setOnglet("profil");
+    /* ⚠️ **`"demander"` et non `"profil"`.** « Demander » a son propre onglet
+       depuis qu'il est dans la barre du bas : marquer « Profil » comme actif
+       pendant qu'on remplit le formulaire de demande allumerait le mauvais
+       repere, et c'est le seul role de cette barre. */
+    setOnglet("demander");
     setEcran({ nom: "demander" });
   };
 
@@ -631,7 +660,12 @@ function RouteurAcheteur({
     <FournisseurNavigation
       destinations={{
         onCatalogue: ouvrirCatalogue,
-        onDemanderProduit: ouvrirDemande,
+        /* ⚠️ **Pas de destination quand on y est déjà.** Le pied de page
+           affichait « Demander un produit » sur l'écran du formulaire de
+           demande, c'est-à-dire un lien vers la page courante. La règle de
+           `NavigationContexte` fait le reste : une entrée sans destination ne
+           se dessine pas. */
+        onDemanderProduit: vue.nom === "demander" ? undefined : ouvrirDemande,
         onMesCommandes: () => {
           setOnglet("commandes");
           setEcran({ nom: "mes-commandes" });
@@ -659,7 +693,11 @@ function RouteurAcheteur({
             setFiltres({ ...filtres, recherche });
             setEcran({ nom: "catalogue" });
           }}
-          onDemander={ouvrirDemande}
+          /* Même raison que pour le pied de page : sur l'écran de demande,
+             ce bouton menait à la page courante, avec le poids visuel du
+             bouton d'envoi. `EnTeteBureau` ne le dessine pas sans
+             destination. */
+          onDemander={vue.nom === "demander" ? undefined : ouvrirDemande}
           notifications={cloche.nonLues}
           onNotifications={cloche.ouvrir}
           onMenu={() => setMenuOuvert(true)}
@@ -674,7 +712,7 @@ function RouteurAcheteur({
       {vue.nom === "fil" ? (
         <Fil
           onOuvrirGroupage={ouvrirGroupage}
-          onRechercher={ouvrirCatalogue}
+          onRechercher={ouvrirLaRecherche}
           onQuestions={(groupage) => setEcran({ nom: "questions", groupage })}
           onPartager={partagerLeGroupage}
           onDemanderProduit={ouvrirDemande}
@@ -683,6 +721,7 @@ function RouteurAcheteur({
 
       {vue.nom === "catalogue" ? (
         <GroupagesOuverts
+          rechercheDepliee={rechercheDemandee}
           estBureau={estBureau}
           filtres={filtres}
           onFiltres={setFiltres}
@@ -919,7 +958,15 @@ function RouteurAcheteur({
           estBureau={estBureau}
           connecte={connecte}
           onRetour={ouvrirCatalogue}
-          onEnvoyee={() => setEcran({ nom: "mes-demandes" })}
+          /* ⚠️ **L'onglet se recale, et il le faut depuis que « Demander »
+             en a un.** On atterrit sur « Mes demandes », qui vit sous
+             « Profil » : sans cette ligne, l'onglet « Demander » resterait
+             allume sur un ecran qui n'est pas le sien. Avant, `ouvrirDemande`
+             posait deja « profil », donc c'etait juste par hasard. */
+          onEnvoyee={() => {
+            setOnglet("profil");
+            setEcran({ nom: "mes-demandes" });
+          }}
           /* ⚠️ L'ecran 11 **reste monte** derriere la feuille : c'est ce qui
              preserve la saisie et la photo deja reduite. Le §1.5 ne demande
              pas seulement de ne pas montrer de mur, il demande que fermer la
@@ -1185,6 +1232,8 @@ function RouteurAcheteur({
                 return setEcran({ nom: "fil" });
               case "groupage":
                 return setEcran({ nom: "catalogue" });
+              case "demander":
+                return setEcran({ nom: "demander" });
               case "commandes":
                 return setEcran({ nom: "mes-commandes" });
               case "profil":

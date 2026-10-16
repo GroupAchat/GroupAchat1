@@ -306,8 +306,10 @@ export default function DetailGroupage({
       <ul className="mt-2 space-y-2">
         {[
           <>
-            Paiement à la commande, <strong className="font-semibold">détenu
-            jusqu&apos;à la clôture</strong> du groupage
+            Paiement à la commande, versé au portefeuille du groupeur et{" "}
+            <strong className="font-semibold">
+              retirable seulement à la clôture
+            </strong>
           </>,
           <>
             À la clôture, le groupeur reçoit les fonds et prépare la commande.{" "}
@@ -544,9 +546,16 @@ export default function DetailGroupage({
           <button
             type="button"
             onClick={onQuestions}
-            className="fixed right-6 bottom-6 z-20 inline-flex h-12 items-center gap-2 rounded-full bg-primaire px-5 text-sm font-semibold text-white shadow-[0_4px_16px_rgba(29,25,22,0.24)] hover:bg-primaire-presse"
+            /* Même pastille blanche que sur téléphone — voir le commentaire
+               de l'autre bouton flottant pour les contrastes calculés. Le
+               survol passe en `surface-douce` : sur ordinateur il faut un
+               retour au pointeur, et il doit rester discret puisque ce
+               bouton n'est plus l'action principale de l'écran. */
+            className="fixed right-6 bottom-6 z-20 inline-flex h-12 items-center gap-2 rounded-full border border-bordure-champ bg-white px-5 text-sm font-semibold text-texte shadow-[0_4px_16px_rgba(29,25,22,0.24)] hover:bg-surface-douce"
           >
-            <IconeQuestion taille={18} />
+            <span aria-hidden="true" className="text-primaire">
+              <IconeQuestion taille={18} />
+            </span>
             Poser une question
           </button>
         )}
@@ -590,12 +599,42 @@ export default function DetailGroupage({
           ⚠️ **Ce bouton flottant n'avait pas de `onClick` non plus**, et c'est
           celui qu'on voit le plus : il est fixe en bas de l'ecran pendant tout
           le defilement de la fiche. */}
+      {/* ⚠️ **Pastille blanche, et non `primaire` plein.**
+
+          Il était en `bg-primaire` avec du texte blanc — c'est-à-dire
+          **exactement le bouton « Commander »** ancré juste en dessous. Deux
+          boutons de même poids, à quelques centimètres l'un de l'autre, sur un
+          écran qui n'a qu'une seule action principale : l'œil ne savait plus
+          lequel était l'offre et lequel était la question.
+
+          Le §1.2 ne dit pas que tout ce qui est cliquable est orange ; il dit
+          que l'orange est la couleur d'action de ce côté du produit. Une seule
+          action principale par écran, donc un seul bouton orange.
+
+          Les trois contrastes sont calculés, pas estimés :
+
+          | | sur blanc |
+          |---|---|
+          | `texte`, le libellé | **17,46:1** |
+          | `primaire`, l'icône | **4,62:1** |
+          | `bordure-champ`, le contour | **3,38:1** |
+
+          ⚠️ Le contour est en `bordure-champ` et non en `bordure` : cette
+          dernière ne tient que **1,22:1**, bien sous le seuil de 3:1 que la
+          règle 1.4.11 impose à la limite d'un composant actionnable. Sur une
+          photo claire, une pastille blanche sans contour visible disparaîtrait.
+
+          **Écarté : le bleu `confiance`.** Lisible (10,36:1), mais le §1.2 le
+          réserve au chrome groupeur — le poser sur une action acheteur
+          mélangerait les deux seuls repères permanents du produit. */}
       <button
         type="button"
         onClick={onQuestions}
-        className="fixed right-4 bottom-24 z-10 inline-flex h-11 items-center gap-1.5 rounded-full bg-primaire px-4 text-sm font-semibold text-white shadow-[0_2px_10px_rgba(29,25,22,0.2)]"
+        className="fixed right-4 bottom-24 z-10 inline-flex h-11 items-center gap-1.5 rounded-full border border-bordure-champ bg-white px-4 text-sm font-semibold text-texte shadow-[0_2px_10px_rgba(29,25,22,0.2)]"
       >
-        <IconeQuestion taille={16} />
+        <span aria-hidden="true" className="text-primaire">
+          <IconeQuestion taille={16} />
+        </span>
         Posez une question
       </button>
 

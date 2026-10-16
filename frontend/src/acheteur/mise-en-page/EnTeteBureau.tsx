@@ -35,7 +35,16 @@ export default function EnTeteBureau({
   recherche: string;
   onRecherche: (valeur: string) => void;
   /** Vers l'ecran 11. Un echec de recherche n'est jamais un cul-de-sac. */
-  onDemander: () => void;
+  /**
+   * ⚠️ **Absent quand on est déjà sur l'écran de demande.**
+   *
+   * Le bouton ne se dessine alors pas, et c'est la même règle que celle de
+   * `NavigationContexte` pour le pied de page : *une entrée non branchée ne se
+   * dessine pas*. Sur l'écran du formulaire, ce bouton menait à la page
+   * courante — avec exactement le poids du bouton d'envoi, même orange, même
+   * hauteur. Deux actions identiques dont une ne faisait rien.
+   */
+  onDemander?: () => void;
   /**
    * Le nombre de notifications non lues.
    *
@@ -148,17 +157,27 @@ export default function EnTeteBureau({
           />
         </div>
 
-        {/* Les actions, groupees et calees a droite. Elles ne se separent
-            jamais : ce sont les deux seuls gestes permanents de l'en-tete. */}
+        {/* Les actions, groupees et calees a droite.
+
+            ⚠️ **Ce commentaire disait : « ce sont les deux seuls gestes
+            permanents de l'en-tete ».** Ils ne sont plus permanents tous les
+            deux : « Demander » s'efface sur l'ecran de demande. La cloche,
+            elle, reste partout. */}
         <div className="flex shrink-0 items-center gap-2 lg:gap-3">
-          <button
-            type="button"
-            onClick={onDemander}
-            className="inline-flex h-12 shrink-0 items-center gap-1.5 rounded-[10px] bg-primaire px-5 font-semibold text-white active:bg-primaire-presse"
-          >
-            <IconeDemander taille={18} />
-            Demander
-          </button>
+          {/* ⚠️ **Rien sans destination**, la meme regle que le pied de page.
+              La rendre facultative ne suffisait pas : le bouton se dessinait
+              quand meme, et `onClick={undefined}` est du TypeScript valide —
+              le typage ne pouvait donc pas signaler le bouton mort. */}
+          {onDemander ? (
+            <button
+              type="button"
+              onClick={onDemander}
+              className="inline-flex h-12 shrink-0 items-center gap-1.5 rounded-[10px] bg-primaire px-5 font-semibold text-white active:bg-primaire-presse"
+            >
+              <IconeDemander taille={18} />
+              Demander
+            </button>
+          ) : null}
 
           <BoutonCloche
             notifications={notifications}

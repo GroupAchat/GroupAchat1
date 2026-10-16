@@ -233,7 +233,7 @@ La liste est courte et exhaustive. Partout ailleurs, c'est de l'orange.
 
 | Emplacement | Écrans |
 |---|---|
-| `BandeauConfiance` | 1, 3, 5, 7, 9 |
+| ~~`BandeauConfiance`~~ | **Supprimé** — voir §1.7 |
 | Statuts « Payée — en attente de clôture » et « Campagne clôturée » | 8, 9 |
 | `Encart` `info` | information neutre |
 | L'icône bouclier | avec le bandeau |
@@ -2294,7 +2294,8 @@ Six détails qui font la différence devant un jury :
 - [ ] Le **total payé** (5 000 F) apparaît partout à partir du récapitulatif, et le **prix de la part** (4 000 F) seulement avant.
 - [ ] La ligne de frais de livraison est **distincte**, jamais fondue dans le prix de la part.
 - [ ] **Aucun écran ne promet que l'argent est bloqué jusqu'à la livraison** (§1.7) — le groupeur est payé à la clôture.
-- [ ] Le `BandeauConfiance` est présent sur les écrans 1, 3, 5, 7 et 9.
+- [ ] **Aucun encart bleu sur un écran acheteur** : le `BandeauConfiance` a été supprimé et les encarts `info` sont neutres. Seule la coche « vérifié » du pseudonyme reste bleue.
+- [ ] **Aucun écran n'écrit que Group Achat détient l'argent.** La formulation est « votre paiement va au portefeuille du groupeur, qui ne peut le retirer qu'à la clôture ».
 - [ ] L'avertissement « vérifiez votre commande devant le livreur » figure sur les écrans 3, 7 et 9.
 - [ ] **Aucun contact de groupeur sur un écran acheteur**, et **aucun numéro d'acheteur sur un écran groupeur**.
 - [ ] **Le pseudonyme du groupeur n'est cliquable nulle part**, et aucune page de profil n'existe.

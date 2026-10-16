@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import BandeauConfiance from "../composants/BandeauConfiance";
 import CarteUrgente from "../composants/CarteUrgente";
 import TuilesCategories from "../composants/TuilesCategories";
 import PucesFiltresActifs from "../composants/PucesFiltresActifs";
@@ -64,10 +63,13 @@ export default function GroupagesOuverts({
   onFiltres,
   onOuvrirGroupage,
   onDemanderProduit,
+  rechercheDepliee = false,
 }: {
   estBureau: boolean;
   filtres: Filtres;
   onFiltres: (filtres: Filtres) => void;
+  /** On arrive par la loupe du fil : l'en-tete ouvre son champ. */
+  rechercheDepliee?: boolean;
   onOuvrirGroupage: (groupage: Groupage) => void;
   onDemanderProduit: () => void;
 }) {
@@ -416,8 +418,8 @@ export default function GroupagesOuverts({
                    */}
                   {/* Blanc plein, pas `white/80` : voir l'encadre ci-dessus. */}
                   <p className="mt-4 max-w-xl text-base text-white lg:text-lg">
-                    Rejoignez un groupage et payez votre part. Votre
-                    paiement est détenu jusqu&apos;à la clôture du groupage.
+                    Rejoignez un groupage et payez votre part. Le groupeur
+                    ne touche les fonds qu&apos;à la clôture.
                   </p>
                 </div>
 
@@ -714,14 +716,11 @@ export default function GroupagesOuverts({
       <EnTeteApplication
         recherche={filtres.recherche}
         onRecherche={(recherche) => onFiltres({ ...filtres, recherche })}
-        onDemander={onDemanderProduit}
+        rechercheDepliee={rechercheDepliee}
         notifications={cloche.nonLues}
         onNotifications={cloche.ouvrir}
       />
 
-      <div className="px-4 pt-4">
-        <BandeauConfiance />
-      </div>
 
       <div className="mt-4">
         <RechercheEtFiltres

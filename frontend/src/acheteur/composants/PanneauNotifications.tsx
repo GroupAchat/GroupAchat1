@@ -69,9 +69,14 @@ const ICONES: Record<
  * couleur signale une action, un etat ou un risque.
  */
 const TONS: Record<NatureNotification, string> = {
-  "produit-arrive": "bg-confiance-fond text-confiance",
-  "reponse-question": "bg-confiance-fond text-confiance",
-  "groupage-cloture": "bg-confiance-fond text-confiance",
+  /* ⚠️ **Neutres, et non plus bleues.** Le raisonnement du paragraphe
+     ci-dessus tient toujours : une seule des quatre est en orange, celle qui
+     annonce ce qui ne s'est pas passe comme prevu. Ce qui change est que les
+     trois autres cessent d'emprunter le bleu du chrome groupeur pour dire
+     « rien ne presse ». `texte-secondaire` sur `surface-douce` : 7,01:1. */
+  "produit-arrive": "bg-surface-douce text-texte-secondaire",
+  "reponse-question": "bg-surface-douce text-texte-secondaire",
+  "groupage-cloture": "bg-surface-douce text-texte-secondaire",
   "groupage-annule": "bg-primaire-fond text-primaire-texte-sur-fond",
 };
 

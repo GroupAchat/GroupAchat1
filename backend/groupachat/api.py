@@ -86,6 +86,35 @@ class CampagneSerializer(serializers.ModelSerializer):
     #: l'acheteur n'a pas dit où il est.
     frais_livraison_a_partir_de = serializers.SerializerMethodField()
 
+    #: Les dernieres personnes qui ont rejoint — **sans aucun nom**.
+    #:
+    #: ⚠️ **C'est la seule facon de rendre l'ambiance du marche sans trahir
+    #: l'anonymat.** Au marche, on voit qui prend et combien, et c'est ce qui
+    #: donne envie d'y aller. Ici on montre **un quartier, une quantite, un
+    #: delai** — jamais un nom, jamais un numero, jamais un pseudonyme.
+    #:
+    #: ⚠️ **Et ce n'est pas la meme chose qu'un avis ou une note.** Il n'y a
+    #: rien a ecrire, rien a moderer, rien a falsifier : chaque ligne est une
+    #: commande payee. C'est une preuve, pas un temoignage.
+    #:
+    #: Le quartier seul reste large — Tokoin compte des dizaines de milliers
+    #: d'habitants — et c'est deja ce que le groupeur voit de ses acheteurs
+    #: (§1.7). La liste est bornee a huit : au-dela elle devient un journal,
+    #: et un journal se lit comme une base de donnees.
+    participants_recents = serializers.SerializerMethodField()
+
+    #: La grille dégressive, **vide la plupart du temps**.
+    #:
+    #: ⚠️ **Ce n'est pas un prix barré** (§3). Il n'y a aucun prix de
+    #: référence inventé : chaque ligne est un prix réellement pratiqué, et
+    #: celui qu'on paie dépend de la quantité qu'on prend. C'est la définition
+    #: du prix de gros — le produit lui-même.
+    #:
+    #: ⚠️ **Le seuil porte sur la quantité de l'acheteur**, jamais sur le
+    #: nombre de participants : ce serait un déclencheur collectif, et le prix
+    #: ne serait pas connu au moment de payer.
+    paliers = serializers.SerializerMethodField()
+
     class Meta:
         model = Campagne
         fields = (
@@ -113,6 +142,8 @@ class CampagneSerializer(serializers.ModelSerializer):
             "progression",
             "heures_restantes",
             "frais_livraison_a_partir_de",
+            "paliers",
+            "participants_recents",
             "caracteristiques",
             "variante",
             "quartier_remise",
@@ -124,6 +155,57 @@ class CampagneSerializer(serializers.ModelSerializer):
 
     def get_frais_livraison_a_partir_de(self, _obj) -> str:
         return str(domaine.FRAIS_LIVRAISON_PROVISOIRES)
+
+    def get_participants_recents(self, obj) -> list[dict]:
+        """Les huit dernieres commandes payees : quartier, quantite, delai.
+
+        ⚠️ **Aucun champ identifiant ne traverse cette route.** Pas
+        d'``acheteur``, pas de ``telephone``, pas de ``code_livraison`` — ce
+        dernier identifie une commande precise et sert a la remise. Les trois
+        champs servis sont ceux que le groupeur voit deja, moins le code.
+
+        ``only`` n'est pas une optimisation cosmetique : il **garantit** que
+        rien d'autre n'est charge, donc que rien d'autre ne peut etre serialise
+        par distraction.
+        """
+        from django.utils import timezone
+
+        from .commandes.models import Commande
+
+        maintenant = timezone.now()
+        lignes = (
+            Commande.objects.filter(
+                campagne=obj, statut__in=Commande.STATUTS_PAYANTS
+            )
+            .only("quartier", "quantite", "passee_le")
+            .order_by("-passee_le")[:8]
+        )
+
+        return [
+            {
+                "quartier": ligne.quartier,
+                "quantite": ligne.quantite,
+                # En heures : l'ecran decide s'il ecrit « il y a 2 h » ou
+                # « hier ». Lui servir une phrase toute faite l'empecherait de
+                # la traduire ou de l'abreger selon la place.
+                "heures": int(
+                    (maintenant - ligne.passee_le).total_seconds() // 3600
+                ),
+            }
+            for ligne in lignes
+        ]
+
+    def get_paliers(self, obj) -> list[dict]:
+        """Les paliers, du plus petit seuil au plus grand.
+
+        L'ordre vient de ``PalierPrix.Meta.ordering`` : l'écran l'affiche tel
+        quel, et n'a donc aucun tri à refaire — une seconde règle de tri dans
+        l'interface finirait par diverger de celle du serveur.
+        """
+        return [
+            {"quantite_min": p.quantite_min, "prix_part": str(p.prix_part)}
+            for p in obj.paliers.all()
+        ]
 
     def get_questions_recentes(self, campagne: Campagne) -> list[dict]:
         """Les deux dernieres questions-reponses publiques.

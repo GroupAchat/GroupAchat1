@@ -5,10 +5,19 @@ import Encart from "../../ui/Encart";
 import EnTeteEcran from "../mise-en-page/EnTeteEcran";
 import { IconeCoche, IconeLieu, IconeRetour } from "../../ui/Icones";
 import Vignette from "../../composants/Vignette";
-import { type Groupage, LIBELLE_QUARTIER, QUARTIERS, type Quartier } from "../../domaine/groupage";
+import {
+  type Groupage,
+  LIBELLE_QUARTIER,
+  prixPourQuantite,
+  QUARTIERS,
+  type Quartier,
+} from "../../domaine/groupage";
 import { formaterFrancs } from "../../domaine/format";
 import type { BrouillonCommande } from "../../domaine/commande";
-import { calculerFraisLivraison } from "../../domaine/livraison";
+import {
+  calculerFraisLivraison,
+  MENTION_LIVRAISON,
+} from "../../domaine/livraison";
 
 /**
  * Ecran 5 — Commander : quantite, position, recapitulatif.
@@ -91,7 +100,23 @@ export default function Commander({
   const [telephone, setTelephone] = useState(telephoneConnu ?? "");
   const [conditionsAcceptees, setConditionsAcceptees] = useState(false);
 
-  const montantParts = groupage.prixPart * quantite;
+  /* ⚠️ **Le prix unitaire dépend de la quantité**, dès qu'il y a une
+     grille. Multiplier par `prixPart` afficherait un total plus élevé que
+     celui que le serveur facturera — l'acheteur verrait 25 000 F et paierait
+     17 500 F. Moins grave que l'inverse, et faux quand même.
+
+     ⚠️ **Le serveur reste la référence** : `Commande.clean` recalcule le
+     montant attendu et refuse la commande si les deux divergent. Ce calcul-ci
+     n'existe que pour afficher un total juste pendant qu'on tourne le
+     sélecteur — attendre le réseau à chaque appui rendrait l'écran
+     inutilisable sur la connexion visée par le §5. */
+  const prixUnitaire = prixPourQuantite(groupage, quantite);
+  const montantParts = prixUnitaire * quantite;
+
+  /** Le palier suivant, s'il existe. */
+  const palierSuivant = groupage.paliers.find(
+    (palier) => quantite < palier.quantiteMin,
+  );
   const frais = quartier
     ? calculerFraisLivraison({ source: sourcePosition, quartier, repere })
     : undefined;
@@ -161,7 +186,7 @@ export default function Commander({
           <div className="min-w-0">
             <p className="font-semibold text-texte">{groupage.produit}</p>
             <p className="text-texte-secondaire">
-              {formaterFrancs(groupage.prixPart)} la part
+              {formaterFrancs(prixUnitaire)} la part
             </p>
           </div>
         </div>
@@ -191,6 +216,21 @@ export default function Commander({
               +
             </button>
           </div>
+
+          {/* ⚠️ **Dit ce qu'il reste à faire, pas ce qu'on « rate ».**
+              « À partir de 5 parts, la part passe à 3 500 F » informe ;
+              « vous perdez 1 500 F » serait une pression, et ce produit n'en
+              met nulle part. La phrase disparaît une fois le dernier palier
+              atteint — il n'y a plus rien à annoncer. */}
+          {palierSuivant ? (
+            <p className="mt-3 text-sm text-texte-secondaire">
+              À partir de {palierSuivant.quantiteMin} parts, la part passe à{" "}
+              <strong className="font-semibold text-texte">
+                {formaterFrancs(palierSuivant.prixPart)}
+              </strong>
+              .
+            </p>
+          ) : null}
         </section>
 
         {/* 4 — Variante, obligatoire avant de continuer */}
@@ -311,14 +351,23 @@ export default function Commander({
             <div className="flex justify-between gap-4 py-1.5">
               <dt className="text-texte">
                 {quantite} part{quantite > 1 ? "s" : ""} ×{" "}
-                {formaterFrancs(groupage.prixPart)}
+                {formaterFrancs(prixUnitaire)}
               </dt>
               <dd className="font-medium text-texte">
                 {formaterFrancs(montantParts)}
               </dd>
             </div>
 
-            <div className="flex justify-between gap-4 py-1.5">
+            {/* ⚠️ **Masquee quand les frais sont nuls.** Ecrire
+                « Livraison : 0 F » ferait lire un oubli ; sans la ligne, le
+                total **est** le prix de la part et ca se verifie d'un coup
+                d'oeil. La ligne reste affichee quand la zone n'est pas
+                desservie : la, l'absence de montant est une information. */}
+            <div
+              className={`flex justify-between gap-4 py-1.5 ${
+                frais?.desservi && frais.montant === 0 ? "hidden" : ""
+              }`}
+            >
               <dt className="text-texte">
                 {frais?.desservi ? `Livraison à ${frais.lieu}` : "Livraison"}
               </dt>
@@ -342,6 +391,18 @@ export default function Commander({
               </dd>
             </div>
           </dl>
+
+          {/* ⚠️ **Sous le total, et pas ailleurs.** L'acheteur ne paie ici que
+              sa part ; la livraison se règle au livreur. Ne pas le dire serait
+              un mensonge par omission — il découvrirait la dépense à sa porte,
+              livreur devant lui, sans l'avoir prévue. C'est exactement ce qui
+              fait refuser un colis, et un refus coûte à tout le monde.
+
+              **Aucun montant** : le tarif de l'agence partenaire n'est pas
+              négocié, donc pas connu. On ne l'invente pas. */}
+          <p className="mt-3 text-sm text-texte-secondaire">
+            {MENTION_LIVRAISON}
+          </p>
         </section>
 
         {/* 8 — Conditions de vente, non cochees par defaut */}

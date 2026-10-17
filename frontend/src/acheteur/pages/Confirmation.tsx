@@ -6,6 +6,7 @@ import { IconeBouclier, IconeCoche, IconeFermer } from "../../ui/Icones";
 import { LIBELLE_QUARTIER } from "../../domaine/groupage";
 import { formaterDateCourte, formaterFrancs } from "../../domaine/format";
 import type { Commande } from "../../domaine/commande";
+import { MENTION_LIVRAISON } from "../../domaine/livraison";
 
 /**
  * Ecran 7 — Confirmation de commande. SPEC_ECRANS_FIGMA.md, ecran 7.
@@ -96,6 +97,10 @@ export default function Confirmation({
               commander chez le fournisseur. Si celui-ci n&apos;aboutit pas,
               vous êtes remboursé intégralement.
             </p>
+            {/* Ici plus qu'ailleurs : c'est le moment où il range son
+                téléphone. Autant qu'il sache qu'il aura une somme à prévoir
+                le jour de la remise. */}
+            <p className="mt-2">{MENTION_LIVRAISON}</p>
           </div>
         </div>
 

@@ -134,10 +134,50 @@ jobs:
           cache-from: type=gha,scope=api
           cache-to: type=gha,scope=api,mode=max
 
-      # ⚠️ **Le front n'est plus publie.** Les deux images nginx ont ete
-      # retirees de `frontend/Dockerfile` : il n'y a plus rien a publier tant
-      # qu'un serveur web n'est pas choisi. `dist/` et `dist-admin/` se
-      # construisent par `npm run build` et doivent etre deposes autrement.
+      # ⚠️ **Ce bloc disait : « Le front n'est plus publie [...] il n'y a plus
+      # rien a publier tant qu'un serveur web n'est pas choisi. »** Il est
+      # choisi — nginx — et les deux images sont publiees ci-dessous.
+      #
+      # ⚠️⚠️ **`VITE_API_URL` est passee en `build-args`, et c'est obligatoire.**
+      # Vite inscrit la valeur **en clair dans le JavaScript produit** : il n'y
+      # a aucun serveur Node pour la relire au demarrage. La passer dans
+      # `environment:` au lancement du conteneur n'aurait **aucun effet**, et
+      # rien ne protesterait — le client appellerait simplement
+      # `127.0.0.1:8000` depuis le navigateur du visiteur, c'est-a-dire chez
+      # lui. C'est le piege le plus couteux de toute cette chaine.
+
+      - name: La boutique
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          target: boutique
+          push: true
+          build-args: |
+            VITE_API_URL=${{ vars.VITE_API_URL }}
+          tags: |
+            ${{ steps.prefixe.outputs.valeur }}/boutique:${{ steps.version.outputs.etiquette }}
+            ${{ steps.prefixe.outputs.valeur }}/boutique:latest
+          cache-from: type=gha,scope=front
+          cache-to: type=gha,scope=front,mode=max
+
+      # ⚠️ **Le meme `scope=front` que la boutique, et c'est voulu.** Les deux
+      # cibles partagent l'etape `construction` — `npm ci` et `npm run build` —
+      # donc un cache commun evite de reinstaller les dependances et de
+      # reconstruire les paquets une seconde fois. Deux scopes separes
+      # doubleraient la duree de ce travail pour rien.
+      - name: L'administration
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          target: admin
+          push: true
+          build-args: |
+            VITE_API_URL=${{ vars.VITE_API_URL }}
+          tags: |
+            ${{ steps.prefixe.outputs.valeur }}/admin:${{ steps.version.outputs.etiquette }}
+            ${{ steps.prefixe.outputs.valeur }}/admin:latest
+          cache-from: type=gha,scope=front
+          cache-to: type=gha,scope=front,mode=max
       #
       # ⚠️ **`VITE_API_URL` reste une variable de construction** : Vite
       # l'inscrit en clair dans le JavaScript. Quel que soit le serveur retenu,

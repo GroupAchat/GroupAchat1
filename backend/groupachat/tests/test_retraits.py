@@ -106,7 +106,9 @@ class LeMontantEstArreteALaCloture(SocleArgent):
         self.assertEqual(retrait.net, Decimal("126500"))
         # 32 × 1 000 F de livraison, **jamais touchés par les frais** : ils
         # vont au transporteur, pas au groupeur.
-        self.assertEqual(retrait.frais_livraison_collectes, Decimal("32000"))
+        # Plus aucun frais de livraison collecte : seuls les 1 500 F
+        # de la plateforme sont retenus.
+        self.assertEqual(retrait.frais_livraison_collectes, Decimal("0"))
 
     def test_les_frais_ne_dependent_pas_du_montant_collecte(self) -> None:
         """⚠️ **C'est tout l'intérêt d'un montant fixe**, et c'est fragile.

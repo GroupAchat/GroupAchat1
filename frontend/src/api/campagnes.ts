@@ -40,6 +40,12 @@ export interface CampagneApi {
   categorie: Categorie;
   /** DRF serialise les decimaux en **chaine**, pour ne pas perdre de precision. */
   prix_part: string;
+  paliers: { quantite_min: number; prix_part: string }[];
+  participants_recents: {
+    quartier: string;
+    quantite: number;
+    heures: number;
+  }[];
   /** Tous les medias, dans l'ordre. */
   medias: MediaProduit[];
   /** La couverture, **deduite de la liste par le serveur**. */
@@ -82,6 +88,16 @@ export function adapterGroupage(campagne: CampagneApi): Groupage {
        visible tout de suite, plutot qu'un nombre tronque qui passerait pour
        un prix. */
     prixPart: Number(campagne.prix_part),
+    /* `?? []` : un serveur plus ancien que ce client ne sert pas le champ, et
+       une grille absente doit se lire comme « pas de palier », pas planter la
+       fiche produit. */
+    paliers: (campagne.paliers ?? []).map((palier) => ({
+      quantiteMin: palier.quantite_min,
+      prixPart: Number(palier.prix_part),
+    })),
+    /* `?? []` pour la meme raison que les paliers : un serveur plus ancien ne
+       sert pas ce champ, et la fiche doit s'afficher sans. */
+    participantsRecents: campagne.participants_recents ?? [],
     acheteursConfirmes: campagne.acheteurs_confirmes,
     objectifParticipants: campagne.objectif_participants,
     progression: campagne.progression,

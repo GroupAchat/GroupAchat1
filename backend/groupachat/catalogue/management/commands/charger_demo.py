@@ -38,7 +38,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
 
-from groupachat.catalogue.models import Campagne
+from groupachat.catalogue.models import Campagne, PalierPrix
 from groupachat.commandes.models import (
     Commande,
     Justificatif,
@@ -286,6 +286,25 @@ class Command(BaseCommand):
             },
         )
 
+        # ⚠️ **Les paliers sont reposes a chaque chargement**, meme sur une
+        # ligne existante — et ils sont d'abord effaces. Sans ce nettoyage, un
+        # rechargement apres modification du catalogue **empilerait** l'ancienne
+        # grille et la nouvelle : deux paliers au meme seuil violeraient la
+        # contrainte d'unicite, et des seuils orphelins resteraient en base.
+        #
+        # `full_clean()` plutot qu'un `create` direct : c'est lui qui refuse une
+        # grille qui monte, et le jeu de demonstration doit passer par les
+        # memes verrous que le formulaire du groupeur.
+        PalierPrix.objects.filter(campagne=campagne).delete()
+        for palier in donnees.get("paliers", []):
+            ligne = PalierPrix(
+                campagne=campagne,
+                quantite_min=palier["quantiteMin"],
+                prix_part=Decimal(str(palier["prixPart"])),
+            )
+            ligne.full_clean()
+            ligne.save()
+
         if not creee:
             # ⚠️ **L'objectif se remet a jour meme sur une ligne existante.**
             # Les groupages d'avant ont recu un objectif deduit de leurs
@@ -305,6 +324,27 @@ class Command(BaseCommand):
             medias = _medias(donnees)
             if campagne.medias != medias:
                 a_poser["medias"] = medias
+
+            # ⚠️ **La date de fin aussi, et c'est le plus important des trois.**
+            #
+            # `heuresRestantes` est fixe dans le catalogue et converti en date
+            # **au moment du chargement** : la maquette doit afficher « il
+            # reste 2 jours » sur C1 quel que soit le jour ou on la montre.
+            # Mais la date etait dans `defaults`, donc jamais reposee sur une
+            # ligne existante — et le jeu de demonstration **vieillissait**.
+            #
+            # Mesure avant correction : sept groupages `ouverte` avec une date
+            # passee, et un catalogue tombe de douze a huit. Relancer
+            # `charger_demo`, le remede que la documentation recommande, n'y
+            # changeait rien.
+            #
+            # ⚠️ **Le statut n'est pas repose.** Un groupage cloture par la
+            # tache planifiee a un `Retrait` derriere lui : le rouvrir rendrait
+            # retirable un argent deja compte. Pour une demonstration
+            # repartant de zero, c'est `flush` puis `charger_demo`.
+            a_poser["date_fin"] = timezone.now() + timedelta(
+                hours=donnees["heuresRestantes"]
+            )
 
             if a_poser:
                 Campagne.objects.filter(pk=campagne.pk).update(**a_poser)

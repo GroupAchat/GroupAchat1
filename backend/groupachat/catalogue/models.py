@@ -99,12 +99,52 @@ class Campagne(models.Model):
         "catégorie", max_length=20, choices=Categorie.choices
     )
 
+    #: Le prix d'**une** part. C'est le prix affiche partout, et le palier
+    #: de depart : un acheteur qui en prend une seule paie celui-la.
+    #:
+    #: Les paliers degressifs, s'il y en a, vivent dans ``PalierPrix``.
     prix_part = models.DecimalField(
         "prix d'une part",
         max_digits=12,
         decimal_places=0,
         validators=[MinValueValidator(Decimal("1"))],
     )
+
+    def prix_pour(self, quantite: int) -> Decimal:
+        """Le prix **unitaire** applicable a cette quantite.
+
+        ## ⚠️ C'est une quantite, pas un nombre de participants
+
+        Le palier se declenche sur ce que **cet acheteur** prend, et sur rien
+        d'autre. Le faire dependre du nombre de participants au groupage
+        serait un **declencheur collectif**, que le produit interdit (voir le
+        docstring de cette classe : *ni plafond, ni minimum, ni declencheur*).
+
+        Ce n'est pas qu'une question de regle. Un prix collectif ne serait
+        **pas connu au moment de payer** : il baisserait apres coup, pour des
+        gens qui ont deja paye, et dont l'argent est deja parti au
+        portefeuille du groupeur. Il faudrait rembourser retroactivement un
+        argent qu'on ne detient pas. Le prix doit etre definitif a la
+        commande.
+
+        ## Pourquoi ce n'est pas un prix barre
+
+        Le §3 interdit tout prix barre, tout badge de reduction, tout
+        « au lieu de ». Une grille degressive n'en est pas un : il n'y a aucun
+        prix de reference invente, seulement **plusieurs prix vrais**, et
+        celui qu'on paie depend de ce qu'on prend. C'est la definition du prix
+        de gros, qui est le produit lui-meme.
+        """
+        if quantite < 1:
+            raise ValueError("La quantité doit valoir au moins 1.")
+
+        # Les paliers sont ordonnes par quantite croissante (``Meta``), donc
+        # le dernier dont le seuil est atteint est le bon.
+        applicable = self.prix_part
+        for palier in self.paliers.all():
+            if quantite >= palier.quantite_min:
+                applicable = palier.prix_part
+        return applicable
 
     #: Combien de personnes le groupeur veut reunir. **Obligatoire.**
     #:
@@ -458,3 +498,102 @@ Statut_PAYANTS = (
     "en-livraison",
     "livree",
 )
+
+
+class PalierPrix(models.Model):
+    """Un palier de prix degressif : « a partir de N parts, le prix est P ».
+
+    **Facultatif, et c'est le point.** Un groupage sans palier se comporte
+    exactement comme avant : un prix, une multiplication. Les paliers ne sont
+    qu'une grille que le groupeur peut poser s'il a negocie un prix de gros
+    par volume chez son fournisseur.
+
+    ## ⚠️ Ce que la grille doit respecter, et pourquoi c'est verifie
+
+    Deux regles, posees par ``clean`` :
+
+    - **le seuil est d'au moins 2 parts.** Un palier a 1 part remplacerait
+      ``prix_part`` sans le dire, et on se retrouverait avec deux sources pour
+      le meme prix ;
+    - **le prix d'un palier est strictement inferieur** a celui du palier
+      precedent, et au prix d'une part. Une grille qui monte n'est pas un prix
+      de gros : c'est une penalite de volume, et aucun ecran du produit ne
+      saurait la presenter honnetement.
+
+    Sans ces deux verrous, on pourrait saisir une grille incoherente — par
+    exemple 5 parts a 6 000 F quand une part en coute 5 000 — et l'acheteur
+    paierait plus cher en prenant plus.
+    """
+
+    campagne = models.ForeignKey(
+        Campagne,
+        on_delete=models.CASCADE,
+        related_name="paliers",
+        verbose_name="groupage",
+    )
+
+    #: A partir de combien de parts ce prix s'applique. **Au moins 2.**
+    quantite_min = models.PositiveIntegerField(
+        "a partir de",
+        validators=[MinValueValidator(2)],
+    )
+
+    prix_part = models.DecimalField(
+        "prix d'une part a ce palier",
+        max_digits=12,
+        decimal_places=0,
+        validators=[MinValueValidator(Decimal("1"))],
+    )
+
+    class Meta:
+        verbose_name = "palier de prix"
+        verbose_name_plural = "paliers de prix"
+        #: Croissant : ``prix_pour`` parcourt la liste et garde le dernier
+        #: seuil atteint. Changer cet ordre casserait ce calcul.
+        ordering = ("quantite_min",)
+        #: Deux paliers au meme seuil rendraient le prix dependant de l'ordre
+        #: d'insertion.
+        constraints = [
+            models.UniqueConstraint(
+                fields=("campagne", "quantite_min"),
+                name="un_seul_palier_par_seuil",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"a partir de {self.quantite_min} : {self.prix_part} F"
+
+    def clean(self) -> None:
+        super().clean()
+        if self.prix_part is None or self.quantite_min is None:
+            return
+
+        if self.prix_part >= self.campagne.prix_part:
+            raise ValidationError(
+                {
+                    "prix_part": (
+                        "Le prix d'un palier doit etre inferieur au prix "
+                        "d'une part."
+                    )
+                }
+            )
+
+        # Le palier immediatement en dessous, s'il existe.
+        precedent = (
+            PalierPrix.objects.filter(
+                campagne=self.campagne, quantite_min__lt=self.quantite_min
+            )
+            .exclude(pk=self.pk)
+            .order_by("-quantite_min")
+            .first()
+        )
+        if precedent and self.prix_part >= precedent.prix_part:
+            raise ValidationError(
+                {
+                    "prix_part": (
+                        f"A partir de {self.quantite_min} parts, le prix doit "
+                        f"etre inferieur a celui du palier de "
+                        f"{precedent.quantite_min} parts."
+                    )
+                }
+            )

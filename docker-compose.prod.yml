@@ -69,15 +69,93 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # ⚠️ **Le front n'est pas servi par ce fichier.** Les deux images nginx ont
-  # ete retirees : le serveur web reste a choisir. En attendant, seules la base
-  # et l'API tournent ici, et `dist/` et `dist-admin/` doivent etre deposes
-  # par un autre moyen — c'est la piece manquante avant une mise en ligne.
+  # ⚠️ **Ce bloc disait : « Le front n'est pas servi par ce fichier [...]
+  # c'est la piece manquante avant une mise en ligne. »** Elle ne manque plus :
+  # les deux images nginx sont revenues, et les deux services sont ci-dessous.
+  boutique:
+    image: ${IMAGE_PREFIXE:?renseignez IMAGE_PREFIXE dans .env}/boutique:${ETIQUETTE:-latest}
+    ports:
+      - "${PORT_BOUTIQUE:-5173}:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  # ── La cloture par la date ────────────────────────────────────────────
   #
-  # ⚠️ Quel que soit ce serveur, **l'administration ne doit pas etre publiee
-  # telle quelle** : l'ecran A2 affiche des noms, des numeros et des references
-  # de pieces d'identite, et la page s'ouvre sans mot de passe. On l'atteint
-  # par un tunnel SSH, ou derriere une authentification posee par le serveur.
+  # ⚠️⚠️ **Sans ce service, le produit ne gagne jamais d'argent.**
+  #
+  # Rien ne s'execute quand une date de fin passe. Un groupage echu reste
+  # `ouverte`, aucun `Retrait` n'est cree, et **l'argent deja encaisse ne
+  # devient jamais retirable** — ni pour le groupeur, ni pour nos 1 500 F. La
+  # commande existait depuis le debut et n'etait planifiee **nulle part** : ni
+  # dans Compose, ni dans la CI, ni dans la documentation de deploiement.
+  #
+  # ⚠️ **Une boucle dans un conteneur plutot que la crontab de l'hote**, et
+  # c'est un choix. La crontab vit en dehors du depot : elle s'oublie a la
+  # reinstallation du serveur, et rien dans le projet ne dirait qu'elle
+  # manque. Ici la tache est **versionnee avec le reste** et repart avec
+  # `docker compose up`.
+  #
+  # **Toutes les dix minutes.** La cloture n'a pas besoin d'etre a la seconde
+  # — une date de fin tombe a 23 h 59 — et une boucle qui tourne sans cesse
+  # ferait du bruit dans les journaux pour rien. Dix minutes bornent le retard
+  # a dix minutes.
+  #
+  # ⚠️ **La commande est sans effet s'il n'y a rien a cloturer**, donc la
+  # repeter ne risque rien : elle ne traite que les groupages dont la date est
+  # passee et qui sont encore `ouverte`.
+  taches:
+    image: ${IMAGE_PREFIXE:?renseignez IMAGE_PREFIXE dans .env}/api:${ETIQUETTE:-latest}
+    # ⚠️ **`entrypoint: []` annule celui de l'image.** Le point d'entree de
+    # l'API applique les migrations puis lance gunicorn : sans cette ligne, ce
+    # conteneur ouvrirait un **second serveur web** et rejouerait les
+    # migrations en parallele du premier.
+    entrypoint: []
+    command:
+      - sh
+      - -c
+      - |
+        while true; do
+          python manage.py cloturer_les_groupages_echus || true
+          sleep 600
+        done
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-groupachat}:${POSTGRES_PASSWORD}@base:5432/${POSTGRES_DB:-groupachat}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?renseignez DJANGO_SECRET_KEY dans .env}
+      DJANGO_DEBUG: "0"
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:?renseignez le nom de domaine dans .env}
+      JETON_ADMIN: ${JETON_ADMIN:?renseignez JETON_ADMIN dans .env}
+      CORS_ORIGINES: ${CORS_ORIGINES:?renseignez CORS_ORIGINES dans .env}
+    depends_on:
+      base:
+        condition: service_healthy
+      # ⚠️ **Apres l'API**, qui applique les migrations dans son point
+      # d'entree. Demarrer en meme temps ferait tourner la commande sur un
+      # schema incomplet au tout premier deploiement.
+      api:
+        condition: service_started
+    restart: unless-stopped
+
+  admin:
+    image: ${IMAGE_PREFIXE:?renseignez IMAGE_PREFIXE dans .env}/admin:${ETIQUETTE:-latest}
+    # ⚠️⚠️ **`127.0.0.1:` en tete, et ce prefixe est tout le sujet.**
+    #
+    # L'avertissement qui vivait ici disait : *« l'administration ne doit pas
+    # etre publiee telle quelle : l'ecran affiche des noms, des numeros et des
+    # references de pieces d'identite, et la page s'ouvre sans mot de passe. »*
+    # Il reste vrai, et ce prefixe est la reponse : le port n'est ouvert que
+    # sur la **boucle locale** du serveur. Depuis l'exterieur, il n'existe pas.
+    #
+    # On l'atteint par un tunnel SSH :
+    #
+    #   ssh -L 5174:127.0.0.1:5174 utilisateur@serveur
+    #
+    # ⚠️ **Retirer `127.0.0.1:` publie l'administration sur Internet.** C'est
+    # une seule chaine de dix caracteres, et c'est la difference entre un
+    # outil interne et une fuite de pieces d'identite.
+    ports:
+      - "127.0.0.1:${PORT_ADMIN:-5174}:80"
+    restart: unless-stopped
 
 volumes:
   donnees-postgres:

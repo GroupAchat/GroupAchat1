@@ -30,19 +30,25 @@ Place de marché d'achat groupé pour Lomé, Togo. **Le produit est codé et il 
 Ce sont des décisions tranchées par l'utilisateur, pas des préférences. Ne pas les rouvrir sans qu'il le demande.
 
 - **Anonymat dans les deux sens.** L'acheteur ne voit qu'un pseudonyme de groupeur ; le groupeur ne voit que des **codes et des quartiers**, jamais un nom, un numéro ou une adresse. C'est ce qui protège le modèle contre la désintermédiation. Seule la page du livreur (écran 22) réunit nom, adresse et téléphone.
-- **Le compte acheteur est un vrai compte, et il est demandé avant d'engager quelque chose.** ⚠️ **Cette règle a été réécrite deux fois par l'utilisateur, et l'ancienne version se lisait : « Pas de mur d'authentification. On navigue librement ; le compte est demandé au moment de payer. »** Ce qui vaut aujourd'hui : on **navigue** toujours librement — fil, catalogue, fiches, questions déjà posées — mais **rejoindre un groupage ou poser une question demande un compte**, et un message explique pourquoi avant d'ouvrir le formulaire. L'inscription est **classique** : nom, numéro, courriel facultatif, mot de passe, puis vérification du numéro par code SMS. ⚠️ Conséquence assumée : la règle « ne dessine jamais deux boutons *Se connecter* et *Créer un compte* » (§1.5 de la spec) **est volontairement enfreinte** — c'est ce que « classique » veut dire. Ce qu'elle protégeait tient autrement : l'inscription est en bouton plein, la connexion en lien discret.
+- **Le compte acheteur est un vrai compte, et il est demandé avant d'engager quelque chose.** ⚠️ **Cette règle a été réécrite deux fois par l'utilisateur, et l'ancienne version se lisait : « Pas de mur d'authentification. On navigue librement ; le compte est demandé au moment de payer. »** Ce qui vaut aujourd'hui : on **navigue** toujours librement — fil, catalogue, fiches, questions déjà posées — mais **rejoindre un groupage ou poser une question demande un compte**, et un message explique pourquoi avant d'ouvrir le formulaire. L'inscription est **classique** : **prénom, numéro obligatoire, courriel facultatif**, puis vérification du numéro par code SMS. ⚠️ **Le formulaire a porté un mot de passe, et ne le porte plus** — chaque champ posé devant quelqu'un qui s'apprête à payer est un acheteur perdu. Il reste **posable depuis l'écran de profil**, pour se reconnecter sans attendre de SMS. ⚠️ Conséquence assumée : la règle « ne dessine jamais deux boutons *Se connecter* et *Créer un compte* » (§1.5 de la spec) **est volontairement enfreinte** — c'est ce que « classique » veut dire. Ce qu'elle protégeait tient autrement : l'inscription est en bouton plein, la connexion en lien discret.
 - **Le numéro de téléphone identifie le compte, et lui seul.** Le courriel est facultatif et ne sert jamais à se connecter : une partie du cœur de cible à Lomé n'a pas d'adresse consultée mais répond au téléphone. ⚠️ **Le code SMS reste la voie de récupération** et lève le verrou des cinq échecs de mot de passe : c'est ce qui dispense d'écrire un parcours « mot de passe oublié », et ce qui garantit qu'un mot de passe perdu ne ferme jamais un compte.
 - **Un groupage clôturé quitte le catalogue** : plus sur le fil, plus dans la recherche, plus dans les catégories. Le filtre est **côté serveur**. Sa fiche reste atteignable par son lien, et le groupeur voit toujours les siens.
 - **Aucun prix barré, aucun badge de réduction, aucun « au lieu de ».** Nulle part.
+- **Des paliers dégressifs, facultatifs, posés par le groupeur.** « 1 part : 5 000 F · à partir de 5 : 3 500 F ». ⚠️ **Ce n'est pas un prix barré et ça ne contredit pas la règle ci-dessus** : aucun prix de référence n'est inventé, il y a **plusieurs prix vrais** et celui qu'on paie dépend de ce qu'on prend. C'est la définition du prix de gros, donc du produit. C'est aussi la réponse à « comment rendre le prix attirant sans prix barré ».
+- ⚠️ **Le seuil porte sur la quantité prise par l'acheteur, jamais sur le nombre de participants.** Un seuil collectif serait un **déclencheur**, que la règle de l'objectif interdit — et surtout le prix ne serait **pas connu au moment de payer** : il baisserait après coup, pour des gens dont l'argent est déjà parti au portefeuille du groupeur. Il faudrait rembourser rétroactivement un argent qu'on ne détient pas.
+- **Deux verrous sur la grille**, posés par `PalierPrix.clean` : le seuil est d'**au moins 2 parts** — à 1 il remplacerait `prix_part` sans le dire — et chaque palier est **strictement moins cher** que le précédent. Une grille qui monte ferait payer **plus cher en prenant plus**.
 - **Le groupeur déclare un objectif de participants**, obligatoire à la création, affiché aux acheteurs en **barre de progression** (§2.5 de la spec). ⚠️ **Ni plafond, ni minimum, ni déclencheur** : dépasser est permis, un groupage sous son objectif peut aboutir, et seule la date clôture. Jamais « places disponibles », « complet », ni « il manque N personnes ».
 - **L'argent de l'acheteur va au portefeuille du groupeur**, tenu par la plateforme, dès le paiement. Nous ne détenons plus les fonds pour notre compte : **nous ne versons rien, nous exécutons des retraits.**
 - **Le solde du groupeur est retirable à la clôture**, intégralement, avant la livraison. ⚠️ **Et c'est son argent, pas le nôtre : aucun écran acheteur ne doit écrire « vos N F sont détenus par Group Achat ».** Les fonds vont à son portefeuille dès le paiement ; la plateforme tient son compte, elle ne détient pas les fonds pour le sien. La formulation acheteur retenue est « votre paiement va au portefeuille du groupeur, qui ne peut le retirer qu'à la clôture ». Reste interdit : « bloqué jusqu'à la livraison » — le groupeur est payé **avant** qu'on livre. Tableau des formulations interdites au §1.7 de la spec des écrans.
 - **Aucun encart bleu sur un écran acheteur.** ⚠️ Le `BandeauConfiance` a été **supprimé**, et les encarts `info` sont passés au neutre : le bleu est le chrome du côté groupeur (§1.2) et s'était réinstallé par petites boîtes un peu partout. Seule exception, la coche « vérifié » de 13 px à côté d'un pseudonyme — c'est une marque, pas une boîte de réassurance. La promesse « livré, ou remboursé » subsiste, en texte.
-- **1 500 F par groupage abouti**, à la charge du groupeur, **retenus au retrait**, jamais sur les frais de livraison. **Ce n'est plus un pourcentage** : un écran qui affiche « 5 % » ou « commission » est un écran à corriger.
+- **1 500 F par groupage abouti, et c'est le seul revenu.** À la charge du groupeur, **retenus au retrait**. **Ce n'est pas un pourcentage** : un écran qui affiche « 5 % » ou « commission » est un écran à corriger.
 - **Le devis fournisseur ne débloque plus l'argent.** Il constate, il ne conditionne pas — §10.2 du cahier des charges, et §9.1 pour ce que ça coûte.
-- **Frais de livraison calculés selon la position** de l'acheteur ; la fonction renvoie **1 000 F** pour l'instant. La position est **conservée sur la commande**.
+- **Aucun frais de livraison facturé à l'acheteur.** ⚠️ **Cette règle disait : « Frais de livraison calculés selon la position de l'acheteur ; la fonction renvoie 1 000 F pour l'instant. »** L'acheteur ne paie désormais **que sa part** — `FRAIS_LIVRAISON_PROVISOIRES` vaut zéro, côté serveur comme côté client, et les récapitulatifs masquent la ligne tant qu'elle est nulle. La position reste **conservée sur la commande** : c'est elle que suit le livreur, et elle redeviendra la base d'un calcul si les frais reviennent.
+- **L'acheteur paie la livraison au livreur, à la remise** — hors plateforme. Group Achat n'encaisse donc rien à ce titre, et son seul revenu reste les 1 500 F par groupage abouti. ⚠️ **Cela oblige à le dire avant** : un total qui n'inclut pas la livraison n'est pas un mensonge, mais ne pas prévenir en est un par omission — l'acheteur découvrirait la dépense à sa porte, livreur devant lui. La phrase vit dans `MENTION_LIVRAISON` (`domaine/livraison.ts`), **à un seul endroit**, et s'affiche sur l'écran de commande, celui du paiement et la confirmation.
+- ⚠️ **Le montant de la livraison n'est pas connu**, et aucun écran ne l'annonce. Le tarif de l'agence partenaire n'a jamais été négocié — `LIVRAISON.md`, le dossier qui devait le porter, a été supprimé du dépôt. On écrit qu'on ne le connaît pas plutôt que de l'inventer. Le jour où il existe, il s'écrit dans `MENTION_LIVRAISON`, une fois.
 - **Pas de messagerie privée.** Questions publiques uniquement, filtrées avant publication. ⚠️ **La cloche de notifications n'y change rien** : c'est **la plateforme qui rédige**, le groupeur ne fait que déclencher un fait (« le produit est arrivé »), et la réponse ne lui rend qu'un **compte**, jamais une liste de destinataires. Aucun champ de texte ne traverse cette route — §1.10 de la spec des écrans.
-- **La clôture par la date passe par une tâche planifiée**, `python manage.py cloturer_les_groupages_echus`. ⚠️ **À brancher sur le cron du VPS au déploiement** : tant qu'elle n'y est pas, un groupage dont la date tombe reste `ouverte`, aucun `Retrait` n'est créé, et **l'argent déjà encaissé ne devient jamais retirable**. Rien ne s'exécute quand une date passe.
+- **La clôture par la date passe par une tâche planifiée**, `python manage.py cloturer_les_groupages_echus`. ⚠️ **Cette règle disait « à brancher sur le cron du VPS au déploiement » — et elle ne l'était nulle part** : ni dans Compose, ni dans la CI, ni dans la documentation. Elle tourne maintenant dans le service **`taches`** de `docker-compose.prod.yml`, toutes les dix minutes. Une boucle dans un conteneur plutôt que la crontab de l'hôte : la crontab vit en dehors du dépôt, s'oublie à la réinstallation du serveur, et rien ne dirait qu'elle manque. Sans elle, un groupage échu reste `ouverte`, aucun `Retrait` n'est créé, et **l'argent déjà encaissé ne devient jamais retirable**.
+- **Sur téléphone, la recherche est une loupe**, pas un champ permanent. ⚠️ **La spec disait l'inverse** — *« une loupe se remarque moins qu'un champ »* — et l'utilisateur a tranché pour la loupe : le champ occupait une ligne entière sur 390 px. Il **se déplie** au toucher, sur une seconde ligne qui n'existe que pendant la recherche ; c'est le seul champ de recherche de l'application, donc le replier sans le rendre atteignable l'aurait supprimée. Ce que ça coûte : la découvrabilité.
 - **Web React d'abord** (mobile d'abord, 390 px), mobile Android/iOS ensuite. Django + DRF + PostgreSQL. **Paiement simulé** jusqu'à l'agrément d'un agrégateur.
 
 ## Jeu de données de démonstration
@@ -50,7 +56,7 @@ Ce sont des décisions tranchées par l'utilisateur, pas des préférences. Ne p
 Les additions doivent tomber juste — un jury vérifie.
 
 - Campagne C1 : **Écouteurs filaires avec micro**, **4 000 F** la part, **32 commandes**
-- Total payé par l'acheteur : 4 000 + 1 000 de livraison = **5 000 F**
+- Total payé par l'acheteur : **4 000 F** — la part, et rien d'autre *(c'était 5 000 F quand la livraison était facturée)*
 - Collecté **128 000 F** − frais Group Achat **1 500 F** = **126 500 F retirables**
 - Second groupage du portefeuille : baskets, 41 × 9 800 = 401 800 F − 1 500 = **400 300 F retirés**
 - Code de livraison : `K7M-4PQ` · Acheteuse : Akosua Doe, Tokoin · Groupeuse : Mama Gro
@@ -145,6 +151,48 @@ cours, et on se retrouve avec une base à moitié créée.
 
 Côté client, `npm run typecheck` et `npm run build` — la construction fait les
 deux paquets, boutique et administration.
+
+## Le déploiement
+
+**Cinq services**, décrits par `docker-compose.prod.yml` et publiés par
+`.github/workflows/deploiement.yml` : `base`, `api`, `boutique`, `admin`,
+`taches`.
+
+| | Port publié |
+|---|---|
+| `api` | `8000` |
+| `boutique` | `5173` |
+| `admin` | **`127.0.0.1:5174`** |
+
+⚠️⚠️ **Le `127.0.0.1:` de l'administration est tout le sujet.** L'écran A1
+s'ouvre **sans mot de passe** et affiche des noms, des numéros et des
+références de pièces d'identité. Le port n'est ouvert que sur la boucle locale
+du serveur ; on l'atteint par un tunnel SSH :
+
+```
+ssh -L 5174:127.0.0.1:5174 utilisateur@serveur
+```
+
+Retirer ce préfixe de dix caractères publierait l'administration sur Internet.
+
+⚠️⚠️ **`VITE_API_URL` est lue à la CONSTRUCTION, pas à l'exécution.** Vite
+l'inscrit en clair dans le JavaScript produit. Elle est passée en `build-args`
+par le workflow, depuis la variable de dépôt du même nom. La mettre dans
+`environment:` au lancement n'aurait **aucun effet** et rien ne protesterait :
+le client appellerait `127.0.0.1:8000` depuis le navigateur du visiteur.
+Changer l'adresse de l'API demande de **reconstruire les images**.
+
+**Essayer les images avant de déployer** — c'est le contrôle qui manquait, et
+qui a laissé un `Dockerfile` sans étape de service passer inaperçu :
+
+```
+docker compose --profile images up --build boutique admin
+```
+
+⚠️ **Ce qui reste à faire avant une vraie mise en ligne** : le dépôt distant
+`origin` pointe sur un autre projet, il n'y a **aucune terminaison HTTPS** dans
+ces fichiers — il faut un reverse-proxy devant —, et l'espace groupeur
+s'identifie encore par `?telephone=` sur douze routes, dont le retrait d'argent.
 
 ## Comment éditer ces fichiers — documents **et** code
 

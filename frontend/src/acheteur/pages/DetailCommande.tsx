@@ -136,14 +136,17 @@ export default function DetailCommande({
               {formaterFrancs(commande.montantParts)}
             </dd>
           </div>
-          <div className="flex justify-between gap-4 py-1.5">
-            <dt className="text-texte-secondaire">
-              Livraison à {LIBELLE_QUARTIER[position.quartier]}
-            </dt>
-            <dd className="text-texte">
-              {formaterFrancs(commande.fraisLivraison)}
-            </dd>
-          </div>
+          {/* Masquee a zero — voir l'ecran de commande. */}
+          {commande.fraisLivraison > 0 ? (
+            <div className="flex justify-between gap-4 py-1.5">
+              <dt className="text-texte-secondaire">
+                Livraison à {LIBELLE_QUARTIER[position.quartier]}
+              </dt>
+              <dd className="text-texte">
+                {formaterFrancs(commande.fraisLivraison)}
+              </dd>
+            </div>
+          ) : null}
           <div className="mt-2 flex justify-between gap-4 border-t border-filet pt-3">
             <dt className="font-semibold text-texte">Total payé</dt>
             <dd className="text-prix font-bold text-texte">

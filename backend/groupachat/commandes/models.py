@@ -190,11 +190,17 @@ class Commande(models.Model):
             )
 
         if self.campagne_id:
-            attendu = domaine.arrondir(self.campagne.prix_part * self.quantite)
+            # ⚠️ **Le prix applicable, pas `prix_part`.** Un groupage peut
+            # porter une grille degressive : 1 part a 5 000 F, 5 parts a
+            # 3 500 F. Multiplier par `prix_part` refuserait alors une
+            # commande parfaitement valide — et c'est exactement le genre de
+            # verrou qui se retourne contre l'acheteur.
+            unitaire = self.campagne.prix_pour(self.quantite)
+            attendu = domaine.arrondir(unitaire * self.quantite)
             if self.montant_parts != attendu:
                 raise ValidationError(
-                    "Le montant des parts ne correspond pas au prix de la "
-                    "campagne multiplié par la quantité."
+                    "Le montant des parts ne correspond pas au prix "
+                    "applicable à cette quantité."
                 )
 
         frais = domaine.calculer_frais_livraison(self.quartier)
@@ -252,7 +258,9 @@ def enregistrer_paiement(
     # pas que le groupeur a atteint son plafond.
     plafond = campagne.groupeur.plafond
     if plafond is not None:
-        apres = campagne.collecte_sur_les_parts + (campagne.prix_part * quantite)
+        apres = campagne.collecte_sur_les_parts + (
+            campagne.prix_pour(quantite) * quantite
+        )
         if apres > plafond:
             raise PlafondAtteint(
                 "Ce groupage est complet. Il se clôture bientôt — revenez "
@@ -267,7 +275,7 @@ def enregistrer_paiement(
         raise ValidationError("Ce groupage n'est plus ouvert.")
 
     montant_parts, frais, total = domaine.calculer_total_commande(
-        campagne.prix_part, quantite, quartier
+        campagne.prix_pour(quantite), quantite, quartier
     )
 
     commande = Commande(

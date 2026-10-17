@@ -104,7 +104,7 @@ export default function GalerieMedia({
 
   if (medias.length === 0) {
     return (
-      <div className="aspect-4/5 w-full bg-surface-douce lg:aspect-4/3 lg:rounded-xl" />
+      <div className="aspect-4/5 w-full bg-surface-douce lg:aspect-auto lg:h-full lg:rounded-xl" />
     );
   }
 
@@ -112,8 +112,17 @@ export default function GalerieMedia({
   const texte = media.alt?.trim() || titre;
 
   return (
-    <div>
-      <div className="relative aspect-4/5 w-full overflow-hidden bg-surface-douce lg:aspect-4/3 lg:rounded-xl">
+    /* ⚠️ **`lg:h-full` et `flex-col` : c'est ce qui supprime le vide.**
+       Sur telephone, rien ne change — la galerie garde son format 4/5 et se
+       laisse mesurer par son contenu. Sur ordinateur, elle remplit la hauteur
+       que son parent lui donne, et l'image prend tout ce qui reste une fois
+       les vignettes placees. */
+    <div className="lg:flex lg:h-full lg:flex-col">
+      {/* `lg:aspect-auto` annule le format fixe : au-dela de `lg`, c'est
+          `flex-1` qui decide de la hauteur, et `min-h-0` autorise la boite a
+          retrecir sous la taille de son contenu — sans lui, une image en
+          `object-cover` pousse le conteneur et le debordement revient. */}
+      <div className="relative aspect-4/5 w-full overflow-hidden bg-surface-douce lg:aspect-auto lg:min-h-0 lg:flex-1 lg:rounded-xl">
         {media.type === "image" ? (
           /* ⚠️ **L'image est un bouton.** Le cadre recadre — c'est le prix du
              format paysage — donc il faut un moyen de voir la photo entiere.
@@ -190,7 +199,10 @@ export default function GalerieMedia({
       {/* ⚠️ Un seul media : aucune commande. Voir l'en-tete. */}
       {medias.length > 1 ? (
         <ul
-          className="mt-3 flex gap-2 overflow-x-auto px-4 lg:px-0"
+          /* `pb-1` : sans lui, l'anneau de focus et l'anneau de
+             selection sont rognes par le bord de la boite defilante — on voit
+             un demi-anneau, ce qui ressemble a un defaut d'affichage. */
+          className="mt-4 flex shrink-0 gap-3 overflow-x-auto px-4 pb-1 lg:px-0"
           aria-label={`Les ${medias.length} médias du produit`}
         >
           {medias.map((vignette, rang) => (
@@ -204,8 +216,23 @@ export default function GalerieMedia({
                     ? `Vidéo ${rang + 1}`
                     : `Photo ${rang + 1}`
                 }
-                className={`relative block size-16 overflow-hidden rounded-xl border-2 ${
-                  rang === actif ? "border-texte" : "border-bordure"
+                /* ⚠️ **L'etat actif se joue sur un anneau, pas sur une
+                   nuance de contour.** Il etait `border-texte` contre
+                   `border-bordure` : deux contours de 2 px, l'un sombre
+                   l'autre gris tres pale — a 64 px et du coin de l'oeil, on
+                   ne voyait pas laquelle etait selectionnee.
+
+                   L'anneau `primaire` avec un ecart (`ring-offset`) detache
+                   franchement la vignette active, et l'inactive passe en
+                   opacite reduite : la difference se lit maintenant sur deux
+                   signaux au lieu d'un demi.
+
+                   `size-20` plutot que `size-16` : a cote d'une image de
+                   700 px de haut, 64 px se lisait comme un residu. */
+                className={`relative block size-20 shrink-0 overflow-hidden rounded-xl transition ${
+                  rang === actif
+                    ? "ring-2 ring-primaire ring-offset-2 ring-offset-white"
+                    : "opacity-70 ring-1 ring-bordure-champ hover:opacity-100"
                 }`}
               >
                 <img

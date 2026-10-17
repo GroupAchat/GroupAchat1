@@ -1,16 +1,27 @@
 # Group Achat en conteneurs
 
-Deux services : la base et l'API. **Le front n'est pas conteneurisé.**
+**Cinq services en production** : la base, l'API, la boutique, l'administration, et la tâche de clôture.
 
-> ⚠️ **Le serveur web a été retiré.** `frontend/Dockerfile` ne contient plus
-> que l'étape de construction : il produit `dist/` et `dist-admin/`, et plus
-> rien n'écoute sur un port. Les cibles `boutique` et `admin` n'existent plus,
-> et plus rien ne les demande — ni les deux fichiers Compose, ni
-> l'intégration continue, ni le déploiement.
->
-> **Conséquence à ne pas perdre de vue : la mise en ligne est incomplète.** Le
-> serveur reçoit la base et l'API, rien d'autre. Servir `dist/` et
-> `dist-admin/` est la pièce qui reste à choisir.
+> ⚠️ **Ce document annonçait : « Deux services : la base et l'API. Le front n'est pas conteneurisé. »** Les deux images nginx sont revenues, et un service de tâches planifiées s'est ajouté — sans lui, aucun groupage ne se clôturait jamais et l'argent encaissé ne devenait pas retirable.
+
+| Service | Image | Port publié |
+|---|---|---|
+| `base` | `postgres:17-alpine` | aucun |
+| `api` | construite depuis `backend/` | `8000` |
+| `boutique` | `frontend/`, cible `boutique` | `5173` |
+| `admin` | `frontend/`, cible `admin` | **`127.0.0.1:5174`** |
+| `taches` | l'image de l'API, sans son point d'entrée | aucun |
+
+⚠️ **Le `127.0.0.1:` de l'administration n'est pas décoratif** : cet écran s'ouvre sans mot de passe. On l'atteint par un tunnel SSH, jamais depuis Internet.
+
+**En développement, le client ne passe pas par ces images** : `npm run dev` a le rechargement à chaud, pas nginx. Les deux services sont derrière un profil pour pouvoir les essayer avant de déployer :
+
+```
+docker compose --profile images up --build boutique admin
+```
+
+C'est précisément ce contrôle qui manquait : le `Dockerfile` du client n'avait plus d'étape de service, et rien ne l'a signalé jusqu'à ce qu'on tente un déploiement.
+
 
 Le **site de présentation** vit dans `frontend/public/presentation/`, donc Vite
 le recopie dans le paquet de la boutique et il part avec lui, quel que soit le

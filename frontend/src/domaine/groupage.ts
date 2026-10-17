@@ -54,7 +54,41 @@ export interface Groupage {
   description: string;
   caracteristiques: Caracteristique[];
   /** Prix d'une part, en francs CFA. Les frais de livraison sont a part. */
+  /**
+   * Le prix d'**une** part, et le point de départ de la grille.
+   *
+   * C'est lui qu'affichent le fil, les cartes et la fiche : un prix unique,
+   * jamais barré. Les paliers, s'il y en a, se lisent dans `paliers`.
+   */
   prixPart: number;
+
+  /**
+   * La grille dégressive, **vide la plupart du temps**.
+   *
+   * ⚠️ **Ce n'est pas un prix barré** (§3). Il n'y a aucun prix de référence
+   * inventé : chaque ligne est un prix réellement pratiqué, et celui qu'on
+   * paie dépend de la quantité qu'on prend. C'est la définition du prix de
+   * gros — le produit lui-même.
+   *
+   * ⚠️ **Le seuil porte sur la quantité de l'acheteur**, jamais sur le nombre
+   * de participants. Un seuil collectif serait un déclencheur, que le §2.5
+   * interdit, et le prix ne serait pas connu au moment de payer : il
+   * baisserait après coup, pour des gens dont l'argent est déjà parti au
+   * portefeuille du groupeur.
+   *
+   * Triée par seuil croissant **par le serveur** — l'écran ne retrie pas, une
+   * seconde règle de tri finirait par diverger de la première.
+   */
+  paliers: PalierPrix[];
+
+  /**
+   * Les dernieres personnes qui ont rejoint — **sans aucun nom**.
+   *
+   * Un quartier, une quantite, un delai. C'est l'ambiance du marche : on
+   * prend sa part parce qu'on voit les autres prendre. Voir
+   * `composants/IlsOntRejoint` pour ce que ce bloc ne dit jamais.
+   */
+  participantsRecents: ParticipantRecent[];
   /** Acheteurs ayant deja paye leur part. Pas de plafond, pas de minimum. */
   acheteursConfirmes: number;
   /**
@@ -197,3 +231,49 @@ export const LIBELLE_CATEGORIE: Record<Categorie, string> = {
   maison: "Maison",
   electronique: "Électronique",
 };
+
+
+/** Une ligne de la grille : « à partir de N parts, le prix est P ». */
+export interface PalierPrix {
+  quantiteMin: number;
+  prixPart: number;
+}
+
+/**
+ * Le prix **unitaire** applicable à cette quantité.
+ *
+ * ⚠️ **Ce calcul existe aussi côté serveur, et c'est le serveur qui fait
+ * foi.** Celui-ci ne sert qu'à afficher un total juste pendant que l'acheteur
+ * tourne le sélecteur de quantité : attendre un aller-retour réseau à chaque
+ * appui rendrait l'écran inutilisable sur la connexion visée par le §5.
+ *
+ * Les deux doivent donner le même résultat, et c'est le serveur qui refuse la
+ * commande si ce n'est pas le cas — `Commande.clean` recalcule le montant
+ * attendu. Un écran qui afficherait 3 500 F et un serveur qui facturerait
+ * 5 000 F serait pire que pas de grille du tout.
+ */
+export function prixPourQuantite(
+  groupage: { prixPart: number; paliers: PalierPrix[] },
+  quantite: number,
+): number {
+  if (quantite < 1) {
+    return groupage.prixPart;
+  }
+  // Les paliers arrivent triés par seuil croissant : le dernier atteint gagne.
+  let applicable = groupage.prixPart;
+  for (const palier of groupage.paliers) {
+    if (quantite >= palier.quantiteMin) {
+      applicable = palier.prixPart;
+    }
+  }
+  return applicable;
+}
+
+
+/** Une ligne de « Ils ont deja rejoint » : jamais de nom. */
+export interface ParticipantRecent {
+  quartier: string;
+  quantite: number;
+  /** Heures ecoulees depuis la commande. */
+  heures: number;
+}

@@ -12,6 +12,7 @@ import PiedPage from "../mise-en-page/PiedPage";
 import GalerieMedia from "../../ui/GalerieMedia";
 import JaugeParticipants from "../../composants/JaugeParticipants";
 import CarteGroupage from "../composants/CarteGroupage";
+import IlsOntRejoint from "../composants/IlsOntRejoint";
 import { type Groupage } from "../../domaine/groupage";
 import {
   decrireTempsRestant,
@@ -170,6 +171,50 @@ export default function DetailGroupage({
         </span>
         <span className="text-texte-secondaire">par part</span>
       </p>
+
+      {/* ⚠️ **La grille dégressive, et ce n'est pas un prix barré.**
+
+          Le §3 interdit tout prix barré, tout badge de réduction, tout
+          « au lieu de ». Rien de tel ici : **aucun prix de référence n'est
+          inventé**. Chaque ligne est un prix réellement pratiqué, et celui
+          qu'on paie dépend de ce qu'on prend. C'est la définition du prix de
+          gros, c'est-à-dire du produit lui-même — et c'est ce qui rend le
+          prix attirant sans mentir.
+
+          ⚠️ **Le seuil porte sur la quantité prise par l'acheteur**, jamais
+          sur le nombre de participants : ce serait un déclencheur collectif
+          (§2.5), et le prix ne serait pas connu au moment de payer.
+
+          Pas d'encart coloré : une grille de prix est une information, pas une
+          alerte. Un filet et des lignes suffisent. */}
+      {groupage.paliers.length > 0 ? (
+        <section className="mt-4 rounded-xl border border-bordure p-3">
+          <h2 className="text-sm font-semibold text-texte">
+            Plus vous en prenez, moins la part coûte
+          </h2>
+          <dl className="mt-2 divide-y divide-filet">
+            <div className="flex justify-between gap-4 py-1.5">
+              <dt className="text-sm text-texte-secondaire">1 part</dt>
+              <dd className="text-sm font-medium text-texte">
+                {formaterFrancs(groupage.prixPart)}
+              </dd>
+            </div>
+            {groupage.paliers.map((palier) => (
+              <div
+                key={palier.quantiteMin}
+                className="flex justify-between gap-4 py-1.5"
+              >
+                <dt className="text-sm text-texte-secondaire">
+                  À partir de {palier.quantiteMin} parts
+                </dt>
+                <dd className="text-sm font-semibold text-primaire">
+                  {formaterFrancs(palier.prixPart)}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      ) : null}
 
       {/* Une seule horloge : l'encart porte la sienne.
 
@@ -344,6 +389,20 @@ export default function DetailGroupage({
     </section>
   );
 
+  /* ⚠️ **Place juste avant les questions, et apres les regles.**
+
+     L'ordre de cette page raconte une decision : ce que c'est, ce que ca
+     coute, comment ca marche — puis **qui l'a deja pris**, puis ce que les
+     autres ont demande. La preuve sociale vient apres l'information, jamais
+     avant : la mettre en tete serait vendre par la foule plutot que par le
+     produit. */
+  const ilsOntRejoint = (
+    <IlsOntRejoint
+      participants={groupage.participantsRecents}
+      total={groupage.acheteursConfirmes}
+    />
+  );
+
   const questions = (
     <section>
       <h3 className="text-lg font-semibold text-texte">
@@ -451,7 +510,17 @@ export default function DetailGroupage({
             aucune place pour glisser — il ne se passe simplement rien.
           */}
           <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:gap-12">
-            <div className="w-full lg:sticky lg:top-24 lg:w-[46%] lg:max-w-xl lg:shrink-0">
+            {/* ⚠️ **Bornee a la hauteur de l'ecran, pas a celle de la
+                rangee.** La nuance est ce qui permet de garder les deux :
+                plus de vide sous les vignettes, **et** le `sticky` qui
+                fonctionne encore. Une colonne etiree sur toute la rangee
+                n'aurait aucune place pour glisser.
+
+                `10rem` : l'en-tete collant et le `top-24`, plus **2 rem
+                rendues au bas**. Sans elles, les vignettes se posaient sur
+                la derniere ligne de pixels de la fenetre et paraissaient
+                coupees — ce qui etait le defaut signale. */}
+            <div className="w-full lg:sticky lg:top-24 lg:flex lg:h-[calc(100dvh-10rem)] lg:w-[46%] lg:max-w-xl lg:shrink-0 lg:flex-col">
               {media}
             </div>
 
@@ -499,6 +568,7 @@ export default function DetailGroupage({
               {caracteristiques}
               {livraison}
               {regles}
+              {ilsOntRejoint}
               {questions}
             </div>
           </div>
@@ -590,6 +660,7 @@ export default function DetailGroupage({
         {caracteristiques}
         {livraison}
         {regles}
+        {ilsOntRejoint}
         {questions}
       </div>
 

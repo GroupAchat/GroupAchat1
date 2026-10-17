@@ -143,8 +143,10 @@ class MontantsTest(TestCase):
             cle_idempotence="idem-1",
         )
         self.assertEqual(commande.montant_parts, Decimal("4000"))
-        self.assertEqual(commande.frais_livraison, Decimal("1000"))
-        self.assertEqual(commande.total, Decimal("5000"))
+        # Plus de frais factures a l acheteur : le total du fil rouge
+        # est 4 000 F, pas 5 000.
+        self.assertEqual(commande.frais_livraison, Decimal("0"))
+        self.assertEqual(commande.total, Decimal("4000"))
 
     def test_un_total_fabrique_est_refuse(self):
         """Une requête forgée ne doit pas payer 5 000 F une commande à 50 000."""
@@ -153,8 +155,8 @@ class MontantsTest(TestCase):
             acheteur=self.acheteuse,
             quantite=10,
             montant_parts=Decimal("4000"),  # devrait valoir 40 000
-            frais_livraison=Decimal("1000"),
-            total=Decimal("5000"),
+            frais_livraison=Decimal("0"),
+            total=Decimal("4000"),
             quartier="Tokoin",
             repere="rue des Cocotiers",
             telephone="+22890123456",
@@ -171,8 +173,8 @@ class MontantsTest(TestCase):
             acheteur=self.acheteuse,
             quantite=1,
             montant_parts=Decimal("4000"),
-            frais_livraison=Decimal("1000"),
-            total=Decimal("5000"),
+            frais_livraison=Decimal("0"),
+            total=Decimal("4000"),
             quartier="Tokoin",
             repere="   ",
             telephone="+22890123456",
@@ -254,10 +256,21 @@ class ClotureTest(TestCase):
         self.assertEqual(retrait.frais_plateforme, Decimal("1500"))
         self.assertEqual(retrait.net, Decimal("126500"))
 
-    def test_les_frais_collectes_sont_comptes_a_part(self):
-        """32 × 1 000 = 32 000 F, reversés au transporteur, jamais touchés."""
+    def test_aucun_frais_de_livraison_n_est_collecte(self):
+        """Zéro, et la collecte reste intacte.
+
+        ⚠️ **Ce test s'appelait `test_les_frais_collectes_sont_comptes_a_part`**
+        et vérifiait *32 × 1 000 = 32 000 F, reversés au transporteur*. Les
+        frais de livraison facturés à l'acheteur ont été supprimés : plus
+        rien n'est collecté à ce titre.
+
+        Ce qu'il garde, et qui comptait déjà : **les frais ne touchent pas
+        à la collecte du groupeur.** À zéro c'est trivialement vrai, mais le
+        test attrape le jour où quelqu'un rebranche un montant et le mélange
+        au net.
+        """
         retrait = cloturer_campagne(self.campagne)
-        self.assertEqual(retrait.frais_livraison_collectes, Decimal("32000"))
+        self.assertEqual(retrait.frais_livraison_collectes, Decimal("0"))
         # Ils n'entrent ni dans la collecte ni dans le net du groupeur.
         self.assertEqual(retrait.collecte, Decimal("128000"))
 

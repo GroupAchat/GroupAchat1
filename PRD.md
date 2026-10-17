@@ -30,7 +30,7 @@
 
 - Je vois les campagnes sans créer de compte
 - Je vois mon total, livraison comprise, avant de payer
-- Je crée mon compte par un formulaire classique — nom, numéro, courriel facultatif, mot de passe — puis je vérifie mon numéro par un code SMS
+- Je crée mon compte par un formulaire classique — prénom, numéro, courriel facultatif — puis je vérifie mon numéro par un code SMS
 - On me le demande **quand j'engage quelque chose** : rejoindre un groupage, poser une question. Jamais à l'ouverture
 - Je reçois une confirmation avec mon code de livraison
 - Si la campagne n'aboutit pas, je suis remboursé intégralement
@@ -50,7 +50,7 @@
 | **campagne** | id · groupeur_id · titre · description · prix_part · contenu_part · média · date_fin · statut |
 | **commande** | id · campagne_id · acheteur_id · quantité · montant_part · **frais_livraison** · total · **position** · repère · téléphone · code_livraison · **clé_idempotence** · statut |
 
-Trois champs à ne pas oublier : **frais de livraison séparés de la part**, **position conservée** sur la commande, **clé d'idempotence** sur le paiement.
+Trois champs à ne pas oublier : **frais de livraison séparés de la part** *(à zéro aujourd'hui — l'acheteur ne paie que sa part — mais le champ reste, séparé)*, **position conservée** sur la commande, **clé d'idempotence** sur le paiement.
 
 ## 7. Hors périmètre
 

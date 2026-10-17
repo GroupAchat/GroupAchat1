@@ -84,13 +84,27 @@ def nature_de_la_photo(octets: bytes) -> str | None:
     return None
 
 
-#: Frais de livraison, en francs CFA.
+#: Frais de livraison factures a l'acheteur, en francs CFA. **Zero.**
 #:
-#: Le calcul réel selon la position n'existe pas encore : la fonction renvoie
-#: 1 000 F pour toute position desservie. C'est écrit tel quel dans le cahier
-#: des charges, et c'est **la seule constante à changer** le jour du vrai
-#: calcul.
-FRAIS_LIVRAISON_PROVISOIRES = Decimal("1000")
+#: ⚠️ **Cette constante valait 1 000 F, et l'acheteur les payait en plus de sa
+#: part.** Ce n'est plus le cas : le seul revenu de la plateforme est de
+#: **1 500 F preleves sur chaque groupage abouti**, a la charge du groupeur et
+#: retenus au retrait. L'acheteur ne paie que sa part.
+#:
+#: Conséquence sur le jeu de demonstration : le total paye passe de
+#: **5 000 F** (4 000 + 1 000) a **4 000 F**.
+#:
+#: ⚠️ **Le champ `Commande.frais_livraison` n'a pas disparu**, il vaut zero.
+#: Le supprimer demanderait une migration sur les colonnes d'argent, et un
+#: champ nul documente ne casse rien la ou une migration ratee sur la
+#: comptabilite, si. Toute la chaine — total paye, statistiques admin,
+#: portefeuille du groupeur — se recalcule depuis ici sans autre changement.
+#:
+#: ⚠️ **Qui paie le livreur reste une question ouverte.** Quand le groupeur n'a
+#: pas son propre livreur, Group Achat fait appel a une agence partenaire — et
+#: 1 500 F par groupage ne couvrent pas des dizaines de remises a Lome. Ce
+#: cout n'est pas connu : on ne l'invente pas ici.
+FRAIS_LIVRAISON_PROVISOIRES = Decimal("0")
 
 #: Les quartiers desservis. Hors de cette liste, la zone n'est pas couverte.
 QUARTIERS_DESSERVIS = (

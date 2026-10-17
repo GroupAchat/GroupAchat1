@@ -236,6 +236,16 @@
           "url": "https://images.pexels.com/photos/38781904/pexels-photo-38781904.jpeg?auto=compress&cs=tinysrgb&w=800",
           "alt": "Sac de riz ouvert vu de dessus, grains beiges et pelle en métal"
         }
+      ],
+      "paliers": [
+        {
+          "quantiteMin": 2,
+          "prixPart": 13000
+        },
+        {
+          "quantiteMin": 4,
+          "prixPart": 12600
+        }
       ]
     },
     {
@@ -269,7 +279,17 @@
       "quartier": "Hedzranawoe",
       "pointRemise": "Supérette Dzidudu, rue des Flamboyants",
       "remiseLe": "2026-10-15",
-      "objectifParticipants": 40
+      "objectifParticipants": 40,
+      "paliers": [
+        {
+          "quantiteMin": 3,
+          "prixPart": 7900
+        },
+        {
+          "quantiteMin": 6,
+          "prixPart": 7500
+        }
+      ]
     },
     {
       "id": "C8",
@@ -302,7 +322,17 @@
       "quartier": "Tokoin",
       "pointRemise": "Pharmacie Sodji, rue des Cocotiers",
       "remiseLe": "2026-10-18",
-      "objectifParticipants": 25
+      "objectifParticipants": 25,
+      "paliers": [
+        {
+          "quantiteMin": 3,
+          "prixPart": 4400
+        },
+        {
+          "quantiteMin": 6,
+          "prixPart": 4100
+        }
+      ]
     },
     {
       "id": "C9",
@@ -462,7 +492,17 @@
       "remiseLe": "2026-10-14",
       "photo": "https://images.pexels.com/photos/29519165/pexels-photo-29519165.jpeg?auto=compress&cs=tinysrgb&w=800",
       "photoAlt": "Sacs de ciment empilés dans un entrepôt",
-      "objectifParticipants": 15
+      "objectifParticipants": 15,
+      "paliers": [
+        {
+          "quantiteMin": 2,
+          "prixPart": 20800
+        },
+        {
+          "quantiteMin": 5,
+          "prixPart": 19900
+        }
+      ]
     },
     {
       "id": "C13",
@@ -542,7 +582,17 @@
       "remiseLe": "2026-10-16",
       "photo": "https://images.pexels.com/photos/6393188/pexels-photo-6393188.jpeg?auto=compress&cs=tinysrgb&w=800",
       "photoAlt": "Change d'un nourrisson",
-      "objectifParticipants": 30
+      "objectifParticipants": 30,
+      "paliers": [
+        {
+          "quantiteMin": 2,
+          "prixPart": 10900
+        },
+        {
+          "quantiteMin": 4,
+          "prixPart": 10400
+        }
+      ]
     },
     {
       "id": "C15",

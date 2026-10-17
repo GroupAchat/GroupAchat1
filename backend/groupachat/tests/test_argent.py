@@ -91,10 +91,13 @@ class FraisDePlateformeTest(TestCase):
 class FraisDeLivraisonTest(TestCase):
     """Les frais selon la position — §11.1 du cahier des charges."""
 
-    def test_mille_francs_dans_lome(self):
+    def test_aucun_frais_dans_lome(self):
         resultat = domaine.calculer_frais_livraison("Tokoin")
         self.assertTrue(resultat.desservi)
-        self.assertEqual(resultat.montant, Decimal("1000"))
+        # ⚠️ **Zéro, et c'est la règle, pas un cas limite.** Le seul revenu de
+        # la plateforme est de 1 500 F par groupage abouti, à la charge du
+        # groupeur. L'acheteur ne paie que sa part.
+        self.assertEqual(resultat.montant, Decimal("0"))
 
     def test_insensible_a_la_casse_et_aux_accents(self):
         for ecriture in ("tokoin", "TOKOIN", "Tokoin "):
@@ -110,8 +113,14 @@ class FraisDeLivraisonTest(TestCase):
         self.assertFalse(resultat.desservi)
         self.assertIsNone(resultat.montant)
 
-    def test_le_fil_rouge_fait_bien_cinq_mille(self):
-        """4 000 de part + 1 000 de livraison = 5 000 F payés.
+    def test_le_fil_rouge_fait_bien_quatre_mille(self):
+        """4 000 F de part, et rien d'autre.
+
+        ⚠️ **Ce test s'appelait `test_le_fil_rouge_fait_bien_cinq_mille`** et
+        vérifiait 4 000 + 1 000 = 5 000. Les frais de livraison facturés à
+        l'acheteur ont été supprimés : le total du fil rouge est désormais
+        4 000 F. Le nom est reproduit ici parce que ce chiffre circule dans
+        les trois documents et qu'un jury le vérifie.
 
         C'est l'erreur la plus facile à commettre dans ce produit : afficher
         4 000 F là où l'acheteur paie 5 000 F.
@@ -120,17 +129,23 @@ class FraisDeLivraisonTest(TestCase):
             Decimal("4000"), 1, "Tokoin"
         )
         self.assertEqual(parts, Decimal("4000"))
-        self.assertEqual(frais, Decimal("1000"))
-        self.assertEqual(total, Decimal("5000"))
+        self.assertEqual(frais, Decimal("0"))
+        self.assertEqual(total, Decimal("4000"))
 
-    def test_les_frais_ne_sont_pas_multiplies_par_la_quantite(self):
-        """Un colis, des frais. Deux parts ne font pas deux livraisons."""
+    def test_les_frais_restent_nuls_quelle_que_soit_la_quantite(self):
+        """Trois parts, toujours aucun frais.
+
+        Le test gardait autrefois une règle utile — *un colis, des frais ;
+        deux parts ne font pas deux livraisons* — et elle n'a plus d'objet
+        depuis que les frais sont nuls. On le garde quand même : il attrape le
+        jour où quelqu'un rebranche un calcul par part.
+        """
         parts, frais, total = domaine.calculer_total_commande(
             Decimal("4000"), 3, "Tokoin"
         )
         self.assertEqual(parts, Decimal("12000"))
-        self.assertEqual(frais, Decimal("1000"))
-        self.assertEqual(total, Decimal("13000"))
+        self.assertEqual(frais, Decimal("0"))
+        self.assertEqual(total, Decimal("12000"))
 
     def test_zone_non_desservie_leve_une_erreur(self):
         with self.assertRaises(domaine.ZoneNonDesservie):

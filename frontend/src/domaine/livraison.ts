@@ -31,8 +31,35 @@ export type ResultatFrais =
   | { desservi: true; montant: number; lieu: string }
   | { desservi: false; lieu: string };
 
-/** Le tarif unique actuel. Une seule constante a changer le jour du vrai calcul. */
-export const FRAIS_PROVISOIRES = 1000;
+/**
+ * Les frais factures a l'acheteur. **Zero.**
+ *
+ * ⚠️ **Cette constante valait 1 000 F.** Le seul revenu de la plateforme est
+ * desormais de **1 500 F preleves sur chaque groupage abouti**, a la charge du
+ * groupeur et retenus au retrait : l'acheteur ne paie que sa part.
+ *
+ * Elle reste une constante plutot qu'un zero ecrit en dur partout, pour la
+ * meme raison qu'avant : **c'est le seul endroit a changer** le jour d'un vrai
+ * calcul par position. Les recapitulatifs masquent la ligne tant qu'elle vaut
+ * zero, et la reaffichent d'eux-memes sinon.
+ */
+export const FRAIS_PROVISOIRES = 0;
+
+/**
+ * Ce qu'il faut dire a l'acheteur, et qui ne se devine pas du total.
+ *
+ * ⚠️ **Une seule phrase, a un seul endroit.** Elle apparait sur l'ecran de
+ * commande, celui du paiement et la confirmation : trois formulations
+ * differentes de la meme promesse n'en font plus une. La centraliser est la
+ * seule facon de garantir qu'elles ne divergent pas au fil des retouches.
+ *
+ * ⚠️ **Aucun montant, et c'est voulu.** Le tarif de l'agence partenaire n'a
+ * jamais ete negocie — `LIVRAISON.md`, le dossier qui devait le porter, a ete
+ * supprime du depot. On ecrit qu'on ne le connait pas plutot que de
+ * l'inventer. Le jour ou il existe, c'est ici qu'il s'ecrit, une fois.
+ */
+export const MENTION_LIVRAISON =
+  "Les frais de livraison se règlent directement au livreur, au moment de la remise.";
 
 export function calculerFraisLivraison(position: Position): ResultatFrais {
   const lieu = LIBELLE_QUARTIER[position.quartier];

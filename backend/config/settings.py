@@ -376,3 +376,48 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 24,
 }
+
+
+# ── La securite du transport, hors developpement ───────────────────────────
+#
+# ⚠️ **La CI disait : « Les avertissements restants concernent tous HTTPS, qui
+# se regle au reverse-proxy et non ici. »** C'etait vrai pour deux d'entre eux
+# et faux pour les deux autres : `SESSION_COOKIE_SECURE` et
+# `CSRF_COOKIE_SECURE` sont des reglages **Django**, qu'aucun proxy ne pose a
+# sa place. Ils sont donc poses ici.
+#
+# ⚠️ **Tous sont conditionnes a `not DEBUG`**, et c'est indispensable : en
+# developpement on sert en clair sur `localhost`, et un cookie marque `secure`
+# n'y serait **jamais renvoye par le navigateur**. On se retrouverait
+# deconnecte a chaque requete, sans message, sur un symptome qui ressemble a
+# une panne de session.
+if not DEBUG:
+    #: Les cookies ne partent que sur une connexion chiffree.
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
+    #: Un cookie de session n'a aucune raison d'etre lisible en JavaScript.
+    SESSION_COOKIE_HTTPONLY = True
+
+    #: ⚠️ **Celui-ci depend du proxy, et il faut le savoir.** Django ne voit
+    #: que du HTTP en clair derriere un reverse-proxy qui termine le TLS : sans
+    #: cet en-tete, il croit la connexion non chiffree et `SECURE_SSL_REDIRECT`
+    #: provoquerait une **boucle de redirection infinie**.
+    #:
+    #: Le proxy **doit** donc envoyer `X-Forwarded-Proto`. nginx le fait avec
+    #: `proxy_set_header X-Forwarded-Proto $scheme;`. S'il ne le fait pas,
+    #: retirer les deux lignes ci-dessous plutot que de se demander pourquoi
+    #: le site boucle.
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SECURE_SSL_REDIRECT = os.environ.get("DJANGO_HTTPS", "1") == "1"
+
+    #: HSTS : le navigateur refusera le HTTP pour ce domaine pendant un an.
+    #:
+    #: ⚠️ **A n'activer qu'une fois le certificat en place et verifie.** Un
+    #: HSTS pose trop tot rend le site **inaccessible** jusqu'a expiration du
+    #: delai, et il n'y a aucun moyen de le retirer a distance : le navigateur
+    #: du visiteur s'en souvient. D'ou le drapeau, qui vaut `0` par defaut.
+    if os.environ.get("DJANGO_HSTS", "0") == "1":
+        SECURE_HSTS_SECONDS = 31536000
+        SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+        SECURE_HSTS_PRELOAD = True

@@ -1171,7 +1171,7 @@ const AIDE: { question: string; reponse: string }[] = [
   {
     question: "Combien coûte la livraison ?",
     reponse:
-      "1 000 F, calculés selon votre quartier et affichés avant le paiement. Ils apparaissent toujours sur une ligne distincte du prix de la part — jamais fondus dedans.",
+      "Elle n'est pas comprise dans le prix que vous payez ici : vous réglez votre part, et la livraison directement au livreur au moment de la remise. Le total affiché avant le paiement est donc le montant exact qui sera débité.",
   },
   {
     question: "Puis-je refuser le colis à la livraison ?",

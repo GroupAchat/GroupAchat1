@@ -7,6 +7,7 @@ import { IconeRetour } from "../../ui/Icones";
 import { LIBELLE_QUARTIER } from "../../domaine/groupage";
 import { formaterFrancs } from "../../domaine/format";
 import type { BrouillonPaiement } from "./Commander";
+import { MENTION_LIVRAISON } from "../../domaine/livraison";
 
 /**
  * Ecran 6 — Paiement Mobile Money (simule). SPEC_ECRANS_FIGMA.md, ecran 6.
@@ -169,14 +170,17 @@ export default function Paiement({
                   {formaterFrancs(commande.montantParts)}
                 </dd>
               </div>
-              <div className="flex justify-between py-1">
-                <dt className="text-texte-secondaire">
-                  Livraison à {LIBELLE_QUARTIER[commande.position.quartier]}
-                </dt>
-                <dd className="text-texte">
-                  {formaterFrancs(commande.fraisLivraison)}
-                </dd>
-              </div>
+              {/* Masquee a zero — voir l'ecran de commande. */}
+              {commande.fraisLivraison > 0 ? (
+                <div className="flex justify-between py-1">
+                  <dt className="text-texte-secondaire">
+                    Livraison à {LIBELLE_QUARTIER[commande.position.quartier]}
+                  </dt>
+                  <dd className="text-texte">
+                    {formaterFrancs(commande.fraisLivraison)}
+                  </dd>
+                </div>
+              ) : null}
             </dl>
           ) : null}
         </div>
@@ -234,6 +238,10 @@ export default function Paiement({
         <p className="text-sm text-texte-secondaire">
           Votre paiement va au portefeuille du groupeur, qui ne peut le retirer
           qu&apos;à la clôture du groupage.
+        </p>
+
+        <p className="mt-2 text-sm text-texte-secondaire">
+          {MENTION_LIVRAISON}
         </p>
 
         {etat === "echec" ? (

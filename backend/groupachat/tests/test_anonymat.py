@@ -129,7 +129,9 @@ class CeQueLAcheteurVoitTest(SocleTest):
         self.assertEqual(ligne["code_livraison"], self.commande.code_livraison)
         self.assertEqual(ligne["repere"], "rue des Cocotiers, près de la pharmacie Sodji")
         self.assertEqual(ligne["groupeur"], "Mama Gro")
-        self.assertEqual(Decimal(ligne["total"]), Decimal("5000"))
+        # Le total du fil rouge est la part seule : plus de frais de
+        # livraison factures a l acheteur.
+        self.assertEqual(Decimal(ligne["total"]), Decimal("4000"))
 
     def test_sans_session_on_ne_voit_rien(self):
         """Pas de liste de commandes servie à qui ne s'identifie pas.

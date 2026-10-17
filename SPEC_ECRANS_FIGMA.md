@@ -46,9 +46,9 @@ Cela supprime d'un coup le moyen le plus courant de séparer les blocs — une c
 
 1. **Une décision par écran.** L'écran de commande choisit une quantité et une adresse ; il ne vend rien d'autre, ne propose rien d'autre.
 2. **Le bouton principal est toujours au même endroit** — ancré en bas, pleine largeur. L'utilisateur ne le cherche jamais.
-3. **Il dit ce qu'il fait, avec le montant** : « Payer 5 000 F », pas « Continuer ». Jamais « OK » ni « Valider » seul.
+3. **Il dit ce qu'il fait, avec le montant** : « Payer 4 000 F », pas « Continuer ». Jamais « OK » ni « Valider » seul.
 4. **Cinq champs visibles au maximum.** Au-delà, on découpe en étapes (c'est pourquoi l'écran 14 en a trois).
-5. **Aucun menu caché.** Tout ce qui compte est dans la barre de navigation à quatre onglets. Pas de tiroir latéral, pas de menu à trois points qui cache une action importante.
+5. **Aucun menu caché.** Tout ce qui compte est dans la barre de navigation à **cinq** onglets. Pas de tiroir latéral, pas de menu à trois points qui cache une action importante.
 6. **Le retour est toujours possible et ne détruit rien.** Une seule exception assumée : après un paiement, on ne revient pas.
 
 #### Trois questions auxquelles chaque écran doit répondre
@@ -339,7 +339,9 @@ Deux choses à ne jamais dessiner : **écran « Connexion / Inscription » au la
 
 **Ce qui doit survivre à la connexion :** la campagne, la quantité, **l'adresse de livraison saisie**, le contenu du formulaire de demande, la position dans le fil.
 
-**L'inscription est classique, et distincte de la connexion.** Un formulaire — nom, numéro, courriel facultatif, mot de passe et sa confirmation — puis une vérification du numéro par code SMS. Deux étapes, un indicateur de progression.
+**L'inscription est classique, et distincte de la connexion.** Un formulaire — **prénom, numéro obligatoire, courriel facultatif** — puis une vérification du numéro par code SMS. Deux étapes, un indicateur de progression.
+
+⚠️ **Le formulaire a porté un mot de passe et sa confirmation, et ne les porte plus.** Ils ont été retirés du parcours d'achat : chaque champ posé devant quelqu'un qui s'apprête à payer est un acheteur perdu. Le mot de passe reste **posable depuis l'écran de profil**, pour qui veut se reconnecter sans attendre de SMS.
 
 ⚠️ **Ce paragraphe disait : « Pas d'inscription distincte. Numéro, puis code SMS. Si le numéro est inconnu, le compte se crée. Ne dessine jamais deux boutons Se connecter et Créer un compte. »** L'utilisateur a tranché pour l'inscription classique, et **les deux boutons sont donc désormais permis** — c'est ce que « classique » veut dire. Ce que la règle protégeait tient autrement, et il faut le tenir : **l'inscription est en bouton plein, la connexion en lien discret.** Quelqu'un qui ne sait pas s'il a déjà un compte suit le bouton plein, et le formulaire le renvoie vers la connexion si son numéro est déjà pris.
 
@@ -829,7 +831,9 @@ C'est contre-intuitif pour qui vient du e-commerce, et c'est pourtant le bon cho
 
 **Frais de livraison : calculés selon la position de l'acheteur** (§11.1 du cahier des charges), payés par lui, **sur une ligne distincte** du prix de la part. Le calcul réel n'existe pas encore : **la fonction renvoie 1 000 F pour toute position**. Dans les maquettes, affiche donc 1 000 F — mais **jamais comme un tarif annoncé à l'avance**.
 
-**La commande fil rouge :** C1, 1 part. **4 000 F de part + 1 000 F de livraison = `5 000 F` payés.** Code de livraison **`K7M-4PQ`**.
+**La commande fil rouge :** C1, 1 part. **`4 000 F` payés — la part, et rien d'autre.** Code de livraison **`K7M-4PQ`**.
+
+> ⚠️ **Cette ligne disait : « 4 000 F de part + 1 000 F de livraison = 5 000 F payés ».** Les frais de livraison facturés à l'acheteur ont été supprimés — le seul revenu de la plateforme est de 1 500 F par groupage abouti, à la charge du groupeur. **Le 5 000 F circule encore dans des captures et des souvenirs** : c'est 4 000 F.
 
 #### ⚠️ Le compte de démonstration n'avait aucune commande
 
@@ -850,7 +854,9 @@ Akosua Doe porte maintenant **quatre commandes**, une par état à montrer :
 
 **Les commandes sont réassignées, pas ajoutées.** Les additions de cette section doivent tomber juste : un jury vérifie. Ajouter une commande à C1 ferait 33 commandes et 132 000 F au lieu de 128 000 F. On reprend donc des commandes existantes et on change leur propriétaire — les comptes restent exacts, et l'une d'elles devient simplement la sienne.
 
-> **Attention en maquettant :** le montant que l'acheteur paie est **5 000 F**, pas 4 000 F. Le prix de la part (4 000 F) s'affiche sur le fil, la campagne et le sélecteur de quantité ; le **total payé** (5 000 F) s'affiche à partir du récapitulatif de commande, sur le paiement, la confirmation, la liste des commandes et le détail. C'est l'erreur la plus facile à commettre dans cette maquette.
+> **Attention en maquettant :** le montant que l'acheteur paie est **4 000 F** — le prix de la part, partout, du fil jusqu'au détail de la commande.
+>
+> ⚠️ **Ce paragraphe avertissait de l'inverse** : *« le montant que l'acheteur paie est 5 000 F, pas 4 000 F [...] c'est l'erreur la plus facile à commettre »*. Elle n'existe plus : il n'y a qu'un montant. La livraison se règle au livreur à la remise, et une mention le dit sur les écrans 5, 6 et 7.
 
 **Portefeuille de Mama Gro** — campagne C1, 32 commandes :
 
@@ -897,7 +903,9 @@ Les additions doivent tomber juste à l'écran : un jury vérifie ce genre de ca
    - « **32 acheteurs confirmés** »
    - « **Par Mama Gro** » en 14 — **non cliquable** (§1.7)
 5. **Bouton ancré** au-dessus de la barre de navigation, pleine largeur : « **Voir le groupage** » → écran 3.
-6. **`BarreNav`** — quatre onglets : **Accueil · Groupage · Commandes · Profil**. Accueil actif, posée sur un dégradé.
+6. **`BarreNav`** — **cinq** onglets : **Accueil · Groupage · Demander · Commandes · Profil**. Accueil actif, posée sur un dégradé.
+
+   > ⚠️ **Elle en comptait quatre**, sans « Demander ». Celui-ci était dans l'en-tête, en bouton orange plein — c'est-à-dire du même poids que l'action principale de l'écran. Il est descendu au **centre** de la barre : « Demander » n'est pas une consultation comme ses voisins, c'est ce qu'on fait quand le catalogue n'a pas ce qu'on cherche, et le centre le met sous le pouce juste après « Groupage ». ⚠️ **La barre du groupeur garde ses quatre onglets** — ne pas confondre les deux.
 7. **Indice de défilement**, sur la première carte seulement : « **Glisser vers le haut pour le groupage suivant** », qui disparaît au premier geste. Sans lui, un utilisateur qui n'a jamais vu ce type d'interface reste bloqué sur le premier écran.
 
 ### Les deux éléments manquants de ta maquette
@@ -1011,7 +1019,7 @@ Sa fiche reste atteignable par son lien, donc ce cas arrive pour de vrai. Le bou
 
       **Ne promets pas de tarif unique ici.** À ce stade l'acheteur n'a pas encore indiqué où il est, donc l'écran ne peut pas connaître son prix. Écrire « 1 000 F partout » serait un engagement que le vrai calcul ne tiendra pas — et revenir dessus après coûterait bien plus que de ne jamais le dire.
 11. **Les règles**, en liste à puces :
-    - « Paiement à la commande, détenu par Group Achat jusqu'à la clôture »
+    - « Paiement à la commande, versé au portefeuille du groupeur et retirable seulement à la clôture »
     - « Le groupeur décide à la clôture si la commande passe »
     - « **Si la campagne n'aboutit pas, vous êtes remboursée intégralement** »
     - « **Vérifiez votre commande devant le livreur** : la contestation n'est plus possible après acceptation »
@@ -1121,7 +1129,7 @@ C'est l'autre moitié de l'écran 4, et elle est nouvelle. Elle s'ouvre depuis l
 6. **Récapitulatif** — trois lignes, et le total est la seule valeur en style `Prix` :
    - 1 part × 4 000 F → `4 000 F`
    - Livraison à Tokoin → `1 000 F`
-   - **Total à payer** → **`5 000 F`**
+   - **Total à payer** → **`4 000 F`**
 
    **Deux états à maquetter pour la ligne de livraison**, puisque son montant dépend de la position :
 
@@ -1139,7 +1147,7 @@ C'est l'autre moitié de l'écran 4, et elle est nouvelle. Elle s'ouvre depuis l
    **Supprimé : la variante « tarif calculé plus tard ».** Elle existait quand les frais hors de Lomé étaient à définir. Désormais le prix est **toujours connu avant le paiement** — soit la fonction renvoie un montant pour cette position, soit elle répond que la zone n'est pas desservie. Il n'y a pas de troisième cas, et c'est un progrès : **on ne demande jamais à quelqu'un de payer un total qu'on complétera plus tard.**
 7. **`BandeauConfiance`** version courte.
 8. Case à cocher « J'accepte les conditions de vente » (lien). Non cochée par défaut, bouton désactivé tant qu'elle ne l'est pas.
-9. **Bouton ancré : « Payer 5 000 F ».** Le montant du bouton est le **total**, livraison comprise — pas le prix de la part.
+9. **Bouton ancré : « Payer 4 000 F ».** Le montant du bouton est le total, qui est le prix de la part — la livraison n'y est pas, elle se règle au livreur.
 
 **C'est ce bouton qui déclenche la connexion** (écran 4), et seulement si l'utilisateur n'a pas de compte. S'il en a un, il va droit à l'écran 6. **Deux variantes à prototyper depuis ce bouton.**
 
@@ -1151,10 +1159,11 @@ C'est l'autre moitié de l'écran 4, et elle est nouvelle. Elle s'ouvre depuis l
 2. **Bandeau de démonstration**, `Encart` `info`, **tout en haut et à dessiner** : « **Démonstration** — aucun paiement réel n'est effectué. »
 
    Ne le cache pas. Notre argument est la sécurité de l'argent : nous nous jugeons d'abord sur notre franchise. Un jury qui découvre seul que le paiement est faux le prend bien plus mal que s'il l'a lu. Il disparaîtra au branchement de l'agrégateur agréé (§18.2 du cahier des charges).
-3. **Montant** au centre : `5 000 F` en 32 Bold, puis « Écouteurs filaires avec micro — 1 part + livraison ». Une ligne dépliable « Détail » affiche 4 000 F + 1 000 F.
+3. **Montant** au centre : `4 000 F` en 32 Bold, puis « Écouteurs filaires avec micro — 1 part ». **Plus de ligne dépliable « Détail »** : il n'y a plus rien à détailler.
 4. **Moyen de paiement** : deux cartes sélectionnables 100 × 80, **T-Money** et **Flooz**.
 5. **Champ numéro**, pré-rempli, modifiable — le numéro de paiement peut différer du numéro du compte.
-6. **Rappel :** « Votre paiement est détenu par Group Achat jusqu'à la clôture de la campagne. » — formulation contrainte, voir §1.7.
+6. **Rappel :** « Votre paiement va au portefeuille du groupeur, qui ne peut le retirer qu'à la clôture du groupage. » — formulation contrainte, voir §1.7.
+7. **Mention livraison :** « Les frais de livraison se règlent directement au livreur, au moment de la remise. »
 7. Bouton ancré : « Confirmer le paiement ».
 
 **États à dessiner — ce sont eux qui font la différence**
@@ -1176,14 +1185,14 @@ C'est l'autre moitié de l'écran 4, et elle est nouvelle. Elle s'ouvre depuis l
 3. **Titre :** « Commande confirmée »
 4. **Sous-titre :** « Vous êtes la 33ᵉ personne à commander cette campagne. »
 5. **`BandeauConfiance` en version développée** — le plus grand de l'application :
-   > 🛡️ **Vos 5 000 F sont détenus par Group Achat**
+   > 🛡️ **Vos 4 000 F vont au portefeuille du groupeur**
    > Ils sont détenus jusqu'à la clôture du groupage. **S'il n'aboutit pas, vous êtes remboursée intégralement.**
 
    ⚠️ **Ne pas écrire à l'acheteur que l'argent est « versé au groupeur à la clôture ».** C'est désormais inexact — la somme est inscrite à son portefeuille dès le paiement (§9 du cahier des charges) — et surtout cette phrase ne lui dit pas ce qu'il veut savoir. Ce qui le rassure, c'est que **rien n'est retirable avant la clôture** et que l'annulation le rembourse.
 
    Exact et suffisant. Ne va pas au-delà : le groupeur est payé à la clôture, donc rien n'est « bloqué jusqu'à la livraison » (§1.7).
 6. **`FriseEtapes`**, première étape active :
-   - ✅ **Paiement reçu** — 5 000 F détenus par Group Achat
+   - ✅ **Paiement reçu** — 4 000 F au portefeuille du groupeur
    - ⏳ **Clôture de la campagne** — 7 octobre
    - 📦 **Commande chez le fournisseur** — par le groupeur
    - 🛵 **Livraison à domicile** — sous 3 à 5 jours
@@ -1199,7 +1208,7 @@ C'est l'autre moitié de l'écran 4, et elle est nouvelle. Elle s'ouvre depuis l
 
 | Produit | Montant | Statut |
 |---|---|---|
-| Écouteurs filaires avec micro — Mama Gro | 5 000 F | **En cours de livraison** — arrive demain |
+| Écouteurs filaires avec micro — Mama Gro | 4 000 F | **En cours de livraison** — arrive demain |
 | Robe wax — Chez Sika | 8 500 F | **Commande en cours chez le groupeur** |
 | Huile de palme 20 L — Mama Gro | 12 200 F | **Payée — en attente de clôture** — 6 jours |
 | Baskets homme — Lomé Deals | 10 800 F | **Livrée** — 28 septembre |
@@ -1224,7 +1233,7 @@ La ligne « Remboursée » est à garder : elle montre que la promesse de rembou
    - « Montrez ce code au livreur »
    - Lien « Augmenter la luminosité » — en plein soleil, un écran sombre ne se scanne pas
 4. **`FriseEtapes`** avec l'étape atteinte et les dates.
-5. **Récapitulatif :** vignette, produit, 1 part, puis le détail — part `4 000 F`, livraison `1 000 F`, **total `5 000 F`** — et « Payée le 5 octobre ».
+5. **Récapitulatif :** vignette, produit, 1 part, **total `4 000 F`**, et « Payée le 5 octobre ». Aucune ligne de livraison chiffrée.
 6. **Adresse de livraison** et numéro joignable. **Aucun contact du groupeur** (§1.7) — ni numéro, ni bouton d'appel. À la place : « Une question ? » vers l'écran 10.
 7. **`Encart` `attention`**, tant que la livraison n'est pas faite : « **Vérifiez votre commande devant le livreur.** Vous pouvez refuser le colis s'il ne correspond pas à votre commande. »
 8. **Bouton « Refuser le colis »** en `danger-texte`, visible **uniquement** pendant la livraison.
@@ -1233,12 +1242,12 @@ La ligne « Remboursée » est à garder : elle montre que la promesse de rembou
 
 | État | Ce qui change |
 |---|---|
-| **Payée — en attente de clôture** | Pas de code. « Votre code apparaîtra ici quand la livraison sera lancée. » Compteur : « Clôture dans 2 jours ». Mention : « Vos 5 000 F sont détenus par Group Achat jusqu'à la clôture. » |
+| **Payée — en attente de clôture** | Pas de code. « Votre code apparaîtra ici quand la livraison sera lancée. » Compteur : « Clôture dans 2 jours ». Mention : « Vos 4 000 F sont au portefeuille du groupeur, qui ne peut les retirer qu'à la clôture. » |
 | **Campagne clôturée** | « Le groupeur confirme la commande sous 48 h. » Si la campagne est maintenue : « Le groupeur a reçu les fonds et prépare votre commande. **Group Achat garantit votre livraison.** » — exact, et c'est la garantie qui porte, pas la détention des fonds (§1.7) |
 | **Commande en cours chez le groupeur** | « Le groupeur a passé commande chez son fournisseur. » |
 | **En cours de livraison** | Le code est affiché. État principal ci-dessus. Bouton « Refuser le colis » actif |
 | **Livrée** | Coche `succes`, « Livrée le 11 octobre ». Le code et le bouton de refus disparaissent |
-| **Campagne annulée** | `Encart` `danger` : « Cette campagne n'a pas abouti. **Vos 5 000 F vous ont été remboursés le 8 octobre**, livraison comprise. » |
+| **Campagne annulée** | `Encart` `danger` : « Cette campagne n'a pas abouti. **Vos 4 000 F vous ont été remboursés le 8 octobre**, livraison comprise. » |
 
 **Feuille « Refuser le colis »** : motif (ce n'est pas le produit commandé · produit visiblement abîmé · autre), description, photos, bouton « Refuser et signaler ». Puis : « Votre signalement est enregistré. Group Achat examine votre dossier sous 48 h et vous rembourse si le refus est justifié. »
 
@@ -1873,7 +1882,7 @@ Par Mama Gro
 Groupeur sélectionné · Livré ou remboursé
 Voir le groupage
 Glisser vers le haut pour le groupage suivant
-Accueil   Groupage   Commandes   Profil
+Accueil  Groupage  Demander  Commandes  Profil
 ```
 
 ### 2 — Groupage (vue liste)
@@ -1910,7 +1919,7 @@ Livraison
 Sous 3 à 5 jours après la clôture
 Frais de livraison selon votre position — à partir de 1 000 F CFA
 Les règles
-Paiement à la commande, détenu par Group Achat jusqu'à la clôture
+Paiement à la commande, versé au groupeur, retirable à la clôture
 Le groupeur décide à la clôture si la commande passe
 Si le groupage n'aboutit pas, vous êtes remboursé intégralement
 Questions (7)          Voir les questions
@@ -1947,17 +1956,17 @@ Numéro à joindre à la livraison
 Récapitulatif
 1 part × 4 000 F CFA            4 000 F CFA
 Livraison à Tokoin              1 000 F CFA
-Total à payer                   5 000 F CFA
+Total à payer                   4 000 F CFA
 Groupeur sélectionné · Livré ou remboursé
 J'accepte les conditions de vente
-Payer 5 000 F CFA
+Payer 4 000 F CFA
 ```
 
 ### 6 — Paiement Mobile Money *(simulé)*
 
 ```
 Paiement
-5 000 F CFA
+4 000 F CFA
 Choisissez votre opérateur
 T-Money        Flooz
 Confirmez sur votre téléphone
@@ -1970,7 +1979,7 @@ Démonstration — aucun argent réel ne circule
 
 ```
 C'est confirmé
-5 000 F CFA payés
+4 000 F CFA payés
 Écouteurs filaires Pro avec micro — 1 part
 Votre code de livraison
 K7M-4PQ
@@ -1985,7 +1994,7 @@ Voir ma commande          Retour à l'accueil
 Mes commandes
 En cours   Terminées
 Écouteurs filaires Pro avec micro
-5 000 F CFA · Payée — en attente de clôture
+4 000 F CFA · Payée — en attente de clôture
 Robe wax, taille M
 8 500 F CFA · En cours de livraison
 Savon de Marseille, carton de 48
@@ -2004,10 +2013,10 @@ K7M-4PQ
 Récapitulatif
 Part        4 000 F CFA
 Livraison   1 000 F CFA
-Total       5 000 F CFA
+Total       4 000 F CFA
 Payée le 5 octobre
 Livrer à : Tokoin, rue des Cocotiers, près de la pharmacie Sodji
-Votre paiement est détenu par Group Achat jusqu'à la clôture du groupage.
+Votre paiement va au portefeuille du groupeur, retirable à la clôture.
 Une question ?          Signaler un problème
 ```
 
@@ -2290,8 +2299,12 @@ Six détails qui font la différence devant un jury :
 ## 5. À vérifier avant de présenter
 
 - [ ] Aucun *Lorem ipsum*, aucun « Produit 1 » sur aucun écran.
-- [ ] Les montants concordent : **4 000 F la part, 1 000 F de livraison, 5 000 F payés**, 128 000 F collectés, 1 500 F de frais Group Achat, **126 500 F retirables par le groupeur**.
-- [ ] Le **total payé** (5 000 F) apparaît partout à partir du récapitulatif, et le **prix de la part** (4 000 F) seulement avant.
+- [ ] Les montants concordent : **4 000 F la part = 4 000 F payés** *(aucun frais de livraison)*, 128 000 F collectés, 1 500 F de frais Group Achat, **126 500 F retirables par le groupeur**.
+- [ ] **Aucun écran n'affiche une ligne « Livraison » chiffrée** tant que les frais sont nuls — ni « 0 F », qui se lit comme un oubli.
+- [ ] **La mention « frais de livraison réglés au livreur à la remise » figure sur l'écran 5, l'écran 6 et l'écran 7.** Sans elle, l'acheteur découvre la dépense à sa porte.
+- [ ] Le montant est **4 000 F partout** : le total payé est le prix de la part, du fil jusqu'au détail de la commande.
+- [ ] **La grille dégressive, là où il y en a une**, est un tableau de prix — **jamais** un prix barré ni une pastille de pourcentage (§3). Elle s'affiche sur la fiche (écran 3) et le prix suit la quantité à l'écran 5.
+- [ ] Sous le sélecteur de quantité, la phrase dit **ce qu'il reste à faire** — « à partir de 5 parts, la part passe à 3 500 F » — et **jamais ce qu'on « rate »**.
 - [ ] La ligne de frais de livraison est **distincte**, jamais fondue dans le prix de la part.
 - [ ] **Aucun écran ne promet que l'argent est bloqué jusqu'à la livraison** (§1.7) — le groupeur est payé à la clôture.
 - [ ] **Aucun encart bleu sur un écran acheteur** : le `BandeauConfiance` a été supprimé et les encarts `info` sont neutres. Seule la coche « vérifié » du pseudonyme reste bleue.

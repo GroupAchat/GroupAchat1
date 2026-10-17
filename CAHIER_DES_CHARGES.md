@@ -90,7 +90,7 @@ L'acheteur ne juge donc pas un groupeur : il fait confiance à Group Achat. C'es
 
    ⚠️ **« Rejoindre » signifie l'ouverture de l'écran de commande, pas le bouton « Payer ».** Le compte est demandé un écran plus tôt qu'avant. Ce que ça coûte, franchement : quelqu'un venu d'un lien WhatsApp qui voudrait seulement *voir* les variantes et les frais de livraison vers son quartier doit maintenant se connecter d'abord. Ce que ça rend : l'écran de commande affiche des frais et pré-remplit une adresse, deux choses qui appartiennent à un compte — les demander à un inconnu, puis lui réclamer un code à l'écran suivant, faisait saisir son adresse avant de savoir qu'un compte serait nécessaire.
 
-   **L'inscription est classique** : nom, numéro, courriel facultatif, mot de passe, puis vérification du numéro par code SMS. Un acheteur qui a déjà un compte entre par son mot de passe, ou par un code SMS s'il l'a oublié.
+   **L'inscription est classique** : **prénom, numéro obligatoire, courriel facultatif**, puis vérification du numéro par code SMS. ⚠️ **Pas de mot de passe à l'inscription** — il se pose plus tard, depuis l'écran de profil, et sert alors à se reconnecter sans attendre de SMS. Un acheteur qui en a posé un entre par lui, ou par un code SMS s'il l'a oublié.
 
    ⚠️ **Ce paragraphe disait : « Le compte se crée par numéro de téléphone + code SMS. Pas de mot de passe, pas d'e-mail, pas d'inscription distincte de la connexion. »** C'est faux depuis que l'utilisateur a tranché pour l'inscription classique. La phrase est reproduite pour que personne ne la restaure en croyant réparer une régression — elle se trouve encore, sous d'autres formes, dans des commentaires du code.
 
@@ -516,7 +516,9 @@ frais_livraison(position) -> montant
 
 > **À ne pas confondre avec un affichage promotionnel.** L'application **n'affiche aucun prix barré et aucun badge de réduction** : notre argument est le prix de gros obtenu par le groupage, pas une remise sur un prix de détail que nous ne contrôlons pas. La règle complète est au §3 du document des écrans.
 
-**Conséquence sur les montants affichés :** le total payé par l'acheteur n'est plus le prix de la part. Sur la campagne de référence, 4 000 F de part + 1 000 F de livraison = **5 000 F à payer**. Tous les écrans doivent afficher ce total, et non le seul prix de la part.
+**Conséquence sur les montants affichés :** le total payé par l'acheteur **est** le prix de la part — 4 000 F sur la campagne de référence.
+
+> ⚠️ **Ce paragraphe disait l'inverse** : *« le total payé n'est plus le prix de la part [...] 4 000 F de part + 1 000 F de livraison = 5 000 F à payer »*. Les frais de livraison facturés à l'acheteur ont été supprimés — il règle la livraison directement au livreur, à la remise. Tous les écrans affichent donc 4 000 F, et **aucun n'affiche de ligne « Livraison » chiffrée**.
 
 > **Le dossier complet du partenariat — économie, circuit physique, cas d'échec, questions à poser à une agence — est dans [LIVRAISON.md](LIVRAISON.md).**
 
@@ -775,7 +777,7 @@ Un groupeur qui s'y reprend à trois fois ne s'est pas trompé — il essaie. **
 
 Il ouvre l'application et **fait défiler** les campagnes en plein écran, photo ou vidéo, comme un fil de réseau social. Une campagne l'intéresse : il ouvre le détail, lit le prix, la quantité par part, le délai restant, les questions déjà posées. **Il peut en poser une — et c'est là qu'un compte lui est demandé pour la première fois**, avec un message qui dit pourquoi : c'est par le compte que la réponse du groupeur lui reviendra.
 
-**C'est en rejoignant le groupage que son compte lui est demandé**, à l'ouverture de l'écran de commande : nom, numéro, courriel facultatif, mot de passe, puis un code SMS pour vérifier le numéro. L'action reprend seule ensuite — il choisit sa quantité, voit son total, saisit son adresse de livraison, et paie.
+**C'est en rejoignant le groupage que son compte lui est demandé**, à l'ouverture de l'écran de commande : prénom, numéro, courriel facultatif, puis un code SMS pour vérifier le numéro. L'action reprend seule ensuite — il choisit sa quantité, voit son total, saisit son adresse de livraison, et paie.
 
 ⚠️ **Cette phrase disait : « C'est en payant que son compte lui est demandé — numéro, code SMS. »** Le compte est désormais demandé un écran plus tôt, et l'inscription est classique (§10.4 bis).
 

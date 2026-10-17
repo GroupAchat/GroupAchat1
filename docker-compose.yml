@@ -134,5 +134,42 @@ services:
   # Ce sont les ports que `CORS_ORIGINES` autorise par defaut : l'API
   # ci-dessus accepte donc leurs appels sans reglage supplementaire.
 
+  # ⚠️ **Derriere un profil : `docker compose up` ne les lance pas.**
+  #
+  # En developpement on sert le client avec `npm run dev`, qui a le
+  # rechargement a chaud ; une image nginx ne l'a pas, et la lancer par defaut
+  # ferait croire qu'on regarde son travail alors qu'on regarde un paquet
+  # construit il y a une heure.
+  #
+  # Elles sont la pour **essayer les images avant de les deployer** :
+  #
+  #   docker compose --profile images up --build boutique admin
+  #
+  # C'est precisement ce controle qui manquait : le `Dockerfile` du client
+  # n'avait plus d'etape de service, et rien ne le signalait avant le jour du
+  # deploiement.
+  boutique:
+    profiles: ["images"]
+    build:
+      context: ./frontend
+      target: boutique
+      args:
+        # ⚠️ Variable de **construction** : elle est inscrite en clair dans le
+        # JavaScript produit. La changer demande de reconstruire l'image.
+        VITE_API_URL: ${VITE_API_URL:-http://127.0.0.1:8000/api}
+    ports:
+      - "${PORT_BOUTIQUE:-5173}:80"
+
+  admin:
+    profiles: ["images"]
+    build:
+      context: ./frontend
+      target: admin
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://127.0.0.1:8000/api}
+    # Meme regle qu'en production : boucle locale seulement.
+    ports:
+      - "127.0.0.1:${PORT_ADMIN:-5174}:80"
+
 volumes:
   donnees-postgres:

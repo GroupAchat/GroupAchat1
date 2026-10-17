@@ -170,11 +170,21 @@ seul, Traefik aussi, nginx demande certbot. **Tant que ce n'est pas fait, ne pas
 devant de vrais acheteurs** : les numéros de téléphone et les adresses de livraison passeraient en
 clair.
 
-**Le front n'est pas déployé par ces fichiers.** Les deux images nginx qui servaient `dist/` et
-`dist-admin/` ont été retirées : le serveur web reste à choisir. Le serveur reçoit donc la base et
-l'API, rien d'autre, et **c'est la pièce qui manque avant une mise en ligne complète**. Les deux
-paquets se construisent par `npm run build` ; `VITE_API_URL` est lue à ce moment-là et inscrite en
-clair dans le JavaScript, donc changer l'adresse de l'API demandera toujours de reconstruire.
+**Le front est déployé par ces fichiers.** ⚠️ Ce paragraphe disait l'inverse — *« les deux images
+nginx ont été retirées [...] c'est la pièce qui manque avant une mise en ligne complète »*. Elle ne
+manque plus : le workflow publie `boutique` et `admin`, et `docker-compose.prod.yml` les sert.
+
+⚠️⚠️ **`VITE_API_URL` est lue à la CONSTRUCTION et inscrite en clair dans le JavaScript.** Elle est
+donc passée en `build-args` par le workflow, depuis la variable de dépôt du même nom. La mettre
+dans `environment:` au lancement n'aurait **aucun effet** et rien ne protesterait : le client
+appellerait `127.0.0.1:8000` depuis le navigateur du visiteur, c'est-à-dire chez lui. Changer
+l'adresse de l'API demande de **reconstruire les images**.
+
+**La clôture par la date tourne dans le service `taches`.** ⚠️ Elle n'était planifiée nulle part —
+ni ici, ni dans Compose, ni dans la CI. Sans elle, un groupage échu reste `ouverte`, aucun
+`Retrait` n'est créé, et **l'argent déjà encaissé ne devient jamais retirable**. Une boucle dans un
+conteneur plutôt que la crontab de l'hôte : la crontab vit en dehors du dépôt, s'oublie à la
+réinstallation du serveur, et rien ne dirait qu'elle manque.
 
 **L'administration n'a aucun mot de passe.** L'écran A1 n'affiche que des compteurs, mais l'écran
 A2 affiche des noms, des numéros et des références de pièces d'identité. Ce qui protège ces

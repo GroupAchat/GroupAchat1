@@ -42,7 +42,9 @@ import tailwindcss from "@tailwindcss/vite";
  * l'application. Seul `/presentation/index.html`, ecrit en entier, marchait.
  *
  * Ce defaut n'existe qu'en developpement : en production, le
- * `try_files $uri $uri/` de `nginx.boutique.conf` resout l'index tout seul.
+ * un serveur statique resout l'index tout seul. ⚠️ Cette phrase citait
+ * `try_files $uri $uri/` de `nginx.boutique.conf` : ce fichier a ete
+ * supprime avec nginx, le deploiement passant par Coolify.
  */
 function servirLaPresentation(): Plugin {
   const reecriveur: Connect.NextHandleFunction = (requete, _reponse, suivant) => {

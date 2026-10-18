@@ -1,38 +1,57 @@
 # Group Achat en conteneurs
 
-**Cinq services en production** : la base, l'API, la boutique, l'administration, et la tâche de clôture.
+**Trois services** : la base, l'API, et la tâche de clôture.
 
-> ⚠️ **Ce document annonçait : « Deux services : la base et l'API. Le front n'est pas conteneurisé. »** Les deux images nginx sont revenues, et un service de tâches planifiées s'est ajouté — sans lui, aucun groupage ne se clôturait jamais et l'argent encaissé ne devenait pas retirable.
+> ⚠️⚠️ **Ce document en annonçait cinq**, dont `boutique` et `admin`, deux
+> images nginx construites depuis `frontend/`. **Elles ont été retirées du
+> dépôt avec nginx lui-même.** Le front est maintenant construit et servi par
+> **Coolify**, qui n'a besoin ni d'image ni de serveur web ici.
+>
+> Avant cela, le document disait encore autre chose : *« Deux services : la
+> base et l'API. Le front n'est pas conteneurisé. »* La bonne manière de lire
+> ces trois états successifs, c'est que **le serveur du front n'a jamais été
+> une décision de ce dépôt**, et qu'il a fini par ne plus y vivre du tout.
 
 | Service | Image | Port publié |
 |---|---|---|
 | `base` | `postgres:17-alpine` | aucun |
 | `api` | construite depuis `backend/` | `8000` |
-| `boutique` | `frontend/`, cible `boutique` | `5173` |
-| `admin` | `frontend/`, cible `admin` | **`127.0.0.1:5174`** |
 | `taches` | l'image de l'API, sans son point d'entrée | aucun |
 
-⚠️ **Le `127.0.0.1:` de l'administration n'est pas décoratif** : cet écran montre des noms, des numéros et des références de pièces d'identité. On l'atteint par un tunnel SSH — `ssh -L 5174:127.0.0.1:5174 utilisateur@serveur`.
+## Le front n'est plus ici
 
-> ⚠️ **Cette phrase disait : « cet écran s'ouvre sans mot de passe ».** Ce
-> n'est plus vrai, et il fallait le corriger plutôt que le laisser : quelqu'un
-> le lit et en conclut soit qu'un tunnel SSH restera nécessaire pour toujours,
-> soit — bien pire — qu'on peut se passer d'authentifier les administrateurs
-> puisque « de toute façon ce n'est pas protégé ».
->
-> **La serrure est maintenant sur la porte**, pas seulement sur le chemin : une
-> session ouverte contre un mot de passe, cinq essais avant un verrou de quinze
-> minutes, et une révocation qui prend effet à la requête suivante. Le
-> `127.0.0.1:` **reste** — deux barrières valent mieux qu'une devant des pièces
-> d'identité — mais ce n'est plus la seule.
-
-**En développement, le client ne passe pas par ces images** : `npm run dev` a le rechargement à chaud, pas nginx. Les deux services sont derrière un profil pour pouvoir les essayer avant de déployer :
+Il se construit avec les outils du projet, et le résultat est deux dossiers de
+fichiers statiques :
 
 ```
-docker compose --profile images up --build boutique admin
+npm ci && npm run build
 ```
 
-C'est précisément ce contrôle qui manquait : le `Dockerfile` du client n'avait plus d'étape de service, et rien ne l'a signalé jusqu'à ce qu'on tente un déploiement.
+| | Dossier produit |
+|---|---|
+| **Boutique** — acheteur, groupeur, livreur | `frontend/dist/` |
+| **Administration** — écran A1 | `frontend/dist-admin/` |
+
+C'est **ce dossier-là** qu'un hébergeur doit publier, jamais `frontend/`.
+⚠️ Publier le dossier source donne une page blanche et, dans la console du
+navigateur, `Failed to load module script [...] MIME type of
+"application/octet-stream"` : le serveur rend l'`index.html` **source**, qui
+demande `/src/main.tsx`, un fichier TypeScript qu'aucun navigateur n'exécute.
+
+⚠️⚠️ **`VITE_API_URL` est une variable de CONSTRUCTION.** Vite l'inscrit en
+clair dans le JavaScript produit ; il n'existe aucun serveur Node pour la
+relire au démarrage. La poser comme variable d'exécution n'a **aucun effet** et
+ne provoque **aucune erreur** : le navigateur de chaque visiteur appelle alors
+`127.0.0.1:8000`, c'est-à-dire sa propre machine. La page s'affiche, et rien
+ne se charge. C'est le piège le plus coûteux de toute cette chaîne.
+
+⚠️ **L'administration affiche des noms, des numéros et des références de
+pièces d'identité.** Elle était publiée sur `127.0.0.1:` et atteinte par un
+tunnel SSH. Ce prefixe n'existe plus : **c'est à l'hébergeur de restreindre
+l'accès** à ce sous-domaine. Elle est désormais protégée par un mot de passe
+— une session contre un compte `is_staff`, cinq essais avant un verrou de
+quinze minutes — mais une page d'administration ouverte sur Internet reste une
+page d'administration ouverte sur Internet.
 
 
 Le **site de présentation** vit dans `frontend/public/presentation/`, donc Vite
@@ -40,7 +59,7 @@ le recopie dans le paquet de la boutique et il part avec lui, quel que soit le
 serveur retenu. Voir [frontend/PRESENTATION.md](frontend/PRESENTATION.md).
 
 ```bash
-cp .env.exemple .env      # puis renseigner les trois secrets
+cp .env.exemple .env      # puis renseigner les deux secrets
 docker compose up --build
 ```
 

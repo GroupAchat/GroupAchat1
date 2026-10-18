@@ -1,3 +1,4 @@
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { defineConfig, type Connect, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
@@ -101,6 +102,52 @@ function servirAdminALaRacine(): Plugin {
   };
 }
 
+/**
+ * Ecrit un `index.html` a cote de `admin.html` dans `dist-admin/`.
+ *
+ * ## ⚠️ Pourquoi c'est necessaire, alors que tout marchait
+ *
+ * `rollupOptions.input` vaut `admin.html`, donc la construction ne produit
+ * **aucun `index.html`**. Les deux serveurs que ce depot controle s'en
+ * accommodaient : `nginx.admin.conf` declarait `index admin.html`, et en
+ * developpement le greffon ci-dessus reecrit l'URL. Le defaut etait donc
+ * **invisible tant qu'on restait dans le depot**.
+ *
+ * ⚠️ **Et `nginx.admin.conf` n'existe plus** — nginx a ete retire du depot, le
+ * deploiement passant par Coolify. Ce greffon n'est donc plus un filet de
+ * securite pour les serveurs tiers : **c'est le seul chemin qui reste.**
+ *
+ * **Tout autre serveur statique cherche `index.html` a la racine** : celui de
+ * Coolify, Netlify, Vercel, `python -m http.server`, un bucket S3. Il repond
+ * 404 — ou, pire, une liste de fichiers sur une page d'administration qu'on ne
+ * veut surtout pas voir indexee.
+ *
+ * ⚠️ **Le fichier est ajoute, pas renomme**, bien que `nginx.admin.conf` ait
+ * disparu depuis. Renommer demanderait de changer `rollupOptions.input`, donc
+ * le nom du fichier source, donc le greffon de developpement qui reecrit
+ * l'URL vers `/admin.html` : trois pieces a bouger ensemble pour supprimer un
+ * fichier d'un kilo-octet. Copier ne casse rien.
+ */
+function ecrireUnIndexHtml(): Plugin {
+  return {
+    name: "admin-index-html",
+    /* `closeBundle` et non `writeBundle` : on veut que tous les fichiers
+       soient ecrits sur le disque avant de lire `admin.html`. */
+    apply: "build",
+    closeBundle() {
+      const dossier = "dist-admin";
+      const source = `${dossier}/admin.html`;
+      if (!existsSync(source)) {
+        /* On ne lance pas d'erreur : si la construction a change de nom de
+           sortie, c'est son auteur qui le saura, et faire echouer le paquet
+           ici masquerait la vraie cause derriere ce greffon secondaire. */
+        return;
+      }
+      writeFileSync(`${dossier}/index.html`, readFileSync(source));
+    },
+  };
+}
+
 export default defineConfig({
   /**
    * Le `.env` de la racine du depot, le meme que Docker Compose et Django.
@@ -118,7 +165,7 @@ export default defineConfig({
    */
   envDir: "..",
 
-  plugins: [react(), tailwindcss(), servirAdminALaRacine()],
+  plugins: [react(), tailwindcss(), servirAdminALaRacine(), ecrireUnIndexHtml()],
 
   /**
    * Un dossier public **a part**, et c'est necessaire depuis que le site de

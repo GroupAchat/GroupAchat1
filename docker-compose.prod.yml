@@ -67,17 +67,25 @@ services:
       base:
         condition: service_healthy
     restart: unless-stopped
+  # ⚠️⚠️ **Les services `boutique` et `admin` ont ete retires d'ici.**
+  #
+  # Ils servaient les deux images nginx publiees par le workflow. Le front est
+  # desormais construit et servi par **Coolify**, qui n'a besoin ni d'image ni
+  # de serveur web dans ce depot : il execute `npm run build` et publie
+  # `frontend/dist/` et `frontend/dist-admin/`.
+  #
+  # Ce fichier ne decrit donc plus que ce qui tourne **en conteneur** : la
+  # base, l'API, et la tache de cloture.
+  #
+  # ⚠️ **L'avertissement qui vivait sur le service `admin` reste vrai, et il
+  # change seulement d'adresse.** Cet ecran affiche des noms, des numeros et
+  # des references de pieces d'identite ; il etait publie sur `127.0.0.1:` pour
+  # n'etre atteignable que par un tunnel SSH. Ce prefixe n'existe plus ici :
+  # **c'est desormais a Coolify de restreindre l'acces** a ce sous-domaine.
+  # Il est maintenant protege par un mot de passe — voir
+  # `comptes/sessions_admin.py` — mais une page d'administration ouverte sur
+  # Internet reste une page d'administration ouverte sur Internet.
 
-  # ⚠️ **Ce bloc disait : « Le front n'est pas servi par ce fichier [...]
-  # c'est la piece manquante avant une mise en ligne. »** Elle ne manque plus :
-  # les deux images nginx sont revenues, et les deux services sont ci-dessous.
-  boutique:
-    image: ${IMAGE_PREFIXE:?renseignez IMAGE_PREFIXE dans .env}/boutique:${ETIQUETTE:-latest}
-    ports:
-      - "${PORT_BOUTIQUE:-5173}:80"
-    depends_on:
-      - api
-    restart: unless-stopped
 
   # ── La cloture par la date ────────────────────────────────────────────
   #
@@ -133,27 +141,5 @@ services:
       api:
         condition: service_started
     restart: unless-stopped
-
-  admin:
-    image: ${IMAGE_PREFIXE:?renseignez IMAGE_PREFIXE dans .env}/admin:${ETIQUETTE:-latest}
-    # ⚠️⚠️ **`127.0.0.1:` en tete, et ce prefixe est tout le sujet.**
-    #
-    # L'avertissement qui vivait ici disait : *« l'administration ne doit pas
-    # etre publiee telle quelle : l'ecran affiche des noms, des numeros et des
-    # references de pieces d'identite, et la page s'ouvre sans mot de passe. »*
-    # Il reste vrai, et ce prefixe est la reponse : le port n'est ouvert que
-    # sur la **boucle locale** du serveur. Depuis l'exterieur, il n'existe pas.
-    #
-    # On l'atteint par un tunnel SSH :
-    #
-    #   ssh -L 5174:127.0.0.1:5174 utilisateur@serveur
-    #
-    # ⚠️ **Retirer `127.0.0.1:` publie l'administration sur Internet.** C'est
-    # une seule chaine de dix caracteres, et c'est la difference entre un
-    # outil interne et une fuite de pieces d'identite.
-    ports:
-      - "127.0.0.1:${PORT_ADMIN:-5174}:80"
-    restart: unless-stopped
-
 volumes:
   donnees-postgres:

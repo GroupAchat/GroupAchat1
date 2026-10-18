@@ -197,15 +197,35 @@ seul, Traefik aussi, nginx demande certbot. **Tant que ce n'est pas fait, ne pas
 devant de vrais acheteurs** : les numéros de téléphone et les adresses de livraison passeraient en
 clair.
 
-**Le front est déployé par ces fichiers.** ⚠️ Ce paragraphe disait l'inverse — *« les deux images
-nginx ont été retirées [...] c'est la pièce qui manque avant une mise en ligne complète »*. Elle ne
-manque plus : le workflow publie `boutique` et `admin`, et `docker-compose.prod.yml` les sert.
+**Le front n'est plus déployé par ces fichiers**, et cette fois ce n'est pas un manque.
+⚠️⚠️ Ce paragraphe a dit successivement l'une et l'autre chose — *« les deux images nginx ont été
+retirées, c'est la pièce qui manque »*, puis *« le workflow publie `boutique` et `admin` »*. La
+conclusion aujourd'hui : **nginx a quitté le dépôt**, et le front est construit et servi par
+**Coolify**. Ces fichiers ne décrivent plus que la base, l'API et la tâche de clôture.
 
-⚠️⚠️ **`VITE_API_URL` est lue à la CONSTRUCTION et inscrite en clair dans le JavaScript.** Elle est
-donc passée en `build-args` par le workflow, depuis la variable de dépôt du même nom. La mettre
-dans `environment:` au lancement n'aurait **aucun effet** et rien ne protesterait : le client
-appellerait `127.0.0.1:8000` depuis le navigateur du visiteur, c'est-à-dire chez lui. Changer
-l'adresse de l'API demande de **reconstruire les images**.
+Ce que l'hébergeur doit publier, c'est le **dossier construit**, jamais le dossier source :
+
+| | À construire avec | À publier |
+|---|---|---|
+| Boutique | `npm ci && npm run build` | `frontend/dist/` |
+| Administration | la même commande | `frontend/dist-admin/` |
+
+⚠️ Publier `frontend/` donne une page blanche, et dans la console :
+`Failed to load module script [...] MIME type of "application/octet-stream"`. C'est l'`index.html`
+**source** qui est servi — il demande `/src/main.tsx`, un fichier TypeScript qu'aucun navigateur
+n'exécute.
+
+⚠️⚠️ **`VITE_API_URL` est lue à la CONSTRUCTION et inscrite en clair dans le JavaScript.** Elle
+doit donc être posée côté **construction** chez l'hébergeur. En variable d'exécution elle n'a
+**aucun effet** et rien ne proteste : le navigateur de chaque visiteur appelle `127.0.0.1:8000`,
+c'est-à-dire sa propre machine. La page s'affiche et rien ne se charge. Changer l'adresse de l'API
+demande toujours de **reconstruire le paquet**.
+
+⚠️ **L'administration n'est plus derrière un tunnel SSH.** Elle était publiée sur `127.0.0.1:5174`
+et atteinte par `ssh -L`. Ce préfixe est parti avec le service. Elle exige maintenant un mot de
+passe — une session contre un compte `is_staff` — mais elle affiche des noms, des numéros et des
+références de pièces d'identité : **restreindre l'accès à ce sous-domaine chez l'hébergeur reste
+la seconde barrière**, et deux barrières valent mieux qu'une devant ces données-là.
 
 **La clôture par la date tourne dans le service `taches`.** ⚠️ Elle n'était planifiée nulle part —
 ni ici, ni dans Compose, ni dans la CI. Sans elle, un groupage échu reste `ouverte`, aucun

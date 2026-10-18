@@ -144,25 +144,99 @@ projet et non à un conteneur venu d'ailleurs.
 cd backend && python manage.py test groupachat --noinput
 ```
 
-293 tests, environ huit minutes. `--noinput` évite la question sur la base de
-test restée d'une exécution précédente. ⚠️ **Ne jamais tuer une connexion
-PostgreSQL pour « débloquer » une base de test occupée** : on tue l'exécution en
-cours, et on se retrouve avec une base à moitié créée.
+**330 tests, environ seize minutes** — ce paragraphe annonçait *« 293 tests,
+environ huit minutes »*, et les deux chiffres avaient vieilli. `--noinput` évite
+la question sur la base de test restée d'une exécution précédente.
+⚠️ **Ne jamais tuer une connexion PostgreSQL pour « débloquer » une base de
+test occupée** : on tue l'exécution en cours, et on se retrouve avec une base à
+moitié créée.
+
+### ⚠️⚠️ Une suite verte en local ne dit rien de la CI, et voici pourquoi
+
+**La CI pose `DJANGO_DEBUG=0` pour tout le job**, parce que c'est le réglage de
+production et que c'est tout l'intérêt de la faire tourner. Or `settings.py`
+active `SECURE_SSL_REDIRECT` dès que `DEBUG` est faux, et le client de test de
+Django parle **en clair** sur `http://testserver` sans envoyer de
+`X-Forwarded-Proto`.
+
+Résultat : Django redirige vers `https://testserver` **avant d'atteindre la
+moindre vue**, et **toute la suite backend tombe sur des `301`**. Le travail
+échouait en quarante-huit secondes — trop vite pour une suite de 330 tests,
+c'est le signe qu'on n'a jamais atteint les tests.
+
+Chacun des trois maillons est juste pris isolément ; c'est leur rencontre qui
+casse. L'étape des tests pose donc `DJANGO_HTTPS: "0"`, **et elle seule** : le
+défaut de production reste `1`, et `check --deploy` garde son propre
+environnement pour vérifier la redirection telle qu'elle sera en ligne.
+
+**Le réflexe utile avant de pousser**, qui reproduit la CI :
+
+```
+DJANGO_DEBUG=0 DJANGO_HTTPS=0 DJANGO_SECRET_KEY=peu-importe \
+  python manage.py test groupachat --noinput
+```
 
 Côté client, `npm run typecheck` et `npm run build` — la construction fait les
 deux paquets, boutique et administration.
 
 ## Le déploiement
 
-**Cinq services**, décrits par `docker-compose.prod.yml` et publiés par
-`.github/workflows/deploiement.yml` : `base`, `api`, `boutique`, `admin`,
-`taches`.
+**Trois services en conteneur**, décrits par `docker-compose.prod.yml` : `base`,
+`api`, `taches`. Le workflow `.github/workflows/deploiement.yml` ne publie plus
+qu'une image, celle de l'API.
 
-| | Port publié |
+⚠️⚠️ **Ce paragraphe en annonçait cinq**, dont `boutique` et `admin` — deux
+images **nginx** construites depuis `frontend/`. **nginx a été retiré du
+dépôt** : `frontend/Dockerfile`, `nginx.boutique.conf`, `nginx.admin.conf` et
+`frontend/.dockerignore` ont été supprimés, ainsi que les services, les étapes
+de CI et les étapes de publication qui les portaient. Le front est construit et
+servi par **Coolify**.
+
+> La bonne manière de lire les trois états successifs de cette section — pas de
+> front conteneurisé, puis deux images nginx, puis plus rien — c'est que **le
+> serveur du front n'a jamais été une décision de ce dépôt**, et qu'il a fini
+> par ne plus y vivre du tout.
+
+### Le front : ce qu'il faut publier, et ce qu'il ne faut surtout pas
+
+```
+npm ci && npm run build
+```
+
+| | À publier |
 |---|---|
-| `api` | `8000` |
-| `boutique` | `5173` |
-| `admin` | **`127.0.0.1:5174`** |
+| **Boutique** | `frontend/dist/` |
+| **Administration** | `frontend/dist-admin/` |
+
+⚠️⚠️ **Publier `frontend/` au lieu de `frontend/dist/` donne une page blanche**,
+et c'est arrivé. Le symptôme, dans la console du navigateur :
+
+```
+Failed to load module script: Expected a JavaScript-or-Wasm module script
+but the server responded with a MIME type of "application/octet-stream".
+```
+
+Le diagnostic tient en une ligne : **le navigateur demande `/src/main.tsx`.**
+Ce chemin n'existe que dans l'`index.html` **source** ; celui de `dist/` charge
+`/assets/index-….js`. Et `application/octet-stream` plutôt qu'une page de repli
+prouve que le fichier TypeScript **existe vraiment sur le serveur**. Donc c'est
+le dossier source qui est publié, et `npm run build` n'a pas tourné.
+
+⚠️ **`dist-admin/` ne contenait pas d'`index.html`**, seulement `admin.html` —
+parce que `rollupOptions.input` vaut `admin.html`. Les deux serveurs que ce
+dépôt contrôlait s'en accommodaient, donc le défaut était invisible de
+l'intérieur ; tout serveur statique aurait répondu **404** à la racine d'une
+page d'administration. `vite.admin.config.ts` écrit maintenant un `index.html`
+**à côté** de `admin.html`.
+
+⚠️⚠️ **`VITE_API_URL` est lue à la CONSTRUCTION, pas à l'exécution.** Vite
+l'inscrit en clair dans le JavaScript produit ; aucun serveur Node ne la relit
+au démarrage. Elle doit être posée **côté construction** chez l'hébergeur. En
+variable d'exécution elle n'a **aucun effet** et **rien ne proteste** : le
+navigateur de chaque visiteur appelle `127.0.0.1:8000`, c'est-à-dire sa propre
+machine. La page s'affiche et rien ne se charge.
+
+### L'administration a un mot de passe
 
 ⚠️⚠️ **Ce paragraphe disait : « l'écran A1 s'ouvre sans mot de passe ».**
 Il ne s'ouvre plus sans : l'administration se connecte par **identifiant et mot
@@ -189,35 +263,21 @@ entrer. La commande est idempotente : relancée, elle ne repose pas le mot de
 passe d'un compte existant, sinon un `.env` oublié sur le serveur annulerait en
 silence tout changement fait depuis l'interface.
 
-⚠️ **Le `127.0.0.1:` de l'administration reste**, et il faut le garder. L'écran
-affiche des noms, des numéros et des références de pièces d'identité : deux
-barrières valent mieux qu'une. On l'atteint par un tunnel SSH :
+⚠️⚠️ **Le `127.0.0.1:5174` de l'administration a disparu avec son service**, et
+c'est la perte la plus sérieuse de ce retrait. Le port n'était ouvert que sur
+la boucle locale du serveur ; on l'atteignait par
+`ssh -L 5174:127.0.0.1:5174 utilisateur@serveur`, et depuis l'extérieur il
+n'existait pas.
 
-```
-ssh -L 5174:127.0.0.1:5174 utilisateur@serveur
-```
-
-Retirer ce préfixe de dix caractères publierait l'administration sur Internet —
-derrière un mot de passe désormais, mais sur Internet.
-
-⚠️⚠️ **`VITE_API_URL` est lue à la CONSTRUCTION, pas à l'exécution.** Vite
-l'inscrit en clair dans le JavaScript produit. Elle est passée en `build-args`
-par le workflow, depuis la variable de dépôt du même nom. La mettre dans
-`environment:` au lancement n'aurait **aucun effet** et rien ne protesterait :
-le client appellerait `127.0.0.1:8000` depuis le navigateur du visiteur.
-Changer l'adresse de l'API demande de **reconstruire les images**.
-
-**Essayer les images avant de déployer** — c'est le contrôle qui manquait, et
-qui a laissé un `Dockerfile` sans étape de service passer inaperçu :
-
-```
-docker compose --profile images up --build boutique admin
-```
+Cet écran affiche des **noms, des numéros de téléphone et des références de
+pièces d'identité**. Le mot de passe est maintenant la première barrière ;
+**restreindre l'accès à ce sous-domaine chez l'hébergeur doit rester la
+seconde.** Deux barrières valent mieux qu'une devant ces données-là.
 
 ⚠️ **Ce qui reste à faire avant une vraie mise en ligne** : le dépôt distant
 `origin` pointe sur un autre projet, il n'y a **aucune terminaison HTTPS** dans
-ces fichiers — il faut un reverse-proxy devant —, et l'espace groupeur
-s'identifie encore par `?telephone=` sur douze routes, dont le retrait d'argent.
+ces fichiers, et l'espace groupeur s'identifie encore par `?telephone=` sur
+douze routes, dont le retrait d'argent.
 
 ## Comment éditer ces fichiers — documents **et** code
 

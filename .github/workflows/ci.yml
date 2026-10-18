@@ -108,6 +108,24 @@ jobs:
         run: python manage.py migrate --noinput
 
       - name: La suite de tests
+        # ⚠️⚠️ **`DJANGO_HTTPS: "0"` n'est pas une commodite, c'est une
+        # correction.** Sans lui, **toute la suite backend echoue** sur des
+        # `301`, et le symptome ne ressemble pas du tout a sa cause.
+        #
+        # La chaine : `settings.py` active `SECURE_SSL_REDIRECT` des que
+        # `DEBUG` est faux, le job pose `DJANGO_DEBUG: "0"` pour tout le monde,
+        # et le client de test de Django parle **en clair** sur
+        # `http://testserver` sans envoyer de `X-Forwarded-Proto`. Django
+        # redirige donc vers `https://testserver` **avant d'atteindre la
+        # moindre vue**, et chaque appel d'API revient en 301.
+        #
+        # Chacun des trois maillons est juste pris isolement ; c'est leur
+        # rencontre qui casse. On desarme donc le troisieme, **ici seulement** :
+        # le defaut de production reste `1`, et l'etape `check --deploy`
+        # au-dessus continue de verifier la redirection telle qu'elle sera en
+        # ligne, avec son propre bloc d'environnement.
+        env:
+          DJANGO_HTTPS: "0"
         run: python manage.py test groupachat --verbosity 2
 
   # ── Le front ─────────────────────────────────────────────────────────────
@@ -176,7 +194,7 @@ jobs:
 
   # ── Les images ───────────────────────────────────────────────────────────
   images:
-    name: Images Docker — construction à blanc
+    name: Image de l'API — construction à blanc
     runs-on: ubuntu-latest
 
     steps:
@@ -197,23 +215,19 @@ jobs:
           push: false
           cache-from: type=gha,scope=api
           cache-to: type=gha,scope=api,mode=max
+      # ⚠️⚠️ **L'etape « L'image du front » a ete retiree d'ici.**
+      #
+      # Elle construisait `frontend/Dockerfile` avec `target: construction`,
+      # pour verifier que `npm ci` puis `npm run build` tenaient dans une image
+      # Linux propre. **Ce `Dockerfile` n'existe plus** : nginx a quitte le
+      # depot, le deploiement passe par Coolify qui sert les fichiers
+      # statiques lui-meme.
+      #
+      # Rien n'est perdu au passage : le travail « Front » ci-dessus fait
+      # tourner les memes `npm ci` et `npm run build` sur le coureur. On
+      # verifiait deux fois la meme chose, et l'une des deux coutait une
+      # construction d'image a chaque poussee.
 
-      # ⚠️ **Une seule image pour le front, et elle ne sert rien.**
-      # `frontend/Dockerfile` n'a plus que son etape de construction : les deux
-      # cibles nginx ont ete retirees, le serveur web reste a choisir. Ce qui
-      # se verifie ici, c'est donc que `npm ci` puis `npm run build` tiennent
-      # dans une image Linux propre — ou le travail « Front » ci-dessus les
-      # fait tourner sur le coureur lui-meme.
-      - name: L'image du front
-        uses: docker/build-push-action@v6
-        with:
-          context: ./frontend
-          target: construction
-          push: false
-          build-args: |
-            VITE_API_URL=http://127.0.0.1:8000/api
-          cache-from: type=gha,scope=front
-          cache-to: type=gha,scope=front,mode=max
 
       # Le fichier Compose doit rester lisible et ses variables résolubles.
       # Une faute de syntaxe ou une variable obligatoire oubliée se verrait

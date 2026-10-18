@@ -93,7 +93,9 @@ Le téléphone reste la référence — on dessine à 390 px et on monte. Mais l
 |---|---|---|
 | **< 768 px** | Le fil plein écran, barre de navigation en bas, colonne de 430 px | Colonne de 430 px, barre de navigation en bas |
 | **768 à 1023 px** | Le catalogue en grille à 2 colonnes, filtres en puces | Colonne latérale bleue, contenu large |
-| **≥ 1024 px** | Catalogue, colonne de filtres latérale, fiche sur 2 colonnes, **page bornée à 1 600 px** | Colonne latérale bleue, contenu borné à 1 180 px |
+| **≥ 1024 px** | Catalogue en grille (3 puis 4 puis 5 colonnes), **filtres en tiroir**, fiche sur 2 colonnes, **page bornée à 1 600 px** | Colonne latérale bleue, contenu borné à 1 180 px |
+
+> ⚠️ **Cette ligne annonçait une « colonne de filtres latérale ».** Elle n'existe pas, et elle n'est pas prévue : `TiroirFiltres` glisse par la droite à **toutes** les largeurs. Une colonne permanente demanderait une seconde implémentation du même panneau — ce que la règle juste en dessous interdit — et mangerait, sur une page bornée à 1 600 px, la largeur d'une colonne de résultats. Voir l'écran 2.
 
 ⚠️ **Aucun écran n'est dédoublé.** Ce sont les mêmes composants dans les trois cas ; seules la largeur et la navigation changent. Écrire une version bureau séparée doublerait le travail à chaque correction, et les deux divergeraient en quelques semaines.
 
@@ -1041,6 +1043,41 @@ On ne peut plus le rejoindre, donc l'afficher ne fait que trois choses, toutes m
 
 **États :** recherches récentes et suggestions avant toute saisie ; chargement ; **aucun résultat** → `EtatVide` « Aucune campagne pour « lait en poudre » » + bouton « **Demander ce produit** », qui transforme un échec de recherche en demande (écran 11).
 
+### ⚠️ Sur grand écran — une grille, et **pas** de colonne de filtres
+
+**C'est l'écran le plus adapté aux grands formats de toute l'application**, et
+cette section manquait.
+
+Les résultats passent en grille de cartes, dont le nombre de colonnes suit le
+**conteneur** :
+
+| Largeur | Colonnes |
+|---|---|
+| téléphone | 2 |
+| ≥ 1 024 px | 3 |
+| ≥ 1 280 px | 4 |
+| ≥ 1 536 px | **5**, et c'est le dernier palier |
+
+⚠️ **Le dernier palier tombe là où le conteneur cesse de croître** (§1). La
+grille passait autrefois à cinq colonnes à 1 800 px alors que la page est bornée
+à 1 600 : la cinquième colonne ne gagnait aucune place, elle **rétrécissait les
+cartes** de 376 à 300 px. Des vignettes qui maigrissent quand l'écran grandit
+sont l'inverse de ce qu'on attend.
+
+⚠️⚠️ **Les filtres restent un tiroir, à toutes les largeurs.** Le §1 annonçait
+une « colonne de filtres latérale » à partir de 1 024 px : **elle n'existe pas**,
+et cette ligne a été corrigée. `TiroirFiltres` glisse par la droite, par-dessus
+la page, sur téléphone comme sur ordinateur.
+
+Ce n'est pas un oubli à rattraper. Une colonne latérale permanente coûterait une
+**seconde implémentation** du même panneau — exactement ce que le §1 interdit
+quand il écrit qu'aucun écran n'est dédoublé — et elle prendrait, sur une page
+bornée à 1 600 px, la largeur d'une colonne de résultats entière.
+
+Les **puces de filtres actifs** restent visibles sous la recherche, tiroir
+fermé : c'est elles qui disent ce qui est filtré, pas le tiroir.
+
+
 ## Écran 3 — Détail d'une campagne
 
 **Objectif :** donner tout ce qu'il faut pour décider de payer.
@@ -1532,6 +1569,65 @@ La première ligne ferme la boucle du produit : une demande devient une campagne
 ---
 
 # Lot 3 — côté groupeur
+
+## Écran 12 bis — Profil de l'acheteur
+
+⚠️⚠️ **Cet écran existe dans le produit et n'avait aucune section ici.** Il
+était cité quatre fois en passant — l'onglet de la `BarreNav`, le mot de passe
+« posable depuis l'écran de profil », le mode économie de données — sans jamais
+être décrit. C'est pourtant **la mise en page bureau la plus élaborée du côté
+acheteur**.
+
+**Objectif :** tout ce qui concerne le compte, sans quitter la boutique. Ce
+n'est pas un écran de réglages système : on y vient surtout pour **vérifier son
+numéro** avant une livraison, ou pour poser un mot de passe.
+
+### Sur téléphone — une colonne
+
+1. **Carte d'identité** : médaillon sur fond `primaire-fond`, texte
+   `primaire-texte-sur-fond` (4,87:1), prénom, numéro, et le mois d'inscription
+   — « membre depuis mars 2026 », jamais une date précise.
+2. **Mes commandes**, **Mes demandes** — des entrées, pas des listes.
+3. **Mot de passe** : « définir » ou « modifier » selon qu'il en a un.
+4. **Mes appareils** : les sessions ouvertes, avec un moyen de les fermer.
+5. **Aide** — sept questions, en accordéon.
+6. **Supprimer mon compte**, en bas, en `danger-texte`.
+
+### ⚠️ Sur ordinateur — deux colonnes à partir de 1 280 px
+
+**Pas avant.** La bascule est à `xl`, et non à `lg` comme le catalogue : les
+blocs de ce profil sont étroits, et les passer en deux colonnes dès 1 024 px
+donnerait deux colonnes maigres au lieu d'une colonne lisible.
+
+| | Largeur |
+|---|---|
+| Colonne de gauche | le reste |
+| Colonne de droite | **22 rem**, fixe |
+
+La page est bornée à `max-w-2xl` en dessous, **`max-w-6xl`** à partir de `xl` —
+elle ne suit donc pas le plafond de 1 600 px du catalogue, parce qu'un formulaire
+de compte étalé sur 1 600 px ne se lit plus.
+
+**La colonne de droite est `sticky`**, callée à `top-24`. Elle porte les blocs
+courts — identité, activité — et reste visible pendant qu'on fait défiler les
+réglages à gauche.
+
+⚠️ **`items-start` sur la grille, et ce n'est pas décoratif.** Sans lui, un
+enfant de grille s'étire à la hauteur de la rangée, et **un élément étiré ne
+colle plus** : `sticky` n'a plus de course où glisser. Le symptôme est une
+colonne qui ne colle pas, sans aucune erreur — on cherche alors dans `top`, dans
+`overflow`, partout sauf au bon endroit.
+
+### La suppression du compte
+
+Confirmation **par saisie** : il faut taper `SUPPRIMER`. Pas une case à cocher,
+pas un second bouton — on ne supprime pas un compte qui porte un historique de
+commandes par inadvertance.
+
+⚠️ **Le compte est anonymisé, pas effacé.** Ses commandes portent une relation
+`PROTECT` : les détruire effacerait des lignes comptables et fausserait le solde
+d'un groupeur. L'écran ne doit donc pas promettre un effacement total.
+
 
 ## Écran 13 — Tableau de bord groupeur
 

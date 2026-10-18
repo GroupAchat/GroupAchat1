@@ -56,7 +56,6 @@ services:
       # identifiants de la base — à quiconque déclenche une erreur 500.
       DJANGO_DEBUG: "0"
       DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:?renseignez le nom de domaine dans .env}
-      JETON_ADMIN: ${JETON_ADMIN:?renseignez JETON_ADMIN dans .env}
       CORS_ORIGINES: ${CORS_ORIGINES:?renseignez CORS_ORIGINES dans .env}
       SMS_FOURNISSEUR: ${SMS_FOURNISSEUR:-}
       # `0` : on ne réécrit pas le jeu de démonstration par-dessus des données
@@ -124,7 +123,6 @@ services:
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?renseignez DJANGO_SECRET_KEY dans .env}
       DJANGO_DEBUG: "0"
       DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:?renseignez le nom de domaine dans .env}
-      JETON_ADMIN: ${JETON_ADMIN:?renseignez JETON_ADMIN dans .env}
       CORS_ORIGINES: ${CORS_ORIGINES:?renseignez CORS_ORIGINES dans .env}
     depends_on:
       base:

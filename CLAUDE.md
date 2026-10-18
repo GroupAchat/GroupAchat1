@@ -164,16 +164,41 @@ deux paquets, boutique et administration.
 | `boutique` | `5173` |
 | `admin` | **`127.0.0.1:5174`** |
 
-⚠️⚠️ **Le `127.0.0.1:` de l'administration est tout le sujet.** L'écran A1
-s'ouvre **sans mot de passe** et affiche des noms, des numéros et des
-références de pièces d'identité. Le port n'est ouvert que sur la boucle locale
-du serveur ; on l'atteint par un tunnel SSH :
+⚠️⚠️ **Ce paragraphe disait : « l'écran A1 s'ouvre sans mot de passe ».**
+Il ne s'ouvre plus sans : l'administration se connecte par **identifiant et mot
+de passe**, contre un compte Django `is_staff`. Ce qui a remplacé le jeton
+unique et partagé :
+
+| | Le jeton partagé | La session |
+|---|---|---|
+| Distingue deux administrateurs | non | **oui** |
+| Se révoque pour une personne | non — il fallait le changer pour tous | **oui**, en décochant `is_staff` |
+| Résiste à l'essai systématique | rien ne comptait les échecs | **5 essais, puis 15 minutes** |
+| « décidé par » sur une décision KYC | ce qu'on voulait bien saisir | **le compte connecté** |
+
+Le dernier n'est pas cosmétique : le §10.5 confie la validation d'un dossier à
+un humain parce que, le jour d'un litige, **ce dossier est notre seul recours
+contre le groupeur**. Un journal dont l'auteur est déclaratif ne prouve rien.
+
+**Le premier compte se crée par `python manage.py creer_administrateur`**, qui
+lit `ADMIN_IDENTIFIANT` et `ADMIN_MOT_DE_PASSE` dans l'environnement.
+⚠️ **Et non `createsuperuser`** : celui-là est interactif et se figerait sur un
+serveur sans terminal, tandis que son `--noinput` crée un compte **sans mot de
+passe utilisable** — donc une administration dans laquelle personne ne peut
+entrer. La commande est idempotente : relancée, elle ne repose pas le mot de
+passe d'un compte existant, sinon un `.env` oublié sur le serveur annulerait en
+silence tout changement fait depuis l'interface.
+
+⚠️ **Le `127.0.0.1:` de l'administration reste**, et il faut le garder. L'écran
+affiche des noms, des numéros et des références de pièces d'identité : deux
+barrières valent mieux qu'une. On l'atteint par un tunnel SSH :
 
 ```
 ssh -L 5174:127.0.0.1:5174 utilisateur@serveur
 ```
 
-Retirer ce préfixe de dix caractères publierait l'administration sur Internet.
+Retirer ce préfixe de dix caractères publierait l'administration sur Internet —
+derrière un mot de passe désormais, mais sur Internet.
 
 ⚠️⚠️ **`VITE_API_URL` est lue à la CONSTRUCTION, pas à l'exécution.** Vite
 l'inscrit en clair dans le JavaScript produit. Elle est passée en `build-args`

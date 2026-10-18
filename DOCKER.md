@@ -12,7 +12,19 @@
 | `admin` | `frontend/`, cible `admin` | **`127.0.0.1:5174`** |
 | `taches` | l'image de l'API, sans son point d'entrée | aucun |
 
-⚠️ **Le `127.0.0.1:` de l'administration n'est pas décoratif** : cet écran s'ouvre sans mot de passe. On l'atteint par un tunnel SSH, jamais depuis Internet.
+⚠️ **Le `127.0.0.1:` de l'administration n'est pas décoratif** : cet écran montre des noms, des numéros et des références de pièces d'identité. On l'atteint par un tunnel SSH — `ssh -L 5174:127.0.0.1:5174 utilisateur@serveur`.
+
+> ⚠️ **Cette phrase disait : « cet écran s'ouvre sans mot de passe ».** Ce
+> n'est plus vrai, et il fallait le corriger plutôt que le laisser : quelqu'un
+> le lit et en conclut soit qu'un tunnel SSH restera nécessaire pour toujours,
+> soit — bien pire — qu'on peut se passer d'authentifier les administrateurs
+> puisque « de toute façon ce n'est pas protégé ».
+>
+> **La serrure est maintenant sur la porte**, pas seulement sur le chemin : une
+> session ouverte contre un mot de passe, cinq essais avant un verrou de quinze
+> minutes, et une révocation qui prend effet à la requête suivante. Le
+> `127.0.0.1:` **reste** — deux barrières valent mieux qu'une devant des pièces
+> d'identité — mais ce n'est plus la seule.
 
 **En développement, le client ne passe pas par ces images** : `npm run dev` a le rechargement à chaud, pas nginx. Les deux services sont derrière un profil pour pouvoir les essayer avant de déployer :
 
@@ -50,19 +62,27 @@ valeurs par défaut de `CORS_ORIGINES` et de `VITE_API_URL` les visent déjà.
 Lancer l'API en conteneur ne demande donc de reconfigurer ni le navigateur ni
 les origines autorisées.
 
-## Les trois secrets
+## Les deux secrets
 
-Compose **s'arrête avec un message en français** si l'un des trois manque. Ce
+Compose **s'arrête avec un message en français** si l'un des deux manque. Ce
 n'est pas une commodité : une base au mot de passe vide et une clé de signature
 par défaut sont deux façons de mettre un service en ligne ouvert.
 
 ```bash
 python -c "import secrets; print(secrets.token_urlsafe(50))"   # DJANGO_SECRET_KEY
-python -c "import secrets; print(secrets.token_urlsafe(32))"   # JETON_ADMIN
+python -c "import secrets; print(secrets.token_urlsafe(24))"   # POSTGRES_PASSWORD
 ```
 
-`POSTGRES_PASSWORD` est le troisième. `.env` est ignoré par git ; le dépôt ne
-contient que `.env.exemple`, sans aucun secret.
+`.env` est ignoré par git ; le dépôt ne contient que `.env.exemple`, sans aucun
+secret.
+
+> ⚠️ **Ils étaient trois, et le troisième était `JETON_ADMIN`** — un jeton
+> unique et partagé qui ouvrait l'écran d'administration. Il n'est plus lu par
+> personne : l'administration se connecte avec un **compte**, créé une fois par
+> `python manage.py creer_administrateur` depuis `ADMIN_IDENTIFIANT` et
+> `ADMIN_MOT_DE_PASSE`. Ces deux variables ne sont **pas** passées aux services :
+> les laisser dans l'environnement du conteneur les rendrait lisibles par
+> `docker inspect` en permanence, pour un usage unique.
 
 ## Le piège à connaître avant de déployer
 

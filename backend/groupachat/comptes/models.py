@@ -14,6 +14,7 @@ from __future__ import annotations
 from datetime import timedelta
 from decimal import Decimal
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
@@ -725,3 +726,156 @@ class SessionAcheteur(models.Model):
         self.dernier_usage = maintenant
         self.expire_le = maintenant + timedelta(days=self.DUREE_JOURS)
         self.save(update_fields=["dernier_usage", "expire_le"])
+
+
+# ── L'administration, et ses vrais comptes ────────────────────────
+
+
+class SessionAdmin(models.Model):
+    """La session d'un administrateur, ouverte contre un mot de passe.
+
+    ## Ce qu'elle remplace
+
+    ⚠️ **Ces routes étaient gardées par un jeton unique et partagé**, lu dans
+    l'en-tête ``X-Jeton-Admin`` et posé dans le ``.env`` du serveur. Le code
+    qui le portait le disait lui-même : *« ce n'est pas de l'authentification,
+    et il ne faut pas le prendre pour telle »*. Trois défauts concrets :
+
+    | | Le jeton partagé | La session |
+    |---|---|---|
+    | Distingue deux administrateurs | non | **oui** |
+    | Se révoque pour une personne | non — il faut le changer pour tous | **oui** |
+    | ``décidé par`` sur une décision KYC | la bonne foi du formulaire | **le compte qui décide** |
+
+    Le troisième est le plus grave, et il n'est pas cosmétique : le §10.5
+    confie la validation d'un dossier à un humain parce que, le jour d'un
+    litige, **le dossier est notre seul recours contre le groupeur**. Un
+    journal dont l'auteur est un champ de texte libre ne prouve rien.
+
+    ## Pourquoi un jeton de session et non la session Django
+
+    Le client d'administration est une application React servie à part, qui
+    parle à l'API par ``fetch`` depuis une autre origine. Les cookies de
+    session traverseraient, mais au prix de ``SESSION_COOKIE_SAMESITE=None``,
+    de CORS avec identifiants et d'une protection CSRF à câbler sur chaque
+    écriture. Un jeton porté par un en-tête n'est pas envoyé automatiquement
+    par le navigateur : **il n'y a donc pas de CSRF à couvrir.** Et il se lit
+    exactement comme la session acheteur, un mécanisme de moins à comprendre.
+
+    ## ⚠️ Douze heures, pas trente jours
+
+    ``SessionAcheteur`` dure trente jours **glissants**, et c'est justifié là :
+    refaire un code SMS à chaque visite ferait perdre des acheteurs. Ici le
+    raisonnement s'inverse — ces routes montrent **des noms, des numéros de
+    téléphone et des références de pièces d'identité**. Une session qui
+    survit un mois sur un portable emporté est une fuite qui attend.
+
+    Douze heures couvrent une journée de travail : on se connecte le matin, on
+    ne se reconnecte pas à midi. Et **elle ne glisse pas** : l'échéance est
+    posée à l'ouverture et ne bouge plus, sinon une session qu'on garde
+    ouverte ne finit jamais.
+    """
+
+    #: Douze heures fermes. Voir la note de classe : ce n'est pas la durée de
+    #: la session acheteur, et l'écart est délibéré.
+    DUREE_HEURES = 12
+
+    utilisateur = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="sessions_admin",
+        verbose_name="administrateur",
+    )
+    #: Indexé et unique : il est lu à chaque requête d'administration.
+    jeton = models.CharField("jeton", max_length=64, unique=True, db_index=True)
+
+    cree_le = models.DateTimeField("ouverte le", auto_now_add=True)
+    expire_le = models.DateTimeField("expire le")
+    dernier_usage = models.DateTimeField("dernier usage", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "session administrateur"
+        verbose_name_plural = "sessions administrateurs"
+        ordering = ("-dernier_usage",)
+
+    def __str__(self) -> str:
+        return f"{self.utilisateur} — jusqu'à {self.expire_le:%d/%m à %Hh%M}"
+
+    @property
+    def valide(self) -> bool:
+        return timezone.now() < self.expire_le
+
+    def marquer_usage(self) -> None:
+        """Note le dernier usage, **sans repousser l'échéance**.
+
+        ⚠️ La différence avec ``SessionAcheteur.prolonger`` est tout le sujet :
+        là-bas l'échéance glisse, ici elle est ferme. Ce champ ne sert donc
+        qu'à voir, dans l'admin Django, quelles sessions sont actives — ce
+        qu'il faut savoir avant d'en révoquer une.
+
+        Au plus une écriture par heure, comme côté acheteur : sinon chaque
+        appel d'API coûte un ``UPDATE``.
+        """
+        maintenant = timezone.now()
+        if maintenant - self.dernier_usage < timedelta(hours=1):
+            return
+        self.dernier_usage = maintenant
+        self.save(update_fields=["dernier_usage"])
+
+
+class VerrouAdmin(models.Model):
+    """Le compteur d'échecs de connexion à l'administration.
+
+    ## ⚠️ Pourquoi un modèle séparé, et pas deux champs sur ``User``
+
+    ``Acheteur`` porte ses propres ``echecs_connexion`` et ``bloque_jusqu_a``.
+    Ici on ne peut pas : ``User`` est le modèle de Django, et lui ajouter des
+    colonnes demanderait de le remplacer par un modèle maison — une migration
+    lourde et irréversible, pour deux entiers.
+
+    ## ⚠️ Et pourquoi la clé est l'identifiant **saisi**, pas le compte
+
+    Compter les échecs sur le compte trouvé ne protège que les comptes qui
+    existent. Un identifiant inconnu n'aurait alors **aucune limite**, et la
+    différence de comportement entre « inconnu, essaie encore » et « connu,
+    verrouillé » révélerait quels identifiants existent. En comptant sur la
+    chaîne saisie, les deux cas se verrouillent pareil et ne disent rien.
+
+    Conséquence assumée : qui connaît l'identifiant d'un collègue peut le
+    verrouiller quinze minutes en se trompant cinq fois exprès. C'est le défaut
+    de tout verrou par identifiant, et le prix est plus faible que l'inverse.
+    """
+
+    #: Cinq, comme pour l'acheteur — voir ``sessions.ECHECS_AVANT_VERROU`` pour
+    #: le raisonnement, qui vaut ici aussi.
+    ECHECS_AVANT_VERROU = 5
+
+    #: Quinze minutes. ⚠️ Mais sans la soupape du côté acheteur : là-bas le
+    #: code SMS reste ouvert pendant le verrou, donc personne n'est fermé
+    #: dehors. Ici **il n'y a pas d'autre porte** : un administrateur
+    #: verrouillé attend, ou un autre lui lève le verrou depuis l'admin Django.
+    #: C'est pour ça que le verrou est court.
+    DUREE_VERROU_MINUTES = 15
+
+    identifiant = models.CharField(
+        "identifiant saisi", max_length=150, unique=True, db_index=True
+    )
+    echecs = models.PositiveSmallIntegerField("échecs consécutifs", default=0)
+    bloque_jusqu_a = models.DateTimeField(
+        "bloqué jusqu'à", null=True, blank=True
+    )
+
+    class Meta:
+        verbose_name = "verrou d'administration"
+        verbose_name_plural = "verrous d'administration"
+        ordering = ("-bloque_jusqu_a",)
+
+    def __str__(self) -> str:
+        return f"{self.identifiant} — {self.echecs} échec(s)"
+
+    @property
+    def est_bloque(self) -> bool:
+        return (
+            self.bloque_jusqu_a is not None
+            and timezone.now() < self.bloque_jusqu_a
+        )

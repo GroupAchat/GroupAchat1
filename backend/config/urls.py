@@ -21,6 +21,7 @@ from groupachat.api_admin import AdministrationViewSet
 from groupachat.api_comptes import CompteViewSet
 from groupachat.api_groupeur import GroupeurViewSet as EspaceGroupeurViewSet
 from groupachat.api_kyc import DossierViewSet, GroupeurViewSet
+from groupachat.api_session_admin import SessionAdminViewSet
 
 routeur = DefaultRouter()
 # Le compte acheteur : code SMS, session, profil. C'est la seule route qui
@@ -57,6 +58,17 @@ routeur.register(
 # pas. Voir l'en-tete de `api_groupeur.py`.
 routeur.register(
     "espace-groupeur", EspaceGroupeurViewSet, basename="espace-groupeur"
+)
+
+# La connexion a l'administration : `connexion/`, `moi/`, `deconnexion/`.
+#
+# ⚠️ **Les routes d'administration etaient gardees par un jeton unique et
+# partage**, recopie a la main par chaque administrateur. Elles exigent
+# desormais une session ouverte contre un mot de passe. Voir
+# `api_session_admin.py` pour les trois routes, et
+# `comptes/sessions_admin.py` pour ce qu'elles verifient.
+routeur.register(
+    "session-admin", SessionAdminViewSet, basename="session-admin"
 )
 
 urlpatterns = [

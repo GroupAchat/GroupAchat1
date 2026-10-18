@@ -104,22 +104,22 @@ DOSSIER = {
 }
 
 
-def main() -> int:
-    jeton = os.environ.get("JETON_ADMIN")
-    if not jeton:
-        # On lit `.env` nous-mêmes : ce script n'est pas lancé par Django.
-        #
-        # ⚠️ **Celui de la racine**, pas `backend/.env` : `config/settings.py`
-        # n'en lit qu'un, et c'est celui-là. Lire l'autre donnait un jeton
-        # vide, donc « rien à vérifier » sur une machine pourtant configurée.
-        fichier = RACINE.parent / ".env"
-        for ligne in fichier.read_text(encoding="utf-8").splitlines():
-            if ligne.startswith("JETON_ADMIN="):
-                jeton = ligne.split("=", 1)[1].strip()
-    if not jeton:
-        print("JETON_ADMIN absent du .env de la racine — rien à vérifier.")
-        return 1
+#: Le compte d'administration que ce script se crée pour travailler.
+#:
+#: ⚠️ **Ce script lisait `JETON_ADMIN` dans le `.env` de la racine**, et sortait
+#: sur « rien à vérifier » quand la variable manquait. Le jeton partagé
+#: n'existe plus : l'administration se connecte contre un compte. Le script en
+#: crée donc un lui-même plutôt que d'exiger qu'il en existe un — il commence
+#: de toute façon par un `flush`, qui vide la table des comptes, donc aucun
+#: compte préexistant ne lui survivrait.
+#:
+#: Le mot de passe est en clair ici, et c'est sans conséquence : il ne vaut que
+#: sur une base locale que la ligne suivante vient d'effacer.
+VERIFICATEUR = "verificateur-automatique"
+MOT_DE_PASSE_VERIFICATEUR = "verification-locale-sans-valeur"
 
+
+def main() -> int:
     print("Remise à zéro du jeu de démonstration…")
     for commande in (["flush", "--noinput"], ["charger_demo"]):
         subprocess.run(
@@ -128,6 +128,22 @@ def main() -> int:
             check=True,
             stdout=subprocess.DEVNULL,
         )
+
+    # ⚠️ **Après le `flush`, jamais avant** : il vide `auth_user`, donc un
+    # compte créé plus tôt disparaîtrait sans bruit et le script échouerait à
+    # sa première requête d'administration, sur un 401 déroutant.
+    subprocess.run(
+        [str(PYTHON), "manage.py", "creer_administrateur"],
+        cwd=RACINE,
+        check=True,
+        stdout=subprocess.DEVNULL,
+        env={
+            **os.environ,
+            "ADMIN_IDENTIFIANT": VERIFICATEUR,
+            "ADMIN_MOT_DE_PASSE": MOT_DE_PASSE_VERIFICATEUR,
+            "ADMIN_NOM": "Verificateur Automatique",
+        },
+    )
 
     port = port_libre()
     base = f"http://127.0.0.1:{port}/api"
@@ -154,6 +170,19 @@ def main() -> int:
         else:
             print("Le serveur n'a pas répondu.")
             return 1
+
+        # La connexion ne peut avoir lieu qu'ici : c'est une requête HTTP, donc
+        # elle a besoin du serveur, qui vient tout juste de répondre.
+        code, session = appeler(
+            "POST",
+            f"{base}/session-admin/connexion/",
+            {
+                "identifiant": VERIFICATEUR,
+                "mot_de_passe": MOT_DE_PASSE_VERIFICATEUR,
+            },
+        )
+        attendu("l'administrateur se connecte", code, 201)
+        jeton = session["jeton"]
 
         print("\n1. Le groupeur dépose son dossier")
         code, depot = appeler("POST", f"{base}/groupeurs/", DOSSIER)
@@ -182,10 +211,14 @@ def main() -> int:
         )
 
         print("\n3. La file d'attente de l'administrateur")
+        # ⚠️ **401 et non 403.** C'est « je ne sais pas qui vous êtes », donc
+        # l'écran doit rouvrir la feuille de connexion ; `client.ts` s'appuie
+        # dessus avec `estNonAuthentifie()`. DRF dégradait ce 401 en 403 faute
+        # de classe d'authentification — voir `sessions_admin.SchemaAdmin`.
         code, _ = appeler("GET", f"{base}/dossiers/")
-        attendu("fermée sans jeton", code, 403)
+        attendu("fermée sans session", code, 401)
         code, _ = appeler("GET", f"{base}/dossiers/", jeton="faux")
-        attendu("fermée avec un mauvais jeton", code, 403)
+        attendu("fermée avec un mauvais jeton", code, 401)
 
         code, file = appeler(
             "GET", f"{base}/dossiers/?etat=en-verification", jeton=jeton
@@ -211,7 +244,7 @@ def main() -> int:
         code, decision = appeler(
             "POST",
             f"{base}/dossiers/{identifiant}/decision/",
-            {"issue": "valide", "canal": "courriel", "decide_par": "Kephira"},
+            {"issue": "valide", "canal": "courriel"},
             jeton=jeton,
         )
         attendu("la décision passe", code, 200)
@@ -256,7 +289,6 @@ def main() -> int:
                 "issue": "refuse",
                 "motif": "doute-identite",
                 "canal": "appel",
-                "decide_par": "Kephira",
             },
             jeton=jeton,
         )
@@ -304,7 +336,7 @@ def main() -> int:
         code, erreur = appeler(
             "POST",
             f"{base}/dossiers/{restant['id']}/decision/",
-            {"issue": "refuse", "canal": "appel", "decide_par": "Kephira"},
+            {"issue": "refuse", "canal": "appel"},
             jeton=jeton,
         )
         attendu("la décision est rejetée", code, 400)

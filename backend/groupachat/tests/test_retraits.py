@@ -38,22 +38,15 @@ from groupachat.commandes.models import (
     cloturer_campagne,
     enregistrer_paiement,
 )
+from django.contrib.auth import get_user_model
+
+from groupachat.comptes import sessions_admin
 from groupachat.comptes.models import Acheteur, Groupeur
 
-#: Le jeton d'administration employé par ces tests.
-#:
-#: ⚠️ Posé par ``override_settings``, **et non dans ``os.environ``** : la
-#: permission le lit dans ``settings.JETON_ADMIN``, qui est résolu une seule
-#: fois au chargement des réglages. Écrire dans l'environnement après ce
-#: moment-là n'a aucun effet — et le symptôme est un 403 incompréhensible,
-#: avec une variable qui porte pourtant la bonne valeur.
-JETON = "jeton-de-test"
-
-
-@override_settings(JETON_ADMIN=JETON)
 class SocleArgent(TestCase):
     def setUp(self) -> None:
         self.client = APIClient()
+        self.jeton_admin = self.ouvrir_l_administration()
 
         self.groupeur = Groupeur.objects.create(
             pseudonyme="Mama Gro",
@@ -86,8 +79,29 @@ class SocleArgent(TestCase):
                 cle_idempotence=f"fil-rouge-{numero}",
             )
 
+    def ouvrir_l_administration(self) -> str:
+        """Un compte `is_staff`, une session, et le jeton qui va avec.
+
+        ⚠️ **Ces tests posaient `@override_settings(JETON_ADMIN=...)`** et
+        envoyaient la même chaîne dans l'en-tête. Le jeton partagé n'existe
+        plus : les routes d'administration exigent une session ouverte contre
+        un mot de passe. On passe donc par `sessions_admin.connecter`, c'est-à-
+        dire par le chemin réel, plutôt qu'en fabriquant un `SessionAdmin` à la
+        main — sinon le test de la connexion serait le seul à l'emprunter.
+        """
+        get_user_model().objects.create_user(
+            username="ama",
+            password="mot-de-passe-de-test",
+            first_name="Ama",
+            last_name="Koffi",
+            is_staff=True,
+        )
+        return sessions_admin.connecter(
+            "ama", "mot-de-passe-de-test"
+        ).jeton
+
     def entete(self) -> dict:
-        return {"HTTP_X_JETON_ADMIN": JETON}
+        return {"HTTP_X_JETON_ADMIN": self.jeton_admin}
 
     def numero(self) -> dict:
         return {"telephone": "+22891000001"}
@@ -427,7 +441,7 @@ class LeTableauDeBordAdmin(SocleArgent):
     def test_il_est_ferme_sans_jeton(self) -> None:
         """Il porte les montants détenus et les noms des groupeurs."""
         reponse = self.client.get("/api/administration/tableau-de-bord/")
-        self.assertEqual(reponse.status_code, 403)
+        self.assertEqual(reponse.status_code, 401)
 
     def test_les_files_mettent_l_argent_en_tete(self) -> None:
         """**Du plus coûteux au moins coûteux.**

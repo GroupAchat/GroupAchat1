@@ -3,7 +3,12 @@ import { createRoot } from "react-dom/client";
 import "../index.css";
 import { lireLeTableauDeBordAdmin } from "../api/administration";
 import { useRequete } from "../api/useRequete";
-import { lireLeJeton, oublierLeJeton, retenirLeJeton } from "./jeton";
+import {
+  lireLaSession,
+  oublierLaSession,
+  retenirLaSession,
+} from "./jeton";
+import { seDeconnecter, type SessionAdmin } from "../api/sessionAdmin";
 import Sidebar, { type EcranAdmin } from "./mise-en-page/Sidebar";
 import DemandeJeton from "./pages/DemandeJeton";
 import DossiersKyc from "./pages/DossiersKyc";
@@ -45,8 +50,14 @@ import Retraits from "./pages/Retraits";
  * | A4 | Groupages, tous etats | `pages/Groupages` |
  *
  * ⚠️ **Le port different n'est pas une mesure de securite.** Il n'authentifie
- * personne. Ce qui ferme ces ecrans est le jeton demande a l'entree, et ce
- * jeton lui-meme ne distingue pas deux administrateurs — voir `jeton.ts`.
+ * personne, et il ne faut jamais compter dessus. Ce qui ferme ces ecrans est
+ * la **connexion par identifiant et mot de passe** demandee a l'entree — voir
+ * `api/sessionAdmin.ts`.
+ *
+ * ⚠️ Ce paragraphe ajoutait : *« et ce jeton lui-meme ne distingue pas deux
+ * administrateurs »*. C'etait vrai du jeton partage qu'on recopiait depuis le
+ * `.env` du serveur ; ce ne l'est plus. Chaque administrateur a son compte, sa
+ * session, et signe les decisions KYC de son nom.
  */
 
 /**
@@ -69,21 +80,44 @@ import Retraits from "./pages/Retraits";
  */
 function Administration() {
   const [ecran, setEcran] = useState<EcranAdmin>("tableau-de-bord");
-  const [jeton, setJeton] = useState(lireLeJeton);
+  const [session, setSession] = useState(lireLaSession);
   const [jetonRefuse, setJetonRefuse] = useState(false);
+  const jeton = session?.jeton ?? "";
 
-  const poserLeJeton = (nouveau: string) => {
-    retenirLeJeton(nouveau);
-    setJeton(nouveau);
+  const ouvrirLaSession = (nouvelle: SessionAdmin) => {
+    retenirLaSession(nouvelle);
+    setSession(nouvelle);
     setJetonRefuse(false);
   };
+
+  /* La deconnexion volontaire, par le bouton de la barre laterale.
+     ⚠️ **Elle ferme la session cote serveur**, et c'est tout l'interet par
+     rapport a l'ancien jeton partage : oublier une valeur dans le navigateur
+     ne la rendait pas invalide, elle restait bonne pour qui l'avait notee.
+     Ici la session est detruite en base.
+     Le `catch` est vide a dessein : si l'appel echoue — serveur injoignable,
+     session deja expiree — on oublie quand meme le jeton localement. Refuser
+     de deconnecter quelqu'un parce que le reseau est coupe serait le pire des
+     comportements sur un poste partage. */
+  const fermerLaSession = useCallback(() => {
+    const actuelle = lireLaSession();
+    if (actuelle) {
+      void seDeconnecter(actuelle.jeton).catch(() => {});
+    }
+    oublierLaSession();
+    setSession(null);
+    setJetonRefuse(false);
+  }, []);
 
   /* `useCallback` : cette fonction part en dependance d'effets dans les
      ecrans, et une nouvelle reference a chaque rendu les relancerait en
      boucle. */
+  /* Le refus subi : le serveur a repondu 401, donc la session est deja morte
+     cote serveur — expiration des douze heures, ou `is_staff` retire. Rien a
+     fermer, seulement a oublier. */
   const refuserLeJeton = useCallback(() => {
-    oublierLeJeton();
-    setJeton("");
+    oublierLaSession();
+    setSession(null);
     setJetonRefuse(true);
   }, []);
 
@@ -128,13 +162,13 @@ function Administration() {
     });
   }, [bord.donnees]);
 
-  if (!jeton) {
+  if (!session) {
     return (
       <DemandeJeton
-        onJeton={poserLeJeton}
+        onSession={ouvrirLaSession}
         erreur={
           jetonRefuse
-            ? "Le serveur a refusé ce jeton. Vérifiez JETON_ADMIN dans le .env."
+            ? "Votre session a pris fin — douze heures écoulées, ou accès retiré. Reconnectez-vous."
             : undefined
         }
       />
@@ -142,7 +176,13 @@ function Administration() {
   }
 
   return (
-    <Sidebar actif={ecran} compteurs={compteurs} onNaviguer={setEcran}>
+    <Sidebar
+      actif={ecran}
+      compteurs={compteurs}
+      onNaviguer={setEcran}
+      nomAdmin={session.nom}
+      onDeconnexion={fermerLaSession}
+    >
       {ecran === "tableau-de-bord" ? (
         <TableauDeBordAdmin
           jeton={jeton}

@@ -38,6 +38,7 @@ from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.response import Response
 
 from .api_kyc import JetonAdmin
+from .comptes import sessions_admin
 from .catalogue.models import Campagne
 from .commandes.models import (
     Commande,
@@ -204,7 +205,15 @@ class AdministrationViewSet(viewsets.GenericViewSet):
     permission_classes = [JetonAdmin]
     #: Pas d'authentification acheteur ici : c'est un autre mécanisme et un
     #: autre public. Voir ``api_kyc.DossierViewSet`` pour le raisonnement.
-    authentication_classes: list = []
+    #: ⚠️ **``SchemaAdmin`` n'authentifie personne** — elle ne fournit que
+    #: l'en-tête ``WWW-Authenticate``, sans laquelle DRF répond **403 au lieu
+    #: de 401** à une session absente ou expirée. La distinction commande deux
+    #: écrans, et ``api/client.ts`` l'exploite déjà avec
+    #: ``estNonAuthentifie()`` : **401** rouvre la feuille de connexion,
+    #: **403** affiche un refus. Un administrateur dont la session a expiré au
+    #: milieu d'un examen de dossier doit retomber sur la feuille, pas sur un
+    #: « accès refusé » qui ne lui laisse aucun moyen de revenir.
+    authentication_classes = [sessions_admin.SchemaAdmin]
     serializer_class = CampagneAdminSerializer
     queryset = Campagne.objects.none()
 

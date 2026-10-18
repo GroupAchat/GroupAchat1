@@ -90,7 +90,7 @@ def poser_database_url(url: str) -> None:
     ⚠️ Cet outil reecrivait le fichier en entier. Tant qu'il visait
     `backend/.env`, qui ne portait que trois variables, c'etait sans
     consequence. Pointe sur le `.env` de la racine, la meme ligne effacerait
-    `JETON_ADMIN`, `SMS_FOURNISSEUR`, `CORS_ORIGINES` et les identifiants du
+    `SMS_FOURNISSEUR`, `CORS_ORIGINES` et les identifiants du
     compte administrateur — c'est-a-dire tout ce qui ne se regenere pas.
 
     Le mot de passe de l'instance change a chaque remise a neuf : c'est bien

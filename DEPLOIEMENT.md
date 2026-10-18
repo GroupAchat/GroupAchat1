@@ -93,11 +93,38 @@ contient les secrets de production, qui n'ont pas à passer par GitHub Actions. 
 `.env.exemple` du dépôt et renseigner :
 
 ```bash
-# Les trois secrets, générés sur le serveur
+# Les secrets, générés sur le serveur
 python3 -c "import secrets; print(secrets.token_urlsafe(50))"   # DJANGO_SECRET_KEY
-python3 -c "import secrets; print(secrets.token_urlsafe(32))"   # JETON_ADMIN
 python3 -c "import secrets; print(secrets.token_urlsafe(24))"   # POSTGRES_PASSWORD
+python3 -c "import secrets; print(secrets.token_urlsafe(18))"   # ADMIN_MOT_DE_PASSE
 ```
+
+⚠️ **`JETON_ADMIN` a disparu de cette liste.** L'administration était ouverte
+par un **jeton unique et partagé** que chaque administrateur recopiait à la
+main ; elle exige maintenant une **session ouverte contre un mot de passe**,
+adossée aux comptes Django filtrés sur `is_staff`.
+
+**Le premier compte se crée une fois, après les migrations :**
+
+```bash
+docker compose -f docker-compose.prod.yml run --rm \
+  -e ADMIN_IDENTIFIANT -e ADMIN_MOT_DE_PASSE -e ADMIN_NOM \
+  api python manage.py creer_administrateur
+```
+
+⚠️ **Et non `createsuperuser`** : celui-là est interactif et attendrait une
+saisie qui ne viendra jamais sur un serveur, tandis que son `--noinput` crée un
+compte **sans mot de passe utilisable** — donc une administration dans laquelle
+personne ne peut entrer. `creer_administrateur` lit l'environnement, ne demande
+rien, et est idémpotente : relancée, elle ne repose pas le mot de passe d'un
+compte existant.
+
+⚠️ **Changez ce mot de passe depuis l'admin Django une fois entré.** Un mot de
+passe passé par l'environnement traîne dans la configuration de la plateforme,
+dans l'historique du shell, parfois dans les journaux de démarrage. Il sert à
+entrer la première fois. Les comptes suivants se créent dans l'admin Django en
+cochant `is_staff`, et se révoquent en le décochant — ce qui **ferme leurs
+sessions en cours** dès la requête suivante, sans attendre les douze heures.
 
 Les valeurs qui **doivent** changer par rapport au développement :
 

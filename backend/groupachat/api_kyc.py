@@ -49,6 +49,7 @@ from rest_framework.response import Response
 from . import domaine, notifications
 from .demonstration import peupler
 from .api import ChampTelephone
+from .comptes import sessions_admin
 from .comptes.annonces import annoncer
 from .comptes.models import DecisionKyc, Groupeur, PieceKyc
 
@@ -57,44 +58,50 @@ from .comptes.models import DecisionKyc, Groupeur, PieceKyc
 
 
 class JetonAdmin(BasePermission):
-    """Un jeton partagé, lu dans l'en-tête ``X-Jeton-Admin``.
+    """Exige une session d'administration ouverte contre un mot de passe.
 
-    ⚠️ **Ce n'est pas de l'authentification, et il ne faut pas le prendre pour
-    telle.** Un jeton unique ne distingue pas deux administrateurs, ne se
-    révoque pas individuellement, et se retrouve dans un historique de shell le
-    jour où quelqu'un le colle dans un ``curl``. Le champ ``decide_par`` des
-    décisions repose d'ailleurs, pour la même raison, sur la bonne foi de celui
-    qui le remplit.
+    ⚠️⚠️ **Cette classe comparait un jeton unique et partagé**, posé dans le
+    ``.env`` du serveur sous ``JETON_ADMIN`` et recopié à la main par chaque
+    administrateur à l'ouverture de l'écran. Sa propre documentation
+    l'admettait : *« ce n'est pas de l'authentification, et il ne faut pas le
+    prendre pour telle »*. Ce qui change :
 
-    Il est quand même là, et c'est mieux que le ``AllowAny`` global du §1.5 :
-    ces routes transportent **des noms, des numéros de téléphone, des numéros
-    de pièce d'identité et des références de pièces déposées**. C'est le point
-    d'entrée le plus sensible du projet. Le laisser ouvert parce que
-    « l'authentification viendra plus tard » serait un choix, pas un oubli.
+    | | Le jeton partagé | La session |
+    |---|---|---|
+    | Distingue deux administrateurs | non | **oui** |
+    | Se révoque pour une personne | non — il faut le changer pour tous | **oui**, en décochant ``is_staff`` |
+    | Résiste à l'essai systématique | rien ne comptait les échecs | **cinq essais, puis quinze minutes** |
+    | ``décidé par`` sur une décision KYC | la bonne foi du formulaire | **le compte authentifié** |
 
-    **Il échoue fermé** : jeton absent de l'environnement, routes inaccessibles.
-    L'inverse — ouvrir faute de configuration — est l'erreur classique, et elle
-    s'installe silencieusement en production, le jour où le fichier
-    d'environnement n'est pas déployé.
+    ``settings.JETON_ADMIN`` n'est plus lu, et **aucune valeur de repli n'a été
+    laissée** : un secret partagé accepté « en plus » aurait rendu tout le
+    reste décoratif, puisqu'il suffit du plus faible des deux chemins.
+
+    **Elle échoue toujours fermée**, et c'est maintenant gratuit : sans compte
+    valide, pas d'accès. L'ancienne version devait lever une erreur explicite
+    quand la variable d'environnement manquait, parce que comparer à une chaîne
+    vide aurait **ouvert** les routes le jour où le ``.env`` n'est pas déployé.
+    Ce piège n'existe plus : il n'y a plus de variable à oublier.
+
+    Pourquoi ces routes méritent tout cela : elles transportent **des noms, des
+    numéros de téléphone, des numéros de pièce d'identité et des références de
+    pièces déposées**. C'est le point d'entrée le plus sensible du projet.
     """
 
     message = (
-        "Ces données sont réservées à l'administration. Jeton absent ou "
-        "invalide."
+        "Ces données sont réservées à l'administration. Session absente ou "
+        "expirée."
     )
 
     def has_permission(self, request, view) -> bool:
-        # Par les réglages, et non par `os.environ` : c'est `config/settings.py`
-        # qui charge le `.env` de la racine, donc lui seul voit la valeur dans
-        # tous les contextes d'import.
-        attendu = settings.JETON_ADMIN
-        if not attendu:
-            raise PermissionDenied(
-                "JETON_ADMIN n'est pas configuré sur le serveur : "
-                "l'administration des dossiers KYC est fermée. Renseignez-le "
-                "dans le .env de la racine du dépôt."
-            )
-        return request.headers.get("X-Jeton-Admin") == attendu
+        session = sessions_admin.session_de_la_requete(request)
+        if session is None:
+            return False
+        # Posée sur la requête pour que les vues sachent **qui** décide, sans
+        # refaire la lecture en base. C'est ce qui permet à ``decide_par`` de
+        # cesser d'être déclaratif.
+        request.session_admin = session
+        return True
 
 
 # ── Ce que le groupeur dépose ───────────────────────────────────────────────
@@ -351,7 +358,14 @@ class TrancherSerializer(serializers.Serializer):
         choices=Groupeur.Niveau.choices, required=False
     )
     canal = serializers.ChoiceField(choices=DecisionKyc.Canal.choices)
-    decide_par = serializers.CharField(max_length=120)
+
+    # ⚠️ **``decide_par`` a été retiré d'ici.** C'était un
+    # ``CharField(max_length=120)`` rempli par le client : n'importe quel
+    # nom pouvait signer n'importe quelle décision. Il est désormais pris
+    # sur la session authentifiée, dans la vue. Le §10.5 confie la
+    # validation d'un dossier à un humain parce que, le jour d'un litige,
+    # ce dossier est notre seul recours contre le groupeur — un journal
+    # dont l'auteur est déclaratif ne prouve rien.
 
     def validate(self, donnees: dict) -> dict:
         try:
@@ -491,19 +505,28 @@ class DossierViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = DossierSerializer
     permission_classes = [JetonAdmin]
 
-    #: ⚠️ **Aucune classe d'authentification, et c'est délibéré.**
+    #: ⚠️⚠️ **Ce raisonnement s'est inversé, et il vaut d'être dit.**
     #:
-    #: L'authentification par défaut du projet reconnaît un **acheteur** à son
-    #: jeton de session. Elle n'a rien à faire ici : ces routes sont gardées
-    #: par un jeton d'administration, qui est un tout autre mécanisme.
+    #: Cette ligne était ``authentication_classes: list = []``, et le
+    #: commentaire qui l'accompagnait défendait le **403** : laisser
+    #: l'authentification acheteur s'appliquer faisait revenir un appel sans
+    #: jeton en *401 avec ``WWW-Authenticate: Jeton``*, c'est-à-dire en
+    #: invitant l'appelant à se connecter **comme acheteur** — ce qui ne lui
+    #: aurait évidemment rien ouvert. « Je ne vous laisserai pas entrer »
+    #: était alors plus vrai que « présentez-vous ».
     #:
-    #: La laisser s'appliquer avait une conséquence concrète et trompeuse : un
-    #: appel sans `X-Jeton-Admin` revenait en **401 avec un en-tête
-    #: `WWW-Authenticate: Jeton`**, c'est-à-dire en invitant l'appelant à se
-    #: connecter comme acheteur — ce qui ne lui ouvrirait évidemment rien. Le
-    #: **403** dit la vérité : « je ne vous laisserai pas entrer », pas
-    #: « présentez-vous ».
-    authentication_classes: list = []
+    #: Cet argument tenait **parce qu'il n'existait aucune connexion
+    #: d'administration** : il n'y avait nulle part où se présenter. Il y en a
+    #: une maintenant, et « présentez-vous » devient la réponse juste.
+    #:
+    #: ``SchemaAdmin`` n'authentifie donc toujours personne — elle renvoie
+    #: ``None`` et ne remplit jamais ``request.user``, pour que rien dans le
+    #: projet ne prenne un administrateur pour un acheteur. Elle ne sert qu'à
+    #: fournir l'en-tête qui permet à DRF d'émettre un **401**, lequel fait
+    #: rouvrir la feuille de connexion côté écran via
+    #: ``client.ts: estNonAuthentifie()``. Un administrateur dont la session
+    #: expire au milieu d'un examen de dossier doit retomber sur la feuille.
+    authentication_classes = [sessions_admin.SchemaAdmin]
 
     def get_queryset(self):
         """La file, **du plus ancien au plus récent**.
@@ -543,7 +566,9 @@ class DossierViewSet(viewsets.ReadOnlyModelViewSet):
         try:
             decision = groupeur.trancher(
                 issue=donnees["issue"],
-                decide_par=donnees["decide_par"],
+                decide_par=sessions_admin.nom_pour_le_journal(
+                    request.session_admin
+                ),
                 canal=donnees["canal"],
                 motif=donnees.get("motif") or None,
                 niveau=donnees.get("niveau"),

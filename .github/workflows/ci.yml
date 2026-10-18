@@ -60,7 +60,6 @@ jobs:
       # serait jamais testé.
       DJANGO_DEBUG: "0"
       DJANGO_SECRET_KEY: cle-jetable-d-integration-continue-sans-valeur
-      JETON_ADMIN: jeton-jetable-d-integration-continue
 
     defaults:
       run:
@@ -163,7 +162,7 @@ jobs:
           cat > ../.env <<'FIN'
           POSTGRES_PASSWORD=SENTINELLE-MOT-DE-PASSE-NE-DOIT-PAS-FUIR
           DJANGO_SECRET_KEY=SENTINELLE-CLE-NE-DOIT-PAS-FUIR
-          JETON_ADMIN=SENTINELLE-JETON-NE-DOIT-PAS-FUIR
+          ADMIN_MOT_DE_PASSE=SENTINELLE-MOT-DE-PASSE-ADMIN-NE-DOIT-PAS-FUIR
           VITE_API_URL=http://127.0.0.1:8000/api
           FIN
           npm run build
@@ -224,7 +223,8 @@ jobs:
           cp .env.exemple .env
           sed -i 's/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=verification/' .env
           sed -i 's/^DJANGO_SECRET_KEY=.*/DJANGO_SECRET_KEY=verification/' .env
-          sed -i 's/^JETON_ADMIN=.*/JETON_ADMIN=verification/' .env
+          sed -i 's/^ADMIN_IDENTIFIANT=.*/ADMIN_IDENTIFIANT=verification/' .env
+          sed -i 's/^ADMIN_MOT_DE_PASSE=.*/ADMIN_MOT_DE_PASSE=verification/' .env
           docker compose config --quiet
           docker compose -f docker-compose.prod.yml config --quiet
           rm -f .env

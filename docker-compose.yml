@@ -84,10 +84,20 @@ services:
       # defaut d'un fichier de deploiement doit etre le reglage sur.
       DJANGO_DEBUG: ${DJANGO_DEBUG:-0}
       DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1}
-      # Le jeton de l'ecran A2. Sans lui, `/api/dossiers/` echoue **fermee**,
-      # ce qui est le bon comportement : l'ecran affiche une erreur, il ne
-      # montre pas de dossiers.
-      JETON_ADMIN: ${JETON_ADMIN:?renseignez JETON_ADMIN dans .env}
+      # ⚠️⚠️ **`JETON_ADMIN` a disparu d'ici, et il ne doit pas revenir.**
+      #
+      # Cette ligne etait `JETON_ADMIN: ${JETON_ADMIN:?renseignez JETON_ADMIN
+      # dans .env}`. La forme `:?` fait **echouer Compose** quand la variable
+      # manque : la laisser aurait bloque le demarrage sur un reglage que plus
+      # personne ne lit, avec un message envoyant chercher ce qui n'existe
+      # plus.
+      #
+      # L'administration se connecte desormais avec un **compte**, cree par
+      # `python manage.py creer_administrateur` depuis `ADMIN_IDENTIFIANT` et
+      # `ADMIN_MOT_DE_PASSE`. Ces deux variables ne sont **pas** passees au
+      # service : elles ne servent qu'a la commande, qu'on lance une fois.
+      # Les mettre ici les laisserait dans l'environnement du conteneur en
+      # permanence, lisibles par `docker inspect`, pour un usage unique.
       # Le code SMS qui ouvre un compte acheteur. **Sans lui, la
       # connexion repond 503 et personne ne peut commander** : Group
       # Achat n'a pas de fournisseur SMS, et un code fixe mis en ligne

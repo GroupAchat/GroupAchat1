@@ -104,7 +104,7 @@ export default defineConfig({
    *
    * ⚠️ **Ce fichier contient des secrets, et ils ne partent pas dans le
    * paquet.** Vite n'expose a `import.meta.env` que les variables prefixees
-   * `VITE_` : `POSTGRES_PASSWORD`, `DJANGO_SECRET_KEY` et `JETON_ADMIN` sont
+   * `VITE_` : `POSTGRES_PASSWORD`, `DJANGO_SECRET_KEY` et `ADMIN_MOT_DE_PASSE` sont
    * lues puis ignorees. C'est verifie par une recherche de leurs valeurs dans
    * `dist/` apres construction, pas suppose.
    */

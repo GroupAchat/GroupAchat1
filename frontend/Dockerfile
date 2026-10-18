@@ -81,6 +81,41 @@ ENV VITE_API_URL=$VITE_API_URL
 RUN npm run build
 
 
+# ── Servir l'administration ────────────────────────────────────────────────
+FROM nginx:1.27-alpine AS admin
+
+COPY --from=construction /app/dist-admin/. /usr/share/nginx/html/
+COPY nginx.admin.conf /etc/nginx/conf.d/default.conf
+
+RUN nginx -t
+
+EXPOSE 80
+
+# ⚠️ **`/admin.html` et non `/`.** Ce paquet n'a pas d'`index.html` : une sonde
+# sur `/` passerait par le repli et repondrait quand meme 200, donc elle ne
+# verifierait rien. On demande le fichier qui doit exister.
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget --quiet --tries=1 --spider http://127.0.0.1/admin.html || exit 1
+
+
+# ⚠️⚠️ **L'ordre de ces deux etapes compte, et ce n'est pas esthetique.**
+#
+# `docker build` sans `--target` construit la **derniere** etape du fichier.
+# L'administration y etait, donc une plateforme qui construit ce `Dockerfile`
+# sans preciser de cible — Coolify, Railway, Render, ou un `docker build` a la
+# main — deployait **l'ecran d'administration** la ou on attendait la boutique.
+#
+# Cet ecran montre des noms, des numeros et des references de pieces
+# d'identite. Le defaut doit donc etre le public, jamais l'interne.
+#
+# ⚠️ Cette phrase disait : *« cet ecran **s'ouvre sans mot de passe** »*.
+# Ce n'est plus vrai — l'administration se connecte par identifiant et mot
+# de passe. **Mais l'ordre des etapes compte toujours autant** : deployer
+# l'administration la ou on attendait la boutique resterait une panne
+# complete, et le mot de passe n'y changerait rien.
+#
+# **`boutique` est desormais en dernier.** Ne pas remettre `admin` apres elle.
+
 # ── Servir la boutique ─────────────────────────────────────────────────────
 FROM nginx:1.27-alpine AS boutique
 
@@ -105,20 +140,3 @@ EXPOSE 80
 # `curl`.
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget --quiet --tries=1 --spider http://127.0.0.1/ || exit 1
-
-
-# ── Servir l'administration ────────────────────────────────────────────────
-FROM nginx:1.27-alpine AS admin
-
-COPY --from=construction /app/dist-admin/. /usr/share/nginx/html/
-COPY nginx.admin.conf /etc/nginx/conf.d/default.conf
-
-RUN nginx -t
-
-EXPOSE 80
-
-# ⚠️ **`/admin.html` et non `/`.** Ce paquet n'a pas d'`index.html` : une sonde
-# sur `/` passerait par le repli et repondrait quand meme 200, donc elle ne
-# verifierait rien. On demande le fichier qui doit exister.
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --quiet --tries=1 --spider http://127.0.0.1/admin.html || exit 1

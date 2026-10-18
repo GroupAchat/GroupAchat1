@@ -352,20 +352,22 @@ CORS_ALLOW_HEADERS = (
 _EN_TEST = "test" in sys.argv
 DEMONSTRATION = not _EN_TEST and os.environ.get("DEMONSTRATION", "") == "1"
 
-#: Le jeton de l'administration des dossiers KYC (en-tete `X-Jeton-Admin`).
+#: ⚠️⚠️ **`JETON_ADMIN` a été retiré d'ici, et il ne doit pas revenir.**
 #:
-#: ⚠️ **Il est lu ICI et nulle part ailleurs.** Il l'etait directement par
-#: `os.environ.get` dans `groupachat/api_kyc.py`, ce qui avait deux
-#: consequences : la valeur echappait a `load_dotenv` si le module etait
-#: importe dans un contexte ou les reglages n'avaient pas ete charges, et le
-#: message d'erreur renvoyait l'administrateur vers `backend/.env`, fichier qui
-#: n'existe plus.
+#: Les routes d'administration étaient gardées par ce **jeton unique et
+#: partagé**, posé dans le `.env` du serveur et recopié à la main par chaque
+#: administrateur. Elles exigent maintenant une **session ouverte contre un mot
+#: de passe**, adossée aux comptes `User` de Django filtrés sur `is_staff`.
 #:
-#: Vide par defaut, et c'est le bon defaut : les routes `/api/dossiers/`
-#: **echouent fermees** quand il manque. Elles transportent des noms, des
-#: numeros et des references de pieces d'identite — le cas incertain doit
-#: refuser, jamais ouvrir.
-JETON_ADMIN = os.environ.get("JETON_ADMIN", "")
+#: **Aucun repli n'a été laissé**, et c'est le point : accepter encore un
+#: secret partagé « au cas où » aurait rendu le reste décoratif, puisqu'il
+#: suffit du plus faible des deux chemins pour entrer.
+#:
+#: On crée un administrateur par `python manage.py createsuperuser`, et on le
+#: révoque en décochant `is_staff` — ce qui ferme ses sessions en cours à la
+#: requête suivante, sans attendre leur expiration.
+#:
+#: Voir `groupachat/comptes/sessions_admin.py`.
 
 REST_FRAMEWORK = {
     # ⚠️ **Aucun mur d'authentification** (§1.5) : on parcourt le catalogue

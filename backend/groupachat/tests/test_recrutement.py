@@ -37,6 +37,9 @@ from rest_framework.test import APIClient
 
 from groupachat import notifications
 from groupachat.catalogue.models import Campagne
+from django.contrib.auth import get_user_model
+
+from groupachat.comptes import sessions_admin
 from groupachat.comptes.models import DecisionKyc, Groupeur, PieceKyc
 
 #: Le jeton d'administration utilisé par les tests.
@@ -532,27 +535,40 @@ class AnnonceDeLaDecision(TestCase):
 # ── L'API ───────────────────────────────────────────────────────────────────
 
 
-@override_settings(JETON_ADMIN=JETON)
 class SocleApi(TestCase):
-    """Pose le jeton d'administration autour de chaque test.
+    """Le socle des tests d'API du recrutement.
 
-    ⚠️ **Par les réglages, et non par `os.environ`.** Le jeton est lu une
-    seule fois, dans `config/settings.py` (`JETON_ADMIN`), et
-    `groupachat/api_kyc.py` consulte ce réglage. Poser la variable
-    d'environnement ici ne changerait donc rien : les réglages sont évalués à
-    l'import du module, bien avant le premier `setUp`.
-
-    C'est exactement la panne que ce socle a connue quand la lecture a été
-    déplacée vers les réglages sans toucher aux tests — neuf tests de ce
-    fichier sont tombés d'un coup, tous avec un 403 inexpliqué.
-
-    `override_settings` pose la valeur et la retire proprement, sans
-    `tearDown` à tenir à jour.
+    ⚠️ **Il portait `@override_settings(JETON_ADMIN="jeton-de-test")`**, avec
+    une longue note expliquant qu'il fallait passer par les réglages et non par
+    `os.environ` — la panne avait coûté neuf tests tombés d'un coup sur un 403
+    inexpliqué. Ce piège n'existe plus : **il n'y a plus de jeton partagé ni de
+    réglage à poser.** Les routes exigent une session, ouverte par
+    `ouvrir_l_administration`.
     """
 
     def setUp(self) -> None:
         self.client = APIClient()
 
+    def ouvrir_l_administration(self) -> str:
+        """Un compte `is_staff`, une session, et le jeton qui va avec.
+
+        ⚠️ **Ces tests posaient `@override_settings(JETON_ADMIN=...)`** et
+        envoyaient la même chaîne dans l'en-tête. Le jeton partagé n'existe
+        plus : les routes d'administration exigent une session ouverte contre
+        un mot de passe. On passe donc par `sessions_admin.connecter`, c'est-à-
+        dire par le chemin réel, plutôt qu'en fabriquant un `SessionAdmin` à la
+        main — sinon le test de la connexion serait le seul à l'emprunter.
+        """
+        get_user_model().objects.create_user(
+            username="ama",
+            password="mot-de-passe-de-test",
+            first_name="Ama",
+            last_name="Koffi",
+            is_staff=True,
+        )
+        return sessions_admin.connecter(
+            "ama", "mot-de-passe-de-test"
+        ).jeton
 
 class InscriptionParApi(SocleApi):
     def test_un_depot_met_le_dossier_en_file_d_attente(self) -> None:
@@ -711,9 +727,10 @@ class ExamenParApi(SocleApi):
         super().setUp()
         self.client.post("/api/groupeurs/", dossier_complet(), format="json")
         self.groupeur = Groupeur.objects.get(pseudonyme="Chez Sika")
+        self.jeton_admin = self.ouvrir_l_administration()
 
     def entete(self) -> dict:
-        return {"HTTP_X_JETON_ADMIN": JETON}
+        return {"HTTP_X_JETON_ADMIN": self.jeton_admin}
 
     def test_la_file_des_dossiers_est_fermee_sans_jeton(self) -> None:
         """**Le point d'entrée le plus sensible du projet.**
@@ -722,27 +739,49 @@ class ExamenParApi(SocleApi):
         pièces d'identité. Le laisser sous le ``AllowAny`` du §1.5 parce que
         « l'authentification viendra plus tard » serait un choix, pas un oubli.
         """
-        self.assertEqual(self.client.get("/api/dossiers/").status_code, 403)
+        # ⚠️ **401 et non 403**, et la nuance n'est pas cosmétique : c'est
+        # « je ne sais pas qui vous êtes », donc l'écran doit rouvrir la
+        # feuille de connexion. `api/client.ts` s'appuie dessus avec
+        # `estNonAuthentifie()`. Ces assertions attendaient 403, parce que
+        # DRF dégrade le 401 en 403 faute de classe d'authentification — voir
+        # `sessions_admin.SchemaAdmin`.
+        self.assertEqual(self.client.get("/api/dossiers/").status_code, 401)
         self.assertEqual(
             self.client.get(
-                "/api/dossiers/", **{"HTTP_X_JETON_ADMIN": "faux"}
+                "/api/dossiers/", **{"HTTP_X_JETON_ADMIN": "faux-jeton"}
             ).status_code,
-            403,
+            401,
         )
 
-    def test_sans_jeton_configure_l_administration_est_fermee(self) -> None:
-        """Elle **échoue fermée**.
+    def test_retirer_is_staff_ferme_les_sessions_en_cours(self) -> None:
+        """⚠️ **Ce test en remplace un autre, qui n'a plus d'objet.**
 
-        Ouvrir faute de configuration est l'erreur classique, et elle
-        s'installe silencieusement en production le jour où le fichier
-        d'environnement n'est pas déployé.
+        Il vérifiait que l'administration échouait fermée quand `JETON_ADMIN`
+        manquait dans les réglages — le piège classique du secret partagé qui
+        **ouvre** faute de configuration, le jour où le `.env` n'est pas
+        déployé. Il n'y a plus de variable à oublier.
+
+        Ce qui mérite un test à sa place, c'est la révocation, parce qu'elle
+        est la seule chose que le jeton partagé ne savait pas faire : on ne
+        pouvait retirer l'accès à une personne qu'en changeant le jeton de
+        tout le monde.
+
+        `is_staff` est donc revérifié **à chaque requête**, et pas seulement à
+        la connexion. Sans cela, décocher la case laisserait la session vivre
+        jusqu'à son expiration — douze heures pendant lesquelles quelqu'un
+        qu'on vient de retirer continuerait à lire des pièces d'identité.
         """
-        # Le réglage vide, et non la variable d'environnement retirée : c'est
-        # le réglage que la permission consulte.
-        with override_settings(JETON_ADMIN=""):
-            reponse = self.client.get("/api/dossiers/", **self.entete())
-        self.assertEqual(reponse.status_code, 403)
-        self.assertIn("JETON_ADMIN", str(reponse.data))
+        self.assertEqual(
+            self.client.get("/api/dossiers/", **self.entete()).status_code, 200
+        )
+
+        compte = get_user_model().objects.get(username="ama")
+        compte.is_staff = False
+        compte.save(update_fields=["is_staff"])
+
+        self.assertEqual(
+            self.client.get("/api/dossiers/", **self.entete()).status_code, 401
+        )
 
     def test_la_file_est_triee_du_plus_ancien_au_plus_recent(self) -> None:
         """Un dossier qui attend depuis six jours est un groupeur qui s'en va."""

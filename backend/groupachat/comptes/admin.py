@@ -42,7 +42,14 @@ from django.utils.html import format_html
 
 from .. import domaine
 from .annonces import annoncer
-from .models import Acheteur, DecisionKyc, Groupeur, PieceKyc
+from .models import (
+    Acheteur,
+    DecisionKyc,
+    Groupeur,
+    PieceKyc,
+    SessionAdmin,
+    VerrouAdmin,
+)
 
 
 @admin.register(Acheteur)
@@ -404,3 +411,98 @@ class PieceKycAdmin(admin.ModelAdmin):
     list_display = ("groupeur", "nature", "depose_le")
     list_filter = ("nature",)
     search_fields = ("groupeur__pseudonyme",)
+
+
+# ── L'administration de l'administration ─────────────────────────
+
+
+@admin.register(SessionAdmin)
+class SessionAdminAdmin(admin.ModelAdmin):
+    """Qui est connecté à l'administration, et de quand.
+
+    ⚠️ **Sans cet écran, le mécanisme serait inadministrable** : on ne verrait
+    pas qui est connecté et on ne pourrait pas couper une session — ce qui est
+    justement la chose que le jeton partagé d'avant ne savait pas faire.
+
+    ## Deux façons de retirer un accès, et elles ne font pas la même chose
+
+    | | Effet |
+    |---|---|
+    | Supprimer les sessions ici | coupe **maintenant**, mais la personne peut se reconnecter |
+    | Décocher ``is_staff`` sur son compte | coupe **et** empêche de revenir |
+
+    La seconde est la bonne pour un départ ; la première pour un poste resté
+    ouvert. Les deux agissent tout de suite : ``is_staff`` est relu à chaque
+    requête, pas seulement à la connexion.
+    """
+
+    list_display = ("utilisateur", "cree_le", "expire_le", "dernier_usage",
+                    "encore_valide")
+    list_filter = ("utilisateur",)
+    search_fields = ("utilisateur__username", "utilisateur__last_name")
+    ordering = ("-dernier_usage",)
+
+    #: ⚠️ **Le jeton n'est pas montré, et il n'est pas modifiable.** L'afficher
+    #: ferait d'un accès en lecture à l'admin Django un accès a l'identité de
+    #: tous les administrateurs connectés : il suffirait de le recopier dans un
+    #: en-tête. Le même raisonnement vaut pour ``Acheteur.mot_de_passe``, exclu
+    #: plus haut dans ce fichier.
+    exclude = ("jeton",)
+    readonly_fields = ("utilisateur", "cree_le", "expire_le", "dernier_usage")
+
+    def has_add_permission(self, request) -> bool:
+        """On n'ouvre pas une session à la main.
+
+        Une session créée ici n'aurait pas de jeton — il est exclu du
+        formulaire — donc ne servirait à rien, et le formulaire échouerait sur
+        la contrainte d'unicité à la seconde tentative. On se connecte par la
+        feuille de connexion.
+        """
+        return False
+
+    @admin.display(boolean=True, description="encore valide")
+    def encore_valide(self, objet: SessionAdmin) -> bool:
+        return objet.valide
+
+
+@admin.register(VerrouAdmin)
+class VerrouAdminAdmin(admin.ModelAdmin):
+    """Les échecs de connexion à l'administration, et de quoi débloquer.
+
+    ⚠️ **C'est le seul recours d'un administrateur verrouillé.** Côté
+    acheteur, le verrou des cinq échecs a une soupape : le code SMS reste
+    ouvert pendant tout le quart d'heure, donc personne n'est fermé dehors.
+    Ici **il n'y a pas d'autre porte** — pas de « mot de passe oublié », pas de
+    SMS. Un administrateur qui s'est verrouillé attend quinze minutes, ou un
+    autre lui lève le verrou depuis cet écran.
+
+    C'est pour cette raison que la durée est courte. Un verrou d'une heure
+    aurait fait perdre une heure à quelqu'un pour cinq fautes de frappe, sans
+    rien gagner contre l'essai systématique : cinq essais par quart d'heure
+    suffisent déjà à le rendre inutile.
+    """
+
+    list_display = ("identifiant", "echecs", "bloque_jusqu_a", "est_bloque")
+    search_fields = ("identifiant",)
+    ordering = ("-bloque_jusqu_a",)
+    actions = ("lever_le_verrou_admin",)
+
+    @admin.display(boolean=True, description="bloqué")
+    def est_bloque(self, objet: VerrouAdmin) -> bool:
+        return objet.est_bloque
+
+    @admin.action(description="Lever le verrou de connexion")
+    def lever_le_verrou_admin(self, request, queryset) -> None:
+        """⚠️ **Les deux champs, et pas seulement la date.**
+
+        Remettre `bloque_jusqu_a` à ``None`` en laissant le compteur à sa
+        valeur rendrait le verrou immédiat à la faute de frappe suivante —
+        c'est exactement le défaut que j'ai introduit puis corrigé côté
+        acheteur. Lever un verrou, c'est repartir de zéro.
+        """
+        nombre = queryset.update(echecs=0, bloque_jusqu_a=None)
+        self.message_user(
+            request,
+            f"{nombre} verrou(s) levé(s) : compteur remis à zéro.",
+            messages.SUCCESS,
+        )

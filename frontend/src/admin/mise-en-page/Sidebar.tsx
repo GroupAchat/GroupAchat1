@@ -61,6 +61,8 @@ export default function Sidebar({
   actif,
   compteurs,
   onNaviguer,
+  nomAdmin,
+  onDeconnexion,
   children,
 }: {
   actif: EcranAdmin;
@@ -74,6 +76,9 @@ export default function Sidebar({
    */
   compteurs?: Partial<Record<EcranAdmin, { nombre: number; urgent?: boolean }>>;
   onNaviguer: (ecran: EcranAdmin) => void;
+  /** Le nom du compte connecte — celui qui signera les decisions KYC. */
+  nomAdmin: string;
+  onDeconnexion: () => void;
   children: ReactNode;
 }) {
   return (
@@ -125,12 +130,29 @@ export default function Sidebar({
           })}
         </ul>
 
-        {/* ⚠️ Dit franchement ce que le jeton ne protege pas. Quelqu'un lira
-            cet ecran et en conclura que l'administration est securisee. */}
-        <p className="border-t border-filet px-5 py-4 text-xs text-texte-secondaire">
-          Jeton partagé — il n&apos;identifie personne. Les décisions portent le
-          nom qu&apos;on veut bien y mettre.
-        </p>
+        {/* ⚠️ **Ce pied de page portait un aveu** : *« Jeton partagé — il
+            n'identifie personne. Les décisions portent le nom qu'on veut bien
+            y mettre. »* Il n'a plus lieu d'etre : l'administration se connecte
+            avec un compte, et c'est ce compte qui signe. La place sert donc
+            maintenant a dire **qui** signe — ce qu'il faut savoir avant de
+            trancher un dossier, et surtout avant de le trancher depuis le
+            poste d'un collegue encore connecte. */}
+        <div className="border-t border-filet px-5 py-4">
+          <p className="text-xs text-texte-secondaire">Connecté en tant que</p>
+          <p className="mt-0.5 truncate text-sm font-semibold text-texte">
+            {nomAdmin}
+          </p>
+          <p className="mt-1 text-xs text-texte-secondaire">
+            Les décisions KYC porteront ce nom.
+          </p>
+          <button
+            type="button"
+            onClick={onDeconnexion}
+            className="mt-3 text-xs font-semibold text-texte underline underline-offset-2 hover:opacity-80"
+          >
+            Fermer la session
+          </button>
+        </div>
       </nav>
 
       <main className="min-w-0 flex-1">{children}</main>

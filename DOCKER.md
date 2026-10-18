@@ -18,25 +18,52 @@
 | `api` | construite depuis `backend/` | `8000` |
 | `taches` | l'image de l'API, sans son point d'entrée | aucun |
 
-## Le front n'est plus ici
+## Le front, et ses deux images sans nginx
 
-Il se construit avec les outils du projet, et le résultat est deux dossiers de
-fichiers statiques :
+Deux images, **un fichier chacune**, qui construisent **et** servent :
+
+| Fichier | Sert | Image |
+|---|---|---|
+| `frontend/Dockerfile` | la boutique, depuis `dist/` | `caddy:2-alpine` |
+| `frontend/Dockerfile.admin` | l'administration, depuis `dist-admin/` | `caddy:2-alpine` |
 
 ```
-npm ci && npm run build
+docker build -t boutique --build-arg VITE_API_URL=https://api.exemple.tg/api ./frontend
+docker build -t admin -f frontend/Dockerfile.admin --build-arg VITE_API_URL=https://api.exemple.tg/api ./frontend
 ```
 
-| | Dossier produit |
-|---|---|
-| **Boutique** — acheteur, groupeur, livreur | `frontend/dist/` |
-| **Administration** — écran A1 | `frontend/dist-admin/` |
+### ⚠️ Caddy, et pas nginx
 
-C'est **ce dossier-là** qu'un hébergeur doit publier, jamais `frontend/`.
-⚠️ Publier le dossier source donne une page blanche et, dans la console du
-navigateur, `Failed to load module script [...] MIME type of
-"application/octet-stream"` : le serveur rend l'`index.html` **source**, qui
-demande `/src/main.tsx`, un fichier TypeScript qu'aucun navigateur n'exécute.
+nginx a été retiré du dépôt. Ce qui le remplace n'est pas un autre serveur à
+configurer : `caddy file-server` **n'a aucun fichier de configuration**, juste
+une commande. Sa table de types MIME est interne, donc **le défaut qui a causé
+la page blanche ne peut pas se reproduire** — un `.js` sort en
+`text/javascript` sans qu'on ait rien à déclarer.
+
+### ⚠️⚠️ Ce que ces images réparent
+
+Le déploiement passait par un « site statique » où le **dossier publié** se
+règle dans l'interface de l'hébergeur. Il est resté sur le dossier source, et
+`achatgr.com` servait l'`index.html` **source** — celui qui demande
+`/src/main.tsx`, un fichier TypeScript qu'aucun navigateur n'exécute. Mesuré
+sur le domaine : `/package.json` répondait **200**, `/assets/` répondait
+**404**.
+
+Ces images **suppriment le réglage au lieu de le documenter**. Il n'y a plus de
+dossier à désigner, donc plus de dossier à se tromper. Vérifié en les faisant
+tourner : `/src/main.tsx` et `/package.json` répondent **404**, et le module
+sort en `text/javascript`.
+
+### ⚠️ Deux fichiers plutôt qu'une cible à choisir
+
+Un seul `Dockerfile` à deux cibles marcherait, et c'était la forme précédente.
+La cible se désigne alors dans un champ de l'interface — exactement le genre de
+champ qui est resté vide. Pire, `docker build` sans `--target` construit la
+**dernière** étape du fichier : avec l'administration en dernier, un hébergeur
+qui ne précise rien déploierait l'écran interne à la place du site public.
+
+Le coût assumé : les étapes de construction sont identiques dans les deux
+fichiers. Quinze lignes recopiées, contre un champ qui peut rester vide.
 
 ⚠️⚠️ **`VITE_API_URL` est une variable de CONSTRUCTION.** Vite l'inscrit en
 clair dans le JavaScript produit ; il n'existe aucun serveur Node pour la

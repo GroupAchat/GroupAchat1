@@ -113,20 +113,22 @@ function servirAdminALaRacine(): Plugin {
  * developpement le greffon ci-dessus reecrit l'URL. Le defaut etait donc
  * **invisible tant qu'on restait dans le depot**.
  *
- * ⚠️ **Et `nginx.admin.conf` n'existe plus** — nginx a ete retire du depot, le
- * deploiement passant par Coolify. Ce greffon n'est donc plus un filet de
- * securite pour les serveurs tiers : **c'est le seul chemin qui reste.**
+ * ⚠️ **Et `nginx.admin.conf` n'existe plus** — nginx a ete retire du depot.
+ * L'image de l'administration, `Dockerfile.admin`, sert `dist-admin/` avec
+ * `caddy file-server`, **sans aucun fichier de configuration**. Ce greffon
+ * n'est donc plus un filet de securite : **c'est lui qui fait repondre la
+ * racine du site.** Sans l'`index.html` qu'il ecrit, l'image rendrait un 404
+ * sur `/`.
  *
  * **Tout autre serveur statique cherche `index.html` a la racine** : celui de
  * Coolify, Netlify, Vercel, `python -m http.server`, un bucket S3. Il repond
  * 404 — ou, pire, une liste de fichiers sur une page d'administration qu'on ne
  * veut surtout pas voir indexee.
  *
- * ⚠️ **Le fichier est ajoute, pas renomme**, bien que `nginx.admin.conf` ait
- * disparu depuis. Renommer demanderait de changer `rollupOptions.input`, donc
- * le nom du fichier source, donc le greffon de developpement qui reecrit
- * l'URL vers `/admin.html` : trois pieces a bouger ensemble pour supprimer un
- * fichier d'un kilo-octet. Copier ne casse rien.
+ * ⚠️ **Le fichier est ajoute, pas renomme.** Renommer demanderait de changer
+ * `rollupOptions.input`, donc le nom du fichier source, donc le greffon de
+ * developpement qui reecrit l'URL vers `/admin.html` : trois pieces a bouger
+ * ensemble pour supprimer un fichier d'un kilo-octet. Copier ne casse rien.
  */
 function ecrireUnIndexHtml(): Plugin {
   return {

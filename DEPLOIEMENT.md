@@ -197,23 +197,25 @@ seul, Traefik aussi, nginx demande certbot. **Tant que ce n'est pas fait, ne pas
 devant de vrais acheteurs** : les numéros de téléphone et les adresses de livraison passeraient en
 clair.
 
-**Le front n'est plus déployé par ces fichiers**, et cette fois ce n'est pas un manque.
-⚠️⚠️ Ce paragraphe a dit successivement l'une et l'autre chose — *« les deux images nginx ont été
-retirées, c'est la pièce qui manque »*, puis *« le workflow publie `boutique` et `admin` »*. La
-conclusion aujourd'hui : **nginx a quitté le dépôt**, et le front est construit et servi par
-**Coolify**. Ces fichiers ne décrivent plus que la base, l'API et la tâche de clôture.
+**Le front a ses deux images, et elles ne contiennent pas nginx.**
+⚠️⚠️ Ce paragraphe a dit trois choses successives — *« les images nginx ont été retirées, c'est la
+pièce qui manque »*, puis *« le workflow publie `boutique` et `admin` »*, puis *« le front est
+construit et servi par l'hébergeur »*. **C'est ce dernier état qui a mis le site en page blanche**,
+et la raison vaut d'être retenue : il déplaçait la décision du dépôt vers un champ de formulaire
+— le *dossier publié* — et ce champ est resté sur le dossier source.
 
-Ce que l'hébergeur doit publier, c'est le **dossier construit**, jamais le dossier source :
-
-| | À construire avec | À publier |
+| Fichier | Sert | Image |
 |---|---|---|
-| Boutique | `npm ci && npm run build` | `frontend/dist/` |
-| Administration | la même commande | `frontend/dist-admin/` |
+| `frontend/Dockerfile` | la boutique, depuis `dist/` | `caddy:2-alpine` |
+| `frontend/Dockerfile.admin` | l'administration, depuis `dist-admin/` | `caddy:2-alpine` |
 
-⚠️ Publier `frontend/` donne une page blanche, et dans la console :
-`Failed to load module script [...] MIME type of "application/octet-stream"`. C'est l'`index.html`
-**source** qui est servi — il demande `/src/main.tsx`, un fichier TypeScript qu'aucun navigateur
-n'exécute.
+Ils construisent **et** servent : il n'y a plus de dossier à désigner, donc plus de dossier à se
+tromper. `caddy file-server` **n'a aucun fichier de configuration**, et sa table de types MIME est
+interne — un `.js` sort en `text/javascript` sans qu'on déclare quoi que ce soit.
+
+Mesuré sur `achatgr.com` avant la correction : `/package.json` répondait **200**, `/src/main.tsx`
+répondait **200 `application/octet-stream`**, et `/assets/` répondait **404**. Avec ces images, les
+deux premiers répondent **404** et le module sort en `text/javascript`.
 
 ⚠️⚠️ **`VITE_API_URL` est lue à la CONSTRUCTION et inscrite en clair dans le JavaScript.** Elle
 doit donc être posée côté **construction** chez l'hébergeur. En variable d'exécution elle n'a

@@ -181,21 +181,52 @@ deux paquets, boutique et administration.
 
 ## Le déploiement
 
-**Trois services en conteneur**, décrits par `docker-compose.prod.yml` : `base`,
-`api`, `taches`. Le workflow `.github/workflows/deploiement.yml` ne publie plus
-qu'une image, celle de l'API.
+**Trois services en conteneur** décrits par `docker-compose.prod.yml` — `base`,
+`api`, `taches` — et **deux images pour le front**, une par fichier :
 
-⚠️⚠️ **Ce paragraphe en annonçait cinq**, dont `boutique` et `admin` — deux
-images **nginx** construites depuis `frontend/`. **nginx a été retiré du
-dépôt** : `frontend/Dockerfile`, `nginx.boutique.conf`, `nginx.admin.conf` et
-`frontend/.dockerignore` ont été supprimés, ainsi que les services, les étapes
-de CI et les étapes de publication qui les portaient. Le front est construit et
-servi par **Coolify**.
+| Fichier | Sert | Image de base |
+|---|---|---|
+| `frontend/Dockerfile` | la boutique, depuis `dist/` | `caddy:2-alpine` |
+| `frontend/Dockerfile.admin` | l'administration, depuis `dist-admin/` | `caddy:2-alpine` |
 
-> La bonne manière de lire les trois états successifs de cette section — pas de
-> front conteneurisé, puis deux images nginx, puis plus rien — c'est que **le
-> serveur du front n'a jamais été une décision de ce dépôt**, et qu'il a fini
-> par ne plus y vivre du tout.
+⚠️⚠️ **nginx a été retiré du dépôt, et il ne doit pas revenir.**
+`nginx.boutique.conf` et `nginx.admin.conf` ont été supprimés. Ce qui les
+remplace n'est pas un autre serveur à configurer : `caddy file-server` **n'a
+aucun fichier de configuration**, juste la commande en bas de chaque
+`Dockerfile`. Sa table de types MIME est interne — c'est ce qui rend
+impossible le défaut décrit ci-dessous.
+
+> **Quatre états successifs**, et il vaut la peine de les lire ensemble : pas
+> de front conteneurisé, puis deux images nginx, puis plus d'image du tout
+> (site statique chez l'hébergeur), puis deux images sans nginx. Le troisième
+> état est celui qui a cassé : il déplaçait la décision du dépôt vers un champ
+> de formulaire, et **le champ est resté vide**.
+
+### ⚠️⚠️ Le défaut qui a mis le site en page blanche
+
+Mesuré sur `achatgr.com`, pas supposé :
+
+| | |
+|---|---|
+| `/package.json` | **200** — le code source était en ligne |
+| `/src/main.tsx` | **200 `application/octet-stream`** — l'erreur du navigateur |
+| `/assets/` | **404** — aucun fichier construit |
+
+L'hébergeur publiait `frontend/` au lieu de `frontend/dist/`, donc il servait
+l'`index.html` **source** — celui qui charge `/src/main.tsx`, un fichier
+TypeScript qu'aucun navigateur n'exécute. `npm run build` ne tournait jamais.
+
+Les deux `Dockerfile` **suppriment le réglage au lieu de le documenter** : ils
+construisent **et** servent, donc il n'y a plus de dossier à désigner. Vérifié
+en les faisant tourner : `/src/main.tsx` et `/package.json` répondent **404**,
+et le module sort en `text/javascript`.
+
+⚠️ **Deux fichiers, et pas une cible à choisir dans un `Dockerfile` unique.**
+Une cible se désigne dans un champ — exactement ce qui vient d'échouer. Et
+`docker build` sans `--target` construit la **dernière** étape : avec
+l'administration en dernier, un hébergeur qui ne précise rien déploierait
+l'écran interne à la place du site public. Le coût assumé : quinze lignes de
+construction recopiées dans les deux fichiers.
 
 ### Le front : ce qu'il faut publier, et ce qu'il ne faut surtout pas
 

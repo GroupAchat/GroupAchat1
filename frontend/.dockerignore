@@ -1,0 +1,28 @@
+# Ce que le contexte de construction ne doit pas transporter.
+
+# ── `node_modules`, la raison principale de ce fichier ─────────────────────
+# Plusieurs centaines de méga-octets, et des binaires compilés pour Windows qui
+# ne tourneraient pas dans l'image Linux. `npm ci` les réinstalle proprement
+# depuis `package-lock.json`. Sans cette ligne, l'envoi du contexte au démon
+# prend plus longtemps que toute la construction.
+node_modules/
+
+# ── Les paquets déjà construits ────────────────────────────────────────────
+# L'image les reconstruit. Les copier reviendrait à embarquer la version de la
+# machine du développeur, avec le `VITE_API_URL` qu'elle avait ce jour-là —
+# alors que c'est précisément ce que l'`ARG` du Dockerfile doit fixer.
+dist/
+dist-admin/
+
+# ── Les variables locales ──────────────────────────────────────────────────
+# ⚠️ `VITE_API_URL` est inscrit **dans le paquet** à la construction : laisser
+# entrer un `.env.local` ferait silencieusement gagner l'adresse de la machine
+# du développeur contre l'`ARG` passé au `docker build`. C'est un piège qui ne
+# produit aucun message d'erreur — le site s'affiche, et il appelle la mauvaise
+# adresse.
+.env
+.env.local
+.env.*.local
+
+.git/
+.gitignore

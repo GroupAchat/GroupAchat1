@@ -43,8 +43,9 @@ import tailwindcss from "@tailwindcss/vite";
  *
  * Ce defaut n'existe qu'en developpement : en production, le
  * un serveur statique resout l'index tout seul. ⚠️ Cette phrase citait
- * `try_files $uri $uri/` de `nginx.boutique.conf` : ce fichier a ete
- * supprime avec nginx, le deploiement passant par Coolify.
+ * `try_files $uri $uri/` de `nginx.boutique.conf` : ce fichier a ete supprime
+ * avec nginx. C'est `caddy file-server`, dans `Dockerfile`, qui sert le site
+ * maintenant — et il resout l'index sans qu'on lui dise rien.
  */
 function servirLaPresentation(): Plugin {
   const reecriveur: Connect.NextHandleFunction = (requete, _reponse, suivant) => {

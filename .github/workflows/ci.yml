@@ -194,7 +194,7 @@ jobs:
 
   # ── Les images ───────────────────────────────────────────────────────────
   images:
-    name: Image de l'API — construction à blanc
+    name: Images Docker — construction à blanc
     runs-on: ubuntu-latest
 
     steps:
@@ -215,18 +215,44 @@ jobs:
           push: false
           cache-from: type=gha,scope=api
           cache-to: type=gha,scope=api,mode=max
-      # ⚠️⚠️ **L'etape « L'image du front » a ete retiree d'ici.**
+      # ⚠️⚠️ **Les deux images du front sont de nouveau construites ici**, et ce
+      # n'est pas une verification en double du travail « Front ».
       #
-      # Elle construisait `frontend/Dockerfile` avec `target: construction`,
-      # pour verifier que `npm ci` puis `npm run build` tenaient dans une image
-      # Linux propre. **Ce `Dockerfile` n'existe plus** : nginx a quitte le
-      # depot, le deploiement passe par Coolify qui sert les fichiers
-      # statiques lui-meme.
+      # Celui-ci fait tourner `npm ci` et `npm run build` sur le coureur : il
+      # prouve que **le code** construit. Ces deux etapes-ci prouvent que
+      # **l'image sert ce qui a ete construit** — c'est-a-dire la partie qui
+      # vient d'echouer en production. Un site qui rendait son `index.html`
+      # source avec une page blanche avait, lui aussi, un `npm run build`
+      # parfaitement vert.
       #
-      # Rien n'est perdu au passage : le travail « Front » ci-dessus fait
-      # tourner les memes `npm ci` et `npm run build` sur le coureur. On
-      # verifiait deux fois la meme chose, et l'une des deux coutait une
-      # construction d'image a chaque poussee.
+      # ⚠️ `VITE_API_URL` est pose a une valeur factice : on verifie que
+      # l'image se construit, pas qu'elle vise la bonne API. La vraie adresse
+      # est passee au moment de construire pour de bon.
+      - name: L'image de la boutique
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: false
+          build-args: |
+            VITE_API_URL=http://127.0.0.1:8000/api
+          cache-from: type=gha,scope=front
+          cache-to: type=gha,scope=front,mode=max
+
+      # ⚠️ **Le meme `scope=front` que la boutique, et c'est voulu.** Les deux
+      # fichiers partagent la meme etape de construction — `npm ci` puis
+      # `npm run build` — donc un cache commun evite de reinstaller les
+      # dependances une seconde fois. Deux scopes separes doubleraient la duree
+      # de ce travail pour rien.
+      - name: L'image de l'administration
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile.admin
+          push: false
+          build-args: |
+            VITE_API_URL=http://127.0.0.1:8000/api
+          cache-from: type=gha,scope=front
+          cache-to: type=gha,scope=front,mode=max
 
 
       # Le fichier Compose doit rester lisible et ses variables résolubles.

@@ -679,14 +679,55 @@ Remplissage **`marque`** (`#FF6A00`), gouttière `surface-douce`. L'orange vif n
 
 « **acheteurs confirmés** », jamais « participants » ni « commandes » (§3). Le champ côté serveur s'appelle `objectif_participants`, mais c'est un nom interne : il ne sort pas à l'écran.
 
-### 2.6 `BandeauConfiance`
-Le bandeau de la promesse de plateforme (§1.7). **C'est le seul élément bleu de l'application** (§1.2) : fond `confiance-fond`, texte `confiance`, icône bouclier `confiance`, coins 12, **pas de bordure ni d'ombre** — le fond teinté suffit à le détacher du blanc.
+### 2.6 ~~`BandeauConfiance`~~ — **supprimé**, et `MENTION_LIVRAISON`
 
-Deux tailles : `compact` (une ligne, pour le fil) et `complet` (deux lignes, pour le détail et la confirmation).
+⚠️⚠️ **Ce composant n'existe plus, et cette section ne subsiste que pour
+empêcher qu'on le réinvente.**
 
-C'est précisément parce que tout le reste est orange que ce bandeau se détache. Dans un écran entièrement bleu, il disparaîtrait ; dans un écran orange, il arrête l'œil — et c'est le message qu'on veut faire remarquer.
+Elle le définissait en entier — *« fond `confiance-fond`, texte `confiance`,
+icône bouclier, [...] c'est le seul élément bleu de l'application »* — alors
+que le §2.0 et la liste de contrôle finale le donnaient déjà pour supprimé.
+**Le document se contredisait**, et celui qui ouvrait cette section-ci le
+réimplémentait de bonne foi.
 
-**Relis le §1.7 avant d'écrire son contenu** : la formulation est contrainte, parce que le groupeur est payé avant la livraison.
+**Pourquoi il est parti.** L'argument qui le justifiait — *« c'est précisément
+parce que tout le reste est orange que ce bandeau se détache »* — est
+exactement ce qui l'a condamné : il a fait école. Le bleu s'est réinstallé par
+petites boîtes un peu partout sur les écrans acheteur, alors que le §1.2 le
+réserve au côté groupeur. **Aucun encart bleu sur un écran acheteur.** Seule
+exception, la coche « vérifié » de 13 px à côté d'un pseudonyme : c'est une
+marque, pas une boîte de réassurance.
+
+**La promesse, elle, reste.** « Livré, ou remboursé » n'a pas disparu : elle
+est **en texte**, dans le flux de la page, sans boîte colorée autour. Là où un
+bloc demeure nécessaire — l'écran 7 — il est **neutre**, bouclier en
+`primaire` et non en `confiance`.
+
+#### `MENTION_LIVRAISON` — la phrase qui a pris sa place
+
+Ce n'est pas un composant mais **une constante de texte**, et elle obeit à une
+règle stricte : elle vit **à un seul endroit**, `MENTION_LIVRAISON` dans
+`domaine/livraison.ts`.
+
+> Les frais de livraison se règlent directement au livreur, au moment de la
+> remise.
+
+Elle s'affiche sur les **trois écrans où l'acheteur voit un total** : commande
+(écran 4), paiement (écran 5), confirmation (écran 7). En `Petit`
+`texte-secondaire`, sans encart.
+
+⚠️ **Pourquoi elle est obligatoire.** L'acheteur ne paie plus aucun frais de
+livraison à Group Achat : il règle le livreur à la remise, hors plateforme. Un
+total qui n'inclut pas la livraison n'est donc pas un mensonge — mais **ne pas
+prévenir en serait un par omission**. Il découvrirait la dépense à sa porte,
+livreur devant lui.
+
+⚠️ **Ne recopie jamais cette phrase à la main**, ni dans le code ni dans une
+maquette. Le tarif du transporteur n'a jamais été négocié ; le jour où il
+existera, la phrase doit changer **une fois et partout**.
+
+**Relis le §1.7 avant d'écrire quoi que ce soit sur l'argent** : la formulation
+reste contrainte, puisque le groupeur est payé avant la livraison.
 
 ### 2.7 `Bouton`
 Hauteur 52, coins 10, pleine largeur moins les marges.
@@ -829,7 +870,13 @@ C'est contre-intuitif pour qui vient du e-commerce, et c'est pourtant le bon cho
 
 **Donc, à ne dessiner nulle part :** prix barré, pastille de pourcentage, « économisez X F », compte à rebours de promotion, « prix habituel ». Ce qui reste, et qui suffit : le prix de la part, ce que contient une part, le nombre de participants et le temps restant.
 
-**Frais de livraison : calculés selon la position de l'acheteur** (§11.1 du cahier des charges), payés par lui, **sur une ligne distincte** du prix de la part. Le calcul réel n'existe pas encore : **la fonction renvoie 1 000 F pour toute position**. Dans les maquettes, affiche donc 1 000 F — mais **jamais comme un tarif annoncé à l'avance**.
+**Aucun frais de livraison n'est facturé à l'acheteur.** Il paie **sa part, et rien d'autre**, et il règle la livraison **au livreur, à la remise** — hors plateforme. Group Achat n'encaisse donc rien à ce titre, et son seul revenu reste les 1 500 F par groupage abouti, à la charge du groupeur.
+
+> ⚠️⚠️ **Ce paragraphe disait : « Frais de livraison calculés selon la position de l'acheteur, payés par lui, sur une ligne distincte [...] la fonction renvoie 1 000 F pour toute position. Dans les maquettes, affiche donc 1 000 F. »** `FRAIS_LIVRAISON_PROVISOIRES` vaut maintenant **zéro**, côté serveur comme côté client, et les récapitulatifs masquent la ligne tant qu'elle est nulle.
+
+> ⚠️ **Cela oblige à prévenir.** Un total qui n'inclut pas la livraison n'est pas un mensonge, mais ne rien dire en serait un par omission : l'acheteur découvrirait la dépense à sa porte, livreur devant lui. D'où `MENTION_LIVRAISON` (§2.6), affichée sur les trois écrans où il voit un total.
+
+> ⚠️ **Et le montant n'est pas connu.** Le tarif de l'agence partenaire n'a jamais été négocié — `LIVRAISON.md`, le dossier qui devait le porter, a été supprimé. **Aucun écran ne l'annonce**, pas même sous la forme d'un « à partir de ».
 
 **La commande fil rouge :** C1, 1 part. **`4 000 F` payés — la part, et rien d'autre.** Code de livraison **`K7M-4PQ`**.
 
@@ -889,9 +936,35 @@ Les additions doivent tomber juste à l'écran : un jury vérifie ce genre de ca
 **De haut en bas** *(aligné sur ta maquette)*
 
 1. **Le média à bord perdu** : photo ou vidéo 9:16 couvrant tout l'écran. Un dégradé `voile` en haut sur 120 px et en bas sur 280 px, sans quoi aucun texte n'est lisible.
-2. **Barre de recherche flottante**, posée sur le média, coins arrondis, fond blanc à 92 % d'opacité : « **Rechercher un produit…** » avec l'icône de loupe. À droite, un bouton `secondaire` compact « **Demander** » → écran 11.
+2. **Une loupe**, posée sur le média — **pas un champ de recherche**. À sa
+   droite, un bouton `secondaire` compact « **Demander** » → écran 11.
 
-   La recherche en clair plutôt qu'une icône, c'est un choix fort et c'est le bon : sur un fil vertical, rien ne dit à l'utilisateur qu'il peut chercher autre chose que ce qui défile. Une loupe se remarque moins qu'un champ.
+   Au toucher, le champ **se déplie** sur une seconde ligne, qui n'existe que
+   pendant la recherche. On le referme avec une croix, et **la fermeture efface
+   le filtre** : laisser une recherche active derrière une loupe repliée
+   donnerait un fil mystérieusement incomplet.
+
+   ⚠️⚠️ **Ce paragraphe disait exactement l'inverse, et avec un argument :**
+   *« La recherche en clair plutôt qu'une icône, c'est un choix fort et c'est
+   le bon : sur un fil vertical, rien ne dit à l'utilisateur qu'il peut
+   chercher autre chose que ce qui défile. Une loupe se remarque moins qu'un
+   champ. »*
+
+   **L'utilisateur a tranché pour la loupe**, et la raison est mesurable : sur
+   390 px, le champ occupait une ligne entière, en permanence, par-dessus le
+   média qui est le cœur de l'écran.
+
+   ⚠️ **Ce que ça coûte, et il faut le dire : la découvrabilité.** L'argument
+   ci-dessus reste vrai — une loupe se remarque moins. C'est un coût accepté,
+   pas un coût disparu.
+
+   ⚠️ **Et c'est le seul champ de recherche de l'application** : le replier
+   sans le rendre atteignable aurait purement supprimé la recherche. La loupe
+   doit donc rester visible à tout moment sur le fil.
+
+   Le code est déjà à jour : voir `acheteur/mise-en-page/EnTeteApplication.tsx`,
+   qui porte la même note.
+
 3. **Rail d'actions vertical à droite**, icônes blanches de 28, libellé 12 dessous :
    - 💬 **Questions** — « **7** » → écran 10
    - ↗️ **Partager**
@@ -1007,17 +1080,33 @@ Sa fiche reste atteignable par son lien, donc ce cas arrive pour de vrai. Le bou
 4. **`CompteurTemps`** : « 🕐 Plus que 2 jours — se termine le 7 octobre à 23 h 59 ».
 5. **`JaugeParticipants`** (§2.5) : « **32** sur 40 acheteurs », barre remplie à 80 %.
 6. **Pseudonyme**, non cliquable, sans aucun autre détail : « Proposé par **Mama Gro** ».
-7. **`BandeauConfiance`** version `complet` — **avant le bouton, pas après** :
-   > 🛡️ **Vous êtes livré, ou remboursé**
-   > Vous êtes livré, ou remboursé. Si la campagne n'aboutit pas, Group Achat vous rembourse intégralement.
+7. **La promesse, en texte — pas en bandeau.**
+
+   ⚠️ **Cette étape demandait un `BandeauConfiance` version `complet`, « avant
+   le bouton, pas après ».** Le composant a été supprimé (§2.6) : c'était une
+   boîte bleue sur un écran acheteur, ce que le §1.2 interdit.
+
+   Rien à dessiner à la place : les règles du point 11 ci-dessous **portent
+   déjà la promesse**, en liste à puces — *« Si le groupage n'aboutit pas, vous
+   êtes remboursé intégralement »*. Le bandeau répétait, dans une boîte, une
+   phrase qui figure dix lignes plus bas.
 8. **Ce que contient une part :** « 1 écouteur filaire avec micro, garantie 3 mois », en bloc distinct — c'est la question que tout acheteur se pose en premier.
 9. **Description** sur 4 lignes, avec « Voir plus ».
 10. **Livraison**, en bloc distinct :
     - « Livraison à domicile par notre partenaire »
     - « Sous 3 à 5 jours après la clôture »
-    - « **Frais de livraison selon votre position** » en `Corps-fort`, puis « à partir de 1 000 F » en `Petit`.
+    - `MENTION_LIVRAISON` (§2.6) en `Petit` : « Les frais de livraison se
+      règlent directement au livreur, au moment de la remise. »
 
-      **Ne promets pas de tarif unique ici.** À ce stade l'acheteur n'a pas encore indiqué où il est, donc l'écran ne peut pas connaître son prix. Écrire « 1 000 F partout » serait un engagement que le vrai calcul ne tiendra pas — et revenir dessus après coûterait bien plus que de ne jamais le dire.
+      ⚠️⚠️ **Cette ligne demandait « Frais de livraison selon votre position »,
+      puis « à partir de 1 000 F »**, avec un avertissement sur le danger
+      d'annoncer un tarif unique. L'avertissement était juste ; il ne va plus
+      assez loin. **Group Achat ne facture aucun frais de livraison**, et le
+      tarif de l'agence partenaire **n'a jamais été négocié**.
+
+      ⚠️ **N'écris donc aucun montant ici, pas même un « à partir de ».** On
+      écrit qu'on ne connaît pas le prix plutôt que de l'inventer. Le jour où
+      il existera, il s'écrira dans `MENTION_LIVRAISON`, **une seule fois**.
 11. **Les règles**, en liste à puces :
     - « Paiement à la commande, versé au portefeuille du groupeur et retirable seulement à la clôture »
     - « Le groupeur décide à la clôture si la commande passe »
@@ -1126,26 +1215,56 @@ C'est l'autre moitié de l'écran 4, et elle est nouvelle. Elle s'ouvre depuis l
    | **Position imprécise ou introuvable** | On garde ce que le téléphone a donné et on demande un repère plus précis. On ne bloque pas |
 
    > **Une règle d'anonymat à ne pas perdre ici** (§1.7) : la position précise est une donnée personnelle, et elle **ne remonte jamais au groupeur** — lui ne voit que des codes et des quartiers (écran 15). Elle ne sort qu'une fois, vers le livreur, le jour de la tournée (écran 22).
-6. **Récapitulatif** — trois lignes, et le total est la seule valeur en style `Prix` :
+6. **Récapitulatif** — **deux lignes**, et le total est la seule valeur en
+   style `Prix` :
    - 1 part × 4 000 F → `4 000 F`
-   - Livraison à Tokoin → `1 000 F`
    - **Total à payer** → **`4 000 F`**
 
-   **Deux états à maquetter pour la ligne de livraison**, puisque son montant dépend de la position :
+   Sous le total, en `Petit` `texte-secondaire`, `MENTION_LIVRAISON` (§2.6) :
 
-   | État | Affichage |
-   |---|---|
-   | **Position pas encore donnée** | « Livraison » → *« selon votre position »* en `texte-secondaire`. Le total affiche « — », et le bouton « Payer » est `desactive` |
-   | **Position connue** | « Livraison à Tokoin » → `1 000 F`, et le total se calcule |
+   > Les frais de livraison se règlent directement au livreur, au moment de la
+   > remise.
 
-   Le premier état est celui qu'on oublie, et c'est pourtant celui que l'utilisateur voit en arrivant sur l'écran. **Un total ne doit jamais s'afficher faux en attendant une saisie.**
+   ⚠️⚠️ **Il n'y a plus de ligne « Livraison », et ce passage en décrivait une
+   longuement.** Il demandait trois lignes, dont « Livraison à Tokoin →
+   `1 000 F` », puis **deux états à maquetter** selon que la position était
+   connue ou non, puis une zone non desservie. Tout cela reposait sur des
+   frais facturés par Group Achat. **Il n'y en a plus** :
+   `FRAIS_LIVRAISON_PROVISOIRES` vaut zéro, côté serveur comme côté client, et
+   les récapitulatifs **masquent la ligne tant qu'elle est nulle**.
 
-   À prévoir aussi, même si ça n'arrive pas dans la démonstration : une zone **non desservie**. `Encart` `attention` — « Nous ne livrons pas encore à Kpalimé. »
+   Le document se contredisait d'ailleurs à trois lignes d'intervalle : il
+   additionnait `4 000 F` et `1 000 F` pour un total de `4 000 F`.
 
-   La ligne de livraison est **distincte et visible**, jamais fondue dans le prix de la part. Deux raisons : les frais varient selon la position alors que la part est la même pour tous, et l'acheteur doit pouvoir vérifier qu'on ne lui a rien glissé dans le total.
+   **Ce qui disparaît avec la ligne**, et c'est autant de moins à dessiner :
+   l'état « total en attente de la position », le bouton désactivé tant que le
+   montant est inconnu, et l'`Encart` « zone non desservie ». Le total est
+   **connu dès l'ouverture de l'écran**.
+
+   ⚠️ **Ce qui ne disparaît pas : la position est toujours demandée.** Elle ne
+   sert plus à calculer un prix, elle sert au **livreur** — c'est elle qu'il
+   suit le jour de la tournée (écran 22). Elle reste conservée sur la
+   commande, et elle redeviendrait la base d'un calcul si les frais revenaient.
+
+   ⚠️ **Et la règle d'anonymat tient toujours** : la position précise ne
+   remonte **jamais** au groupeur, qui ne voit que des codes et des quartiers.
+
 
    **Supprimé : la variante « tarif calculé plus tard ».** Elle existait quand les frais hors de Lomé étaient à définir. Désormais le prix est **toujours connu avant le paiement** — soit la fonction renvoie un montant pour cette position, soit elle répond que la zone n'est pas desservie. Il n'y a pas de troisième cas, et c'est un progrès : **on ne demande jamais à quelqu'un de payer un total qu'on complétera plus tard.**
-7. **`BandeauConfiance`** version courte.
+7. **`MENTION_LIVRAISON`**, en `Petit` `texte-secondaire`, juste sous le total.
+
+   ⚠️ **Cette étape demandait un `BandeauConfiance` version courte** — supprimé
+   (§2.6). Ce qui prend sa place n'est pas une réassurance mais un
+   **avertissement**, et il est plus utile :
+
+   > Les frais de livraison se règlent directement au livreur, au moment de la
+   > remise.
+
+   La phrase vit **à un seul endroit** dans le code — `MENTION_LIVRAISON`, dans
+   `domaine/livraison.ts` — et s'affiche sur les trois écrans où l'acheteur voit
+   un total : commande, paiement, confirmation. ⚠️ **Ne la recopie jamais à la
+   main** : le jour où le tarif du transporteur sera connu, elle doit changer
+   une fois et partout.
 8. Case à cocher « J'accepte les conditions de vente » (lien). Non cochée par défaut, bouton désactivé tant qu'elle ne l'est pas.
 9. **Bouton ancré : « Payer 4 000 F ».** Le montant du bouton est le total, qui est le prix de la part — la livraison n'y est pas, elle se règle au livreur.
 
@@ -1184,9 +1303,26 @@ C'est l'autre moitié de l'écran 4, et elle est nouvelle. Elle s'ouvre depuis l
 2. **Pastille de succès :** rond `succes-fond` 72, coche `succes` 40.
 3. **Titre :** « Commande confirmée »
 4. **Sous-titre :** « Vous êtes la 33ᵉ personne à commander cette campagne. »
-5. **`BandeauConfiance` en version développée** — le plus grand de l'application :
-   > 🛡️ **Vos 4 000 F vont au portefeuille du groupeur**
-   > Ils sont détenus jusqu'à la clôture du groupage. **S'il n'aboutit pas, vous êtes remboursée intégralement.**
+5. **Un bloc neutre**, icône bouclier en `primaire` à gauche, texte à droite.
+   **Pas de fond coloré, pas de bleu.**
+
+   ⚠️ **Cette étape demandait un `BandeauConfiance` « en version développée, le
+   plus grand de l'application »** — supprimé (§2.6). Le bloc reste, parce
+   qu'ici il est justifié : c'est le moment où l'acheteur range son téléphone.
+   Mais il est **neutre**, et le bouclier est orange, pas bleu.
+
+   > **Vos 4 000 F vont au portefeuille du groupeur**
+   > Il ne peut les retirer qu'à la clôture du groupage, pour commander chez le
+   > fournisseur. Si celui-ci n'aboutit pas, vous êtes remboursé intégralement.
+   >
+   > Les frais de livraison se règlent directement au livreur, au moment de la
+   > remise.
+
+   La dernière ligne est `MENTION_LIVRAISON` (§2.6). ⚠️ **Elle est ici plus
+   qu'ailleurs indispensable** : c'est le dernier écran avant qu'il repose son
+   téléphone, et il doit savoir qu'une somme reste à prévoir le jour de la
+   remise. Ne pas le dire serait un mensonge par omission — il découvrirait la
+   dépense à sa porte, livreur devant lui.
 
    ⚠️ **Ne pas écrire à l'acheteur que l'argent est « versé au groupeur à la clôture ».** C'est désormais inexact — la somme est inscrite à son portefeuille dès le paiement (§9 du cahier des charges) — et surtout cette phrase ne lui dit pas ce qu'il veut savoir. Ce qui le rassure, c'est que **rien n'est retirable avant la clôture** et que l'annulation le rembourse.
 
@@ -1214,7 +1350,9 @@ C'est l'autre moitié de l'écran 4, et elle est nouvelle. Elle s'ouvre depuis l
 | Baskets homme — Lomé Deals | 10 800 F | **Livrée** — 28 septembre |
 | Savon de Marseille — Chez Sika | 10 500 F | **Remboursée** — campagne annulée |
 
-Les montants de cette liste sont des **totaux payés**, livraison comprise : chacun est le prix de la part du §3 plus 1 000 F. C'est ce que l'acheteur a réellement débité, donc c'est ce qu'il doit retrouver ici.
+Les montants de cette liste sont des **totaux payés**, et chacun est **exactement le prix de la part** du §3.
+
+> ⚠️ **Cette phrase disait : « totaux payés, livraison comprise : chacun est le prix de la part plus 1 000 F ».** L'acheteur ne paie plus aucun frais de livraison à Group Achat. Si des captures anciennes montrent des totaux supérieurs au prix de la part, elles sont périmées.
 
 La ligne « Remboursée » est à garder : elle montre que la promesse de remboursement n'est pas qu'une phrase dans les conditions.
 
@@ -1501,7 +1639,9 @@ Délai de livraison annoncé · zones couvertes · et un choix en deux cartes :
 - « **J'utilise le service partenaire de Group Achat** » — l'option par défaut
 - « **J'ai mon propre livreur** » — il gère alors ses livraisons lui-même
 
-Sous ce choix, une mention qui évite un malentendu : « Les frais de livraison (1 000 F dans Lomé) sont payés par l'acheteur et vont au transporteur. Ils n'entrent jamais dans votre solde. »
+Sous ce choix, une mention qui évite un malentendu : « Les frais de livraison sont payés par l'acheteur **au livreur, à la remise**. Ils ne passent jamais par Group Achat et n'entrent jamais dans votre solde. »
+
+> ⚠️ **Cette mention annonçait « 1 000 F dans Lomé ».** Le tarif de l'agence partenaire **n'a jamais été négocié** — `LIVRAISON.md`, le dossier qui devait le porter, a été supprimé du dépôt. On écrit qu'on ne le connaît pas plutôt que de l'inventer, et **aucun écran ne l'annonce**.
 
 **Écran de fin :** récapitulatif + « Publier la campagne ». Puis une confirmation avec **« Partager sur WhatsApp »** bien visible : c'est par là que les groupeurs amènent leurs contacts existants, et l'ignorer serait ignorer comment ce marché fonctionne.
 
@@ -1808,6 +1948,111 @@ Un tableau de bord qui donne un chiffre sans point de comparaison ne sert à rie
 
 **Chrome neutre**, ni orange ni bleu. Fond `surface-douce`, cartes blanches. Les deux chromes de marque appartiennent aux deux publics ; l'outil interne n'en porte aucun, et cette neutralité est utile : elle évite de confondre une capture d'écran interne avec le produit.
 
+### A1.0 — La feuille de connexion, avant tout le reste
+
+⚠️⚠️ **Cette section est nouvelle, et son absence était le plus gros trou du
+document.** L'écran A1 **s'ouvrait sans mot de passe** — il était gardé par un
+**jeton unique et partagé**, posé dans le `.env` du serveur et recopié à la
+main par chaque administrateur. Le code qui le portait l'admettait : *« ce
+n'est pas de l'authentification, et il ne faut pas le prendre pour telle »*.
+
+Il y a maintenant **de vrais comptes**. Ce que ça change :
+
+| | Le jeton partagé | La session |
+|---|---|---|
+| Distingue deux administrateurs | non | **oui** |
+| Se révoque pour une personne | non — il fallait le changer pour tous | **oui** |
+| Résiste à l'essai systématique | rien ne comptait les échecs | **5 essais, puis 15 minutes** |
+| « décidé par » sur une décision KYC | ce qu'on voulait bien saisir | **le compte connecté** |
+
+Le dernier n'est pas cosmétique. Le §10.5 du cahier des charges confie la
+validation d'un dossier à un humain parce que, le jour d'un litige, **ce
+dossier est notre seul recours contre le groupeur**. Un journal dont l'auteur
+est un champ de texte libre ne prouve rien.
+
+**À dessiner : une carte centrée, 1 280 × 800, chrome neutre.**
+
+1. Titre — « **Administration Group Achat** »
+2. Une phrase qui dit pourquoi c'est fermé : « Ces écrans affichent des noms,
+   des numéros de téléphone et des références de pièces d'identité. »
+3. Champ « **Identifiant** »
+4. Champ « **Mot de passe** », masqué
+5. Bouton plein « **Ouvrir l'administration** », désactivé tant qu'un des deux
+   champs est vide, en état `chargement` pendant l'envoi
+
+⚠️ **Pas de code SMS ici, et pas de « mot de passe oublié ».** L'acheteur a le
+code SMS comme voie de récupération ; l'administrateur n'en a aucune. Un
+administrateur qui a perdu son mot de passe le fait réinitialiser par un autre,
+dans l'admin Django. C'est assumé : ce sont quelques personnes, pas un public.
+
+#### ⚠️⚠️ Un seul message d'erreur pour trois causes
+
+Identifiant inconnu, mot de passe faux, compte sans droits : **la même phrase**,
+mot pour mot.
+
+> Identifiant ou mot de passe incorrect.
+
+Distinguer « cet identifiant n'existe pas » de « mauvais mot de passe » dirait
+à qui essaie **quels identifiants existent**, et lui permettrait de n'attaquer
+que ceux-là. C'est la différence entre deviner deux secrets et n'en deviner
+qu'un. **Ne dessine jamais deux messages distincts ici**, même si l'un semblerait
+plus serviable.
+
+#### Le verrou
+
+Au **cinquième** échec, la connexion se ferme **quinze minutes**, et le message
+change pour annoncer le délai restant :
+
+> Trop de tentatives. Réessayez dans 14 minute(s).
+
+⚠️ **Le verrou s'annonce à l'instant où il est posé**, pas à la tentative
+suivante. Sinon la personne passerait le quart d'heure à chercher un mot de
+passe qui, de toute façon, ne serait pas accepté.
+
+⚠️ **Quinze minutes et pas davantage**, parce qu'**il n'y a pas d'autre porte**.
+Côté acheteur, le code SMS reste ouvert pendant le verrou, donc personne n'est
+fermé dehors. Ici, un administrateur verrouillé attend, ou un collègue lui lève
+le verrou depuis l'admin Django.
+
+#### La session, et où elle se voit
+
+**Douze heures, et elle ne glisse pas** : l'échéance est posée à l'ouverture et
+ne bouge plus. ⚠️ C'est volontairement différent de la session acheteur, qui
+dure trente jours **glissants** : là-bas refaire un code SMS à chaque visite
+ferait perdre des acheteurs, ici l'écran montre des pièces d'identité. Douze
+heures couvrent une journée de travail.
+
+**Le pied de la barre latérale** porte l'identité, et c'est la seule chose qui
+change dans le chrome de A1 :
+
+> Connecté en tant que
+> **Ama Koffi**
+> Les décisions KYC porteront ce nom.
+> *Fermer la session*
+
+⚠️ **Ce pied de page portait un aveu** : *« Jeton partagé — il n'identifie
+personne. Les décisions portent le nom qu'on veut bien y mettre. »* Il n'a plus
+lieu d'être. La place sert désormais à dire **qui** signe — ce qu'il faut savoir
+avant de trancher un dossier, et surtout avant de le trancher depuis le poste
+d'un collègue resté connecté.
+
+#### Ce qui ne se dessine pas
+
+**La création d'un compte** : elle se fait par
+`python manage.py creer_administrateur`, en ligne de commande, et les comptes
+suivants dans l'admin Django en cochant `is_staff`.
+
+**La révocation** : on décoche `is_staff`, et **les sessions en cours tombent à
+la requête suivante** — pas au bout de douze heures. Il n'y a donc aucun écran
+« gérer les administrateurs » à maquetter, et il ne faut pas en inventer un :
+l'admin Django le fait déjà, mieux et avec un journal.
+
+⚠️ **La déconnexion ferme la session côté serveur**, elle ne se contente pas
+d'oublier le jeton dans le navigateur. C'est tout l'écart avec le jeton
+partagé : l'oublier ne le rendait pas invalide, il restait bon pour qui l'avait
+noté. Les **autres** sessions du même compte survivent — fermer l'onglet d'un
+poste partagé ne doit pas déconnecter la même personne de son téléphone.
+
 ### L'ordre vertical, qui est tout le propos
 
 **1. Les alertes**, pleine largeur, en haut. Une ligne par alerte, la plus grave en premier. `Encart` `danger` pour un changement de compte Mobile Money, `attention` pour un plafond approché. **Rien quand il n'y a rien** — pas de bloc vide « aucune alerte », qui prend de la place et apprend à ignorer la zone.
@@ -1917,7 +2162,7 @@ Garantie     3 mois
 Livraison
 À domicile par notre partenaire
 Sous 3 à 5 jours après la clôture
-Frais de livraison selon votre position — à partir de 1 000 F CFA
+Les frais de livraison se règlent directement au livreur, à la remise.
 Les règles
 Paiement à la commande, versé au groupeur, retirable à la clôture
 Le groupeur décide à la clôture si la commande passe
@@ -1955,8 +2200,8 @@ Repère : rue des Cocotiers, près de la pharmacie Sodji
 Numéro à joindre à la livraison
 Récapitulatif
 1 part × 4 000 F CFA            4 000 F CFA
-Livraison à Tokoin              1 000 F CFA
 Total à payer                   4 000 F CFA
+Les frais de livraison se règlent directement au livreur, à la remise.
 Groupeur sélectionné · Livré ou remboursé
 J'accepte les conditions de vente
 Payer 4 000 F CFA
@@ -2012,7 +2257,6 @@ Votre code de livraison
 K7M-4PQ
 Récapitulatif
 Part        4 000 F CFA
-Livraison   1 000 F CFA
 Total       4 000 F CFA
 Payée le 5 octobre
 Livrer à : Tokoin, rue des Cocotiers, près de la pharmacie Sodji
@@ -2336,7 +2580,7 @@ Six détails qui font la différence devant un jury :
 - [ ] L'écran 22 n'affiche **aucun montant**, et le numéro de l'acheteur n'apparaît nulle part ailleurs.
 - [ ] **Nulle part de texte blanc sur `marque` `#FF6A00`** (2,87:1). Les boutons pleins sont en `primaire` `#CC4A00`.
 - [ ] `marque` n'apparaît qu'avec du texte ou une icône sombre : compteur du fil, statut « en cours de livraison », bouton flottant, barre de progression.
-- [ ] **Écrans acheteur (1 à 12) : chrome orange.** Au plus un élément bleu par écran, et c'est le bandeau de confiance ou un statut « argent détenu ». Aucun bouton, lien ou onglet actif bleu.
+- [ ] **Écrans acheteur (1 à 12) : chrome orange, et **aucun** élément bleu.** ⚠️ Cette ligne en tolérait un par écran — *« le bandeau de confiance ou un statut argent détenu »*. Le `BandeauConfiance` a été supprimé (§2.6) et les encarts `info` sont passés au neutre. **Seule exception : la coche « vérifié » de 13 px** à côté d'un pseudonyme — c'est une marque, pas une boîte de réassurance.
 - [ ] **Écrans groupeur (13 à 20) : chrome bleu.** Au plus un bloc orange par écran, et c'est une urgence. Aucun bouton ni onglet actif orange.
 - [ ] Les statuts « argent détenu » passent en **neutre** sur les écrans groupeur.
 - [ ] **Nulle part de texte orange sur un aplat bleu** (3,61:1) — une pastille pleine, oui ; du texte courant, non.
@@ -2356,3 +2600,7 @@ Six détails qui font la différence devant un jury :
 - [ ] L'article de démonstration est l'**écouteur filaire à 4 000 F**, et les additions tombent juste : 32 × 4 000 = 128 000 F, moins 1 500 F de frais = **126 500 F retirables**.
 - [ ] L'écran 21 a son **état vide dessiné**, et il ne montre **ni nom d'acheteur, ni classement entre groupeurs**.
 - [ ] L'écran 14 saisit le **prix pour 1 pièce**, et les paliers de quantité affichent leur prix unitaire calculé.
+- [ ] **Aucune ligne « Livraison » dans un récapitulatif acheteur**, et **aucun montant de livraison nulle part** — pas même un « à partir de ». Le total est **exactement le prix de la part**, connu dès l'ouverture de l'écran (§3).
+- [ ] `MENTION_LIVRAISON` apparaît sur les **trois** écrans où l'acheteur voit un total — commande, paiement, confirmation — et **nulle part elle n'est recopiée à la main** (§2.6).
+- [ ] **Sur téléphone, la recherche est une loupe**, pas un champ permanent. Elle se déplie au toucher et la fermeture efface le filtre (écran 1).
+- [ ] **L'écran A1 ne s'ouvre pas sans mot de passe** : feuille de connexion identifiant + mot de passe, **un seul message d'erreur pour les trois causes de refus**, verrou de 15 minutes au cinquième échec, et le pied de la barre latérale dit **qui signera les décisions KYC** (§A1.0).

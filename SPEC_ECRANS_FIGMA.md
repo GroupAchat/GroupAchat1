@@ -596,7 +596,11 @@ C'est l'élément où les deux chromes se voient le plus : la barre de navigatio
 
 Sur le fil, la barre est posée sur le média avec un dégradé `voile` derrière elle.
 
-### 2.3 `LigneCampagne` — version liste
+### 2.3 `LigneGroupage` — version liste
+
+⚠️ **Il s'appelait `LigneCampagne` dans ce document**, et `LigneGroupage` dans le code. Le produit dit « groupage », pas « campagne » — c'est le nom du code qui fait foi.
+
+⚠️⚠️ **Et ce n'est plus le composant du catalogue.** Celui-ci affiche des **cartes en grille** (`CarteGroupage`, §2.15). `LigneGroupage` sert aux **listes compactes**. La phrase ci-dessous — *« ce n'est pas une carte »* — reste vraie de ce composant-ci, et fausse du catalogue.
 Pour la recherche et les listes, à côté du fil plein écran.
 
 **Ce n'est pas une carte.** Sur fond blanc, une carte blanche n'existe pas : c'est une **ligne**, séparée de la suivante par un filet de 1 px et par du vide. Rien ne l'encadre.
@@ -828,6 +832,143 @@ Sert au suivi de commande (écran 9) et à la confirmation (écran 7).
 
 ---
 
+
+### 2.15 `CarteGroupage` — la carte du catalogue
+
+⚠️⚠️ **C'est l'élément le plus visible de l'application, et il ne figurait
+nulle part dans ce document.** Le §2 décrivait 14 composants quand le code en
+compte 43 ; celui-ci manquait, avec les en-têtes et le pied de page. Une IA à
+qui on donnait ce fichier pour dessiner les écrans devait donc **l'inventer**.
+
+Carte verticale, bord à bord dans sa colonne de grille :
+
+```
+  ┌────────────────────────┐
+  │   photo, format 4:3    │   ← `object-cover`, fond `surface-douce`
+  ├────────────────────────┤
+  │ Écouteurs filaires...  │   titre, `Corps-fort`
+  │ 4 000 F  / part        │   prix en `primaire`, « / part » en secondaire
+  │ description, 2 lignes  │   `line-clamp-2`, `texte-secondaire`
+  │                        │
+  │ ▓▓▓▓▓▓▓▓░░  32/40       │   `JaugeParticipants` (§2.5)
+  │ Plus que 2 jours        │   `CompteurTemps` (§2.4)
+  │ Mama Gro ✔              │   pseudonyme + coche « vérifié »
+  └────────────────────────┘
+```
+
+**Bordure `bordure` 1 px, coins 12, aucune ombre.** Au survol et au focus, la
+bordure passe en `primaire` — c'est le seul changement, et la photo grandit de
+3 %.
+
+⚠️ **La coche « vérifié » est le seul bleu autorisé sur un écran acheteur**
+(§1.2, §2.6). 13 px, à côté du pseudonyme, jamais dans une boîte.
+
+⚠️ **Ni prix barré, ni pastille de réduction, ni « au lieu de »** (§3). Quand
+le groupage a des **paliers**, la carte montre le prix d'une part ; la grille
+complète est sur la fiche (écran 3).
+
+**La jauge et le compteur sont poussés en bas** par `mt-auto` : les titres font
+une ou deux lignes, et sans cela les cartes d'une même rangée n'aligneraient
+pas leurs bas.
+
+### 2.16 `TuilesCategories`
+
+Six tuiles, **en grille et non en rangée défilante** : 3 colonnes sur
+téléphone, une seule rangée de 6 à partir de `sm`. Chaque tuile porte la photo
+d'un groupage réel de sa catégorie, et une teinte propre (`cat-alimentaire`,
+`cat-vetements`… — voir les jetons de `index.css`).
+
+⚠️ **À six éléments, tout tient à l'écran.** Une rangée qui défile cache
+toujours son dernier élément, et personne ne va le chercher.
+
+### 2.17 `EnTeteApplication` — l'en-tête acheteur
+
+⚠️ **Absent de ce document, alors qu'il est sur tous les écrans.**
+
+De gauche à droite : **logo** (26 px de haut), puis à droite une **loupe**, le
+bouton **« Demander »**, et la **cloche** de notifications.
+
+Deux positions selon l'écran :
+
+| | Position |
+|---|---|
+| Sur le fil (écran 1) | `absolute` en haut, **posé sur le média** |
+| Partout ailleurs | `sticky` en haut, fond blanc |
+
+⚠️ **La loupe déplie un champ sur une seconde ligne**, qui n'existe que pendant
+la recherche — voir l'écran 1. Sur le fil, la toucher **change d'écran** : on
+arrive au catalogue avec le champ déjà déplié, sans avoir à retoucher la loupe.
+
+Sur grand écran c'est `EnTeteBureau` qui prend le relais, avec les mêmes
+éléments et la navigation en clair plutôt qu'en barre du bas.
+
+### 2.18 `PiedPage`
+
+Filet supérieur `bordure`, fond blanc, logo et quelques entrées.
+
+⚠️ **Onze liens ont été retirés**, parce qu'ils ne menaient nulle part :
+c'étaient des `<button>` sans destination. **Un lien qu'on clique et qui ne
+répond pas ne décrit aucune structure — il fait douter de tout le reste.** Ne
+dessine donc ici que des entrées qui mènent quelque part. Un lien « CGU » vers
+une page inexistante est pire qu'une absence de CGU.
+
+### 2.19 La recherche : trois composants
+
+| Composant | Rôle |
+|---|---|
+| `RechercheEtFiltres` | le champ déplié et le bouton qui ouvre le tiroir |
+| `TiroirFiltres` | un panneau `fixed` qui **glisse par la droite**, par-dessus la page |
+| `PucesFiltresActifs` | les filtres posés, visibles **tiroir fermé** |
+
+⚠️ **Le tiroir est un tiroir à toutes les largeurs**, téléphone comme
+ordinateur. Il n'existe pas de colonne de filtres latérale, et le §1 l'annonçait
+à tort — la ligne a été corrigée.
+
+⚠️ **Ce sont les puces qui disent ce qui est filtré, pas le tiroir.** Un tiroir
+fermé cache son contenu ; sans les puces, l'utilisateur verrait une liste
+incomplète sans savoir pourquoi.
+
+### 2.20 `IlsOntRejoint` — l'ambiance de marché
+
+Sur la fiche d'un groupage (écran 3). Trois colonnes par ligne : **un quartier,
+une quantité, un délai**. « Tokoin · 2 parts · il y a 3 h ».
+
+⚠️⚠️ **Jamais de nom, jamais d'initiales, jamais de photo.** Le §1.7 pose
+l'anonymat dans les deux sens : le quartier suffit à l'effet recherché — montrer
+qu'il y a du monde — et c'est déjà tout ce que le groupeur lui-même voit de ses
+acheteurs.
+
+### 2.21 `InviteCompte` et `FeuilleInscription`
+
+`InviteCompte` est **le message qui précède l'inscription** : il dit pourquoi un
+compte est demandé, avant d'ouvrir le formulaire. Il apparaît quand on tente de
+**rejoindre un groupage** ou de **poser une question**, jamais à l'ouverture de
+l'application (§1.5).
+
+`FeuilleInscription` est le formulaire : **prénom, numéro obligatoire, courriel
+facultatif**, puis vérification du numéro par code SMS.
+
+⚠️ **Pas de champ mot de passe ici** — chaque champ posé devant quelqu'un qui
+s'apprête à payer est un acheteur perdu. Le mot de passe se pose depuis l'écran
+de profil (écran 12 bis).
+
+### 2.22 Les composants non décrits ici
+
+Pour être franc sur ce que ce document couvre : **le code compte 43 composants
+et cette section en décrit vingt et un.** Les autres n'ont pas de description
+parce qu'ils n'en demandent pas — ce sont des enveloppes sans apparence propre,
+ou des variantes des précédents :
+
+`Carrousel` · `CarteUrgente` · `ChampPhoto` · `EtatReseau` · `FeuilleConnexion` ·
+`FeuilleRefusColis` · `FeuilleRemontante` · `FeuilleSignalement` · `Fugitif` ·
+`GalerieMedia` · `Graphique` · `Icones` · `Illustrations` · `Logo` ·
+`MenuPrincipal` · `NavigationContexte` · `PanneauFiltres` ·
+`PanneauNotifications` · `PanneauQuestions` · `BoutonCloche` · `EnTeteEcran`
+
+⚠️ **Si tu dessines un écran à partir de ce document, ouvre aussi le dossier
+`frontend/src/acheteur/composants/`.** Ce §2 dit l'intention ; le code dit
+l'état.
+
 ## 3. Jeu de données de démonstration
 
 Un seul jeu, utilisé sur **tous** les écrans.
@@ -1035,10 +1176,16 @@ On ne peut plus le rejoindre, donc l'afficher ne fait que trois choses, toutes m
 **Sa fiche reste accessible par son lien** (écran 3). Un acheteur qui a payé garde un chemin vers ce qu'il a acheté — le lui refuser en « page introuvable » lui ferait croire que sa commande a disparu. Il ne le trouve simplement plus en parcourant.
 
 1. En-tête avec champ de recherche actif : « Rechercher un produit… », retour à gauche.
-2. **Catégories** en puces défilantes : Alimentaire · Vêtements · Chaussures · Hygiène · Maison · Électronique.
+2. **Catégories** en **grille de six tuiles** (§2.16) : 3 colonnes sur téléphone, une seule rangée de 6 à partir de `sm`. Alimentaire · Vêtements · Chaussures · Hygiène · Maison · Électronique.
+
+   ⚠️ **Cette ligne disait « puces défilantes ».** Ce n'en sont pas, et c'est délibéré : à six éléments tout tient à l'écran, et **une rangée qui défile cache toujours son dernier élément**.
 3. **Filtres** en puces : « Se termine bientôt » · « Moins de 10 000 F » · catégorie.
 4. **Tri :** fin proche · prix · nombre de commandes.
-5. **Résultats** en `LigneCampagne` (§2.3 — des lignes séparées par un filet, pas des cartes), avec le compte : « 7 campagnes ».
+5. **Résultats** en **grille de `CarteGroupage`** (§2.15) — 2 colonnes sur téléphone, jusqu'à 5 sur grand écran. Voir la section « Sur grand écran » ci-dessous.
+
+   ⚠️⚠️ **Cette ligne prescrivait `LigneCampagne` — « des lignes séparées par un filet, pas des cartes ».** C'est faux depuis longtemps : le catalogue affiche **des cartes en grille**. L'écart n'était pas théorique — une IA à qui on donnait ce document dessinait une liste de lignes, et le résultat ne ressemblait pas au produit.
+
+   `LigneGroupage` (§2.3) existe toujours, mais pour les **listes compactes** — pas pour le catalogue.
 6. `BarreNav`, onglet Rechercher actif.
 
 **États :** recherches récentes et suggestions avant toute saisie ; chargement ; **aucun résultat** → `EtatVide` « Aucune campagne pour « lait en poudre » » + bouton « **Demander ce produit** », qui transforme un échec de recherche en demande (écran 11).

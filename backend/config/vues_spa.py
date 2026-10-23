@@ -22,6 +22,7 @@ from pathlib import Path
 
 from django.conf import settings
 from django.http import Http404, HttpRequest, HttpResponse
+from django.utils.decorators import method_decorator
 from django.views.decorators.cache import never_cache
 from django.views.generic import View
 
@@ -39,6 +40,11 @@ def _page_pour(hote: str) -> str:
     return "index.html"
 
 
+# ⚠️ `method_decorator`, et non `@never_cache` posé directement sur `get`.
+# `never_cache` attend une **fonction de vue** dont le premier argument est la
+# requête ; appliqué à une méthode, il reçoit `self` à la place et échoue en
+# TypeError dès le premier affichage.
+@method_decorator(never_cache, name="dispatch")
 class ApplicationCompilee(View):
     """Rend la page d'entrée pour toute adresse non prise par l'API.
 
@@ -50,7 +56,6 @@ class ApplicationCompilee(View):
     # Jamais mise en cache : son contenu change à chaque déploiement, et c'est
     # elle qui désigne les fichiers compilés par leur empreinte. Une version
     # gardée en cache ferait réclamer des fichiers qui n'existent plus.
-    @never_cache
     def get(self, requete: HttpRequest, *args, **kwargs) -> HttpResponse:
         fichier = _racine_web() / _page_pour(requete.get_host())
         if not fichier.is_file():

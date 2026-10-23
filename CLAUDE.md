@@ -10,7 +10,7 @@ Place de marché d'achat groupé pour Lomé, Togo. **Le produit est codé et il 
 
 | Fichier | Rôle |
 |---|---|
-| [PRD.md](PRD.md) | Le PRD d'une page — un paragraphe, puis les détails pour coder |
+| [PRD.md](PRD.md) | Le PRD d'une page — un paragraphe, puis les détails coder |
 | [CAHIER_DES_CHARGES.md](CAHIER_DES_CHARGES.md) | Le document maître : modèle, argent, KYC, admin, livraison, modération, stack |
 | [SPEC_ECRANS_FIGMA.md](SPEC_ECRANS_FIGMA.md) | 22 écrans + A1 admin, design system, jeu de données de démonstration |
 | [DOCKER.md](DOCKER.md) | Les images, les cibles de construction, et comment lancer la pile en conteneurs |

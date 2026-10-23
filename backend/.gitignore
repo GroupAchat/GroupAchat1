@@ -1,13 +1,7 @@
 .venv/
 __pycache__/
-*.pyc
-db.sqlite3
-.env
-.pgdata/
-.pgdata.log
-
-# Les courriels ecrits en developpement : ils portent des noms et des adresses.
-.courriels/
-
-# Produit par `collectstatic`, reconstruit a chaque image.
-staticfiles/
+*.py[cod]
+base-de-secours.sqlite3
+medias/
+statiques/
+*.log

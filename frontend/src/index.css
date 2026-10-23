@@ -1,294 +1,274 @@
-/* **Jost pour les titres, Inter pour tout le reste.**
-
-   ⚠️ Poppins a ete retiree. C'est une geometrique, comme Jost : deux
-   geometriques l'une sur l'autre ne se distinguent pas vraiment, et surtout
-   Poppins est faite pour les titres. En texte courant francais — mots longs,
-   accents nombreux, apostrophes partout — ses lettres larges et ses jambages
-   courts rendent la lecture lente, ce qui se voyait sur les paragraphes de
-   l'ecran 3.
-
-   Inter est dessinee pour l'ecran et pour les petites tailles : jambages
-   longs, ouvertures nettes, diacritiques lisibles a 12 px. C'est d'ailleurs
-   ce que le §1.3 de la spec proposait a l'origine, avant que la charte ne
-   retienne Jost + Poppins.
-
-   Jost reste aux titres, et c'est elle qui donne son caractere a la page :
-   une grotesque neutre partout serait lisible et sans identite.
-
-   **Deux fichiers variables au lieu de six statiques.** `wght@400..700`
-   demande une seule fonte couvrant toute la plage, au lieu d'un
-   telechargement par graisse. Sur le forfait limite du §5, c'est moins
-   d'octets et surtout **deux requetes au lieu de six**.
-
-   `display=swap` evite que le texte reste invisible pendant le chargement. */
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400..700&family=Jost:wght@500..700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap");
 @import "tailwindcss";
 
-/* ------------------------------------------------------------------
-   Jetons de couleur — SPEC_ECRANS_FIGMA.md §1.2
-   Ne jamais modifier une teinte sans refaire le calcul de contraste.
-   Deux chromes : orange dominant cote acheteur, bleu dominant cote
-   groupeur. Voir `ui/chrome.ts`. Ne jamais les inverser.
-   ------------------------------------------------------------------ */
+/* ───────────────────────────────────────────────────────────────────────────
+   Le système de design de Group Achat.
+
+   Deux couleurs, celles du logo : le **bleu marine** de la confiance et
+   l'**orange mangue** de l'envie. Lesquelles dominent dépend de qui regarde —
+   voir « L'accent change avec le profil » plus bas.
+   ─────────────────────────────────────────────────────────────────────────── */
+
 @theme {
-  --color-marque: #ff6a00; /* aplats vifs — texte sombre uniquement */
-  --color-primaire: #cc4a00; /* boutons pleins, liens, etats actifs */
-  --color-primaire-presse: #a64200;
-  --color-primaire-fond: #fff1e6;
-  --color-primaire-texte-sur-fond: #b34a00;
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
 
-  --color-confiance: #1e3a8a;
-  --color-confiance-presse: #152c68;
-  --color-confiance-fond: #e8edf8;
+  /* Bleu du logo (#1E3A8A), décliné. */
+  --color-marine-50: #eef3ff;
+  --color-marine-100: #dae5ff;
+  --color-marine-200: #bcd0ff;
+  --color-marine-300: #8eb0ff;
+  --color-marine-400: #5884fd;
+  --color-marine-500: #335df8;
+  --color-marine-600: #1f3eed;
+  --color-marine-700: #1b30d8;
+  --color-marine-800: #1e3a8a;
+  --color-marine-900: #1b2f6b;
+  --color-marine-950: #141e42;
 
-  --color-succes: #0b6b52;
-  --color-succes-fond: #e6f4ec;
+  /* Orange du logo (#FF6A00), décliné. */
+  --color-mangue-50: #fff5ed;
+  --color-mangue-100: #ffe8d4;
+  --color-mangue-200: #ffcda8;
+  --color-mangue-300: #ffaa70;
+  --color-mangue-400: #ff7b36;
+  --color-mangue-500: #ff6a00;
+  --color-mangue-600: #f04e00;
+  --color-mangue-700: #c73a06;
+  --color-mangue-800: #9e300d;
+  --color-mangue-900: #7f2a0e;
 
-  --color-danger: #c0392b;
-  --color-danger-fond: #fbeae8;
+  /* L'accent : un alias qui pointe vers une variable fixée à l'exécution.
+     C'est ce qui permet à `bg-accent` de virer à l'orange ou au bleu sans
+     qu'aucun composant ne connaisse le profil de qui le regarde. */
+  --color-accent: var(--teinte-accent);
+  --color-accent-doux: var(--teinte-accent-doux);
+  --color-accent-fort: var(--teinte-accent-fort);
+  --color-accent-contraste: var(--teinte-accent-contraste);
+  --color-second: var(--teinte-second);
 
-  /* ── Les teintes de categorie ──────────────────────────────────────────
-     ⚠️ **Ecart assume au §1.2**, qui ecrit : « Aucun aplat "pour decorer" :
-     une couleur signale une action, un etat ou un risque, jamais un
-     ornement. » Ces six teintes sont exactement cela — des ornements. La
-     demande est explicite et posterieure, donc elle s'applique.
+  --radius-douce: 1rem;
+  --radius-carte: 1.5rem;
 
-     La raison du §1.2 reste vraie, et une seule chose la tient : **elles ne
-     servent jamais de signal.** Elles ne colorent que des **surfaces** —
-     fonds de tuiles, bandes de section — et jamais un bouton, un etat ou une
-     alerte. L'orange plein garde le monopole de l'action, le bleu celui de
-     la confiance, le rouge celui du probleme. Si une de ces teintes se met a
-     dire quelque chose, le systeme de signal s'effondre et le §1.2 a eu
-     raison contre nous.
+  --animate-apparition: apparition 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-montee: montee 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-eclosion: eclosion 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  --animate-chatoiement: chatoiement 1.6s linear infinite;
+  --animate-battement: battement 2.4s ease-in-out infinite;
+  --animate-glissement: glissement 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
 
-     Elles sont desaturees pour cette raison : une pastille pale ne peut pas
-     rivaliser avec un aplat sature, donc elle ne peut pas voler le signal.
+/* ── L'accent change avec le profil ─────────────────────────────────────────
+   Décision du cahier des charges : l'acheteur vit dans l'orange, le groupeur
+   dans le bleu. Deux univers reconnaissables au premier coup d'œil, qui
+   disent à chacun où il se trouve sans avoir à lire un titre.
+   Le visiteur sans compte voit l'orange : c'est la couleur de l'envie, et
+   c'est un acheteur qui s'ignore.                                           */
+:root,
+:root[data-profil="acheteur"],
+:root[data-profil="visiteur"] {
+  --teinte-accent: var(--color-mangue-500);
+  --teinte-accent-doux: var(--color-mangue-50);
+  --teinte-accent-fort: var(--color-mangue-600);
+  --teinte-accent-contraste: #ffffff;
+  --teinte-second: var(--color-marine-800);
+  --degrade-accent: linear-gradient(135deg, #ff8534 0%, #ff6a00 48%, #f04e00 100%);
+  --lueur-accent: 0 18px 40px -16px rgb(255 106 0 / 0.55);
+}
 
-     Chaque paire teinte/accent est calculee — jamais estimee :
+:root[data-profil="groupeur"],
+:root[data-profil="administrateur"] {
+  --teinte-accent: var(--color-marine-800);
+  --teinte-accent-doux: var(--color-marine-50);
+  --teinte-accent-fort: var(--color-marine-900);
+  --teinte-accent-contraste: #ffffff;
+  --teinte-second: var(--color-mangue-500);
+  --degrade-accent: linear-gradient(135deg, #335df8 0%, #1e3a8a 52%, #141e42 100%);
+  --lueur-accent: 0 18px 40px -16px rgb(30 58 138 / 0.55);
+}
 
-     | Categorie | Teinte | Accent | `texte` | `texte-secondaire` | Accent |
-     |---|---|---|---|---|---|
-     | Alimentaire | `#E7F2E3` | `#1F6B3A` | 15,14:1 | 6,43:1 | **5,65:1** |
-     | Vetements | `#EFE7F6` | `#5B3E8F` | 14,49:1 | 6,16:1 | **6,89:1** |
-     | Chaussures | `#E3EEF9` | `#1D4E89` | 14,85:1 | 6,31:1 | **7,14:1** |
-     | Hygiene | `#E0F1F0` | `#0F6360` | 14,97:1 | 6,36:1 | **6,06:1** |
-     | Maison | `#F7EBDC` | `#8A5312` | 14,86:1 | 6,31:1 | **5,37:1** |
-     | Electronique | `#E7EAF1` | `#374258` | 14,50:1 | 6,16:1 | **8,37:1** |
+:root {
+  --fond: #fbfaf8;
+  --fond-carte: #ffffff;
+  --fond-doux: #f4f2ef;
+  --bordure: #e9e5df;
+  --texte: #1a1714;
+  --texte-doux: #6d6558;
+  color-scheme: light;
+}
 
-     ⚠️ La colonne qui compte est la derniere : l'accent est la seule teinte
-     saturee posee sur un fond clair, donc la seule qui puisse passer sous le
-     seuil. La plus juste est `maison` a **5,37:1** — conforme, mais avec
-     moins de 0,9 de marge. Reteinter un fond sans refaire ce calcul casse la
-     paire en silence.
-     ------------------------------------------------------------------ */
-  --color-cat-alimentaire: #e7f2e3;
-  --color-cat-alimentaire-accent: #1f6b3a;
-  --color-cat-vetements: #efe7f6;
-  --color-cat-vetements-accent: #5b3e8f;
-  --color-cat-chaussures: #e3eef9;
-  --color-cat-chaussures-accent: #1d4e89;
-  --color-cat-hygiene: #e0f1f0;
-  --color-cat-hygiene-accent: #0f6360;
-  --color-cat-maison: #f7ebdc;
-  --color-cat-maison-accent: #8a5312;
-  --color-cat-electronique: #e7eaf1;
-  --color-cat-electronique-accent: #374258;
+:root:not([data-theme="light"]) {
+  @media (prefers-color-scheme: dark) {
+    --fond: #110f0d;
+    --fond-carte: #1a1714;
+    --fond-doux: #221e1a;
+    --bordure: #322c26;
+    --texte: #f6f3ef;
+    --texte-doux: #a79d90;
+    color-scheme: dark;
+  }
+}
 
-  /* ── Les neutres, rechauffes ───────────────────────────────────────────
-     ⚠️ **Ils etaient bleus, et c'etait le defaut d'harmonie du site.**
-
-     Mesure des anciennes valeurs, en teinte HSL :
-
-     | Jeton | Avant | Teinte |
-     |---|---|---|
-     | `texte` | `#14181F` | **218°** |
-     | `texte-secondaire` | `#5A6472` | **215°** |
-     | `bordure` | `#E4E7EC` | **218°** |
-     | `surface-douce` | `#F7F8FA` | **220°** |
-
-     Tous entre 215 et 220° — du bleu. Or la marque acheteur est a **22-26°**,
-     de l'orange. Et ces quatre jetons portent **85 % des pixels de la page**
-     (318 usages sur 374) : l'ensemble lisait donc froid, et l'orange y etait
-     un corps etranger pose dessus. C'est ca, « les couleurs ne s'harmonisent
-     pas » — ce n'etait pas une impression, c'est mesurable.
-
-     La correction tourne la teinte a **28°** en gardant la clarte, avec une
-     saturation tres basse : ce sont des gris chauds, pas des beiges. Un gris
-     chaud lit comme du papier, et le bleu du chrome groupeur s'y pose aussi
-     bien que l'orange — verifie : `confiance` tient 9,78:1 sur la surface
-     douce chaude.
-
-     ⚠️ **Aucun contraste ne se degrade**, parce que la clarte ne bouge pas :
-     `texte` passe de 17,79:1 a 17,46:1 sur blanc, `texte-secondaire` **gagne**
-     en lisibilite (6,00 → 7,46:1). */
-  --color-texte: #1d1916; /* 17,46:1 sur blanc — etait #14181F */
-  --color-texte-secondaire: #5c544d; /* 7,46:1 — etait #5A6472 a 6,00:1 */
-
-  /* **Le troisieme niveau manquait.** Deux gris seulement pour 239 usages de
-     texte obligeaient a faire toute la hierarchie a la graisse et a la taille.
-     Celui-ci porte les mentions et les horodatages.
-
-     ⚠️ 4,86:1 sur blanc et **4,57:1 sur `surface-douce`** : conforme, mais
-     c'est le jeton le plus juste de la palette. Il est fait pour des mentions
-     courtes, jamais pour un paragraphe, et jamais sur un fond plus sombre que
-     `surface-douce`. */
-  --color-texte-mention: #7a7066;
-
-  --color-bordure: #ebe8e5; /* etait #E4E7EC */
-
-  /* **Un filet plus leger que `bordure`, et c'est une distinction de metier.**
-     Les deux font des traits, mais pas le meme travail : `bordure` cerne un
-     champ ou une carte — un objet avec lequel on interagit — tandis que ce
-     filet-ci ne fait que separer deux blocs de contenu.
-     Les separateurs etaient dessines avec `bordure`, donc aussi marques que
-     le contour d'un champ de saisie. C'est ce qui donne a une page son air
-     quadrille : beaucoup de lignes, toutes de meme force, aucune hierarchie.
-     Un separateur n'a **aucun seuil de contraste a tenir** — il ne porte
-     aucune information et ne delimite rien d'actionnable. */
-  --color-filet: #f0edeb;
-
-  /* **Le contour d'un champ, et c'est une obligation, pas un gout.**
-
-     ⚠️ Les champs de saisie etaient cernes de `bordure` — **1,22:1 sur
-     blanc**. Or le critere WCAG 1.4.11 demande **3:1** pour toute information
-     visuelle necessaire a *identifier* un composant d'interface, et sur un
-     champ au fond blanc pose sur une page blanche, ce trait est la seule
-     chose qui dise ou cliquer. En plein soleil sur l'ecran d'un Android
-     d'entree de gamme — le §5 — il disparait.
-
-     Un fond teinte ne reglait rien : `surface-douce` sur blanc ne vaut que
-     1,03:1. Il fallait donc un vrai trait.
-
-     3,38:1 sur blanc, 3,20:1 sur `surface-douce` : conforme sur les deux
-     fonds ou un champ se pose.
-
-     **Reserve aux controles** — champs, cases, selecteurs. Les cartes gardent
-     `bordure` : une carte ne s'actionne pas, son contour est decoratif et
-     n'a aucun seuil a tenir. Trois traits, trois metiers. */
-  --color-bordure-champ: #948a80;
-  --color-surface-douce: #faf8f7; /* etait #F7F8FA */
-
-  /* Roboto reste en secours : il est deja sur tout Android, donc la page est
-     lisible avant que les fontes n'arrivent — et ses proportions sont proches
-     de celles d'Inter, donc le texte ne saute presque pas au moment du swap. */
-  --font-sans: Inter, Roboto, system-ui, -apple-system, sans-serif;
-  --font-titre: Jost, Inter, Roboto, system-ui, sans-serif;
-
-  /* ── L'echelle typographique du §1.3, enfin nommee ──────────────────────
-     Elle existait dans la spec et nulle part dans le code : `Prix` s'ecrivait
-     `text-[22px]` a **neuf endroits**, `Code` `text-[32px]` a deux. Une
-     echelle qu'on recopie a la main n'est pas une echelle, et c'est ainsi
-     qu'apparaissent les `text-[15px]` et `text-[28px]` isoles qu'on trouvait
-     aussi. Nommee, elle se respecte toute seule. */
-  --text-titre-ecran: 24px;
-  --text-prix: 22px;
-  --text-titre-fil: 20px;
-  --text-titre-section: 18px;
-  --text-code: 32px;
+:root[data-theme="dark"] {
+  --fond: #110f0d;
+  --fond-carte: #1a1714;
+  --fond-doux: #221e1a;
+  --bordure: #322c26;
+  --texte: #f6f3ef;
+  --texte-doux: #a79d90;
+  color-scheme: dark;
 }
 
 @layer base {
+  * {
+    border-color: var(--bordure);
+  }
+
   html {
-    /* Pas de zoom automatique du texte en paysage sur Android. */
-    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
   }
 
   body {
-    /* §1.2 — fond blanc sur tous les ecrans, un seul niveau de surface. */
-    background-color: #ffffff;
-    color: var(--color-texte);
+    background: var(--fond);
+    color: var(--texte);
     font-family: var(--font-sans);
-    /* §1.3 — Corps 16 px, plancher absolu. */
-    font-size: 16px;
-    /* 1,6 et non 1,5. Poppins est une geometrique : ses lettres sont larges et
-       ses jambages courts, ce qui rend les lignes serrees fatigantes en
-       francais, ou les mots sont longs et les accents nombreux. Le dixieme
-       supplementaire se voit surtout sur les paragraphes de trois lignes et
-       plus — la description d'un groupage, les regles de l'ecran 3. */
-    line-height: 1.6;
+    /* Le produit est pensé d'abord pour le téléphone : on évite le
+       rebond élastique qui ferait décrocher le fil vertical de l'accueil. */
+    overscroll-behavior-y: none;
     -webkit-font-smoothing: antialiased;
   }
 
-  /* Titres et montants en Jost. Le reste du texte est en Poppins. */
-  h1,
-  h2,
-  h3,
-  .police-titre {
-    font-family: var(--font-titre);
+  h1, h2, h3 {
+    letter-spacing: -0.02em;
+    font-weight: 700;
   }
 
-  /* Anneau de focus visible : l'ecran est aussi parcouru au clavier. */
-  :focus-visible {
-    outline: 2px solid var(--color-primaire);
-    outline-offset: 2px;
+  /* Chiffres alignés : une jauge dont les montants dansent d'un pixel à
+     chaque mise à jour donne une impression de bricolage. */
+  .tabulaire {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  .surface {
+    background: var(--fond-carte);
+    border: 1px solid var(--bordure);
+  }
+
+  .surface-douce {
+    background: var(--fond-doux);
+  }
+
+  .texte-doux {
+    color: var(--texte-doux);
+  }
+
+  .degrade-accent {
+    background-image: var(--degrade-accent);
+  }
+
+  .lueur-accent {
+    box-shadow: var(--lueur-accent);
+  }
+
+  /* Verre dépoli pour les barres flottantes posées sur les photos. */
+  .verre {
+    background: color-mix(in srgb, var(--fond-carte) 72%, transparent);
+    backdrop-filter: blur(16px) saturate(140%);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+  }
+
+  .verre-sombre {
+    background: rgb(0 0 0 / 0.34);
+    backdrop-filter: blur(14px) saturate(130%);
+    -webkit-backdrop-filter: blur(14px) saturate(130%);
+  }
+
+  /* ── Le fil vertical de l'accueil ────────────────────────────────────────
+     Une campagne par écran, qui s'aimante au défilement — le geste des
+     réseaux sociaux, appliqué aux achats groupés. `touch` et non `mandatory`
+     pour que le pouce garde la main : un aimant trop fort donne l'impression
+     de se battre avec la page.                                              */
+  .fil-vertical {
+    scroll-snap-type: y mandatory;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .fil-vertical::-webkit-scrollbar {
+    display: none;
+  }
+
+  .ecran-fil {
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
+
+  .sans-barre {
+    scrollbar-width: none;
+  }
+
+  .sans-barre::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Squelette de chargement : mieux qu'un tourniquet, il annonce la forme de
+     ce qui arrive. */
+  .squelette {
+    background: linear-gradient(
+      90deg,
+      var(--fond-doux) 25%,
+      color-mix(in srgb, var(--fond-doux) 60%, var(--bordure)) 50%,
+      var(--fond-doux) 75%
+    );
+    background-size: 200% 100%;
+    animation: var(--animate-chatoiement);
   }
 }
 
 @keyframes apparition {
-  from {
-    opacity: 0;
-    transform: scale(0.94);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-@layer utilities {
-  /*
-   * ⚠️ **La largeur de page, et il n'y en a qu'une.**
-   *
-   * Elle etait eparpillee : l'en-tete et le pied de page allaient d'un bord a
-   * l'autre, le catalogue aussi, mais la fiche produit, les commandes, les
-   * demandes et le profil etaient enfermes dans une colonne centree de
-   * 1 280 px. Sur un ecran de 1 920, passer du catalogue a une fiche faisait
-   * donc **sauter toute la page** : le contenu rentrait d'un coup de 320 px
-   * de chaque cote pendant que l'en-tete, lui, restait colle aux bords. Les
-   * deux ne se sont jamais alignes.
-   *
-   * Un seul plafond, pose au meme endroit partout, et le probleme disparait.
-   *
-   * **Pourquoi 1 600 et pas 1 280.** A 1 280, un ecran de 1 920 laisse
-   * 320 px de vide de chaque cote — c'est ce qui avait fait retirer le
-   * plafond du catalogue, avec raison. A 1 600, le meme ecran laisse 160 px,
-   * ce qui se lit comme une marge et non comme un trou. Et un ecran de 2 560
-   * cesse d'etaler une barre de recherche sur deux metres.
-   *
-   * **La gouttiere grandit avec l'ecran** : pleine largeur ne veut pas dire
-   * colle au bord. A 1 920, un titre qui demarre a 16 px du cadre a l'air
-   * tombe dans le coin plutot que pose.
-   *
-   * Ce qui doit toucher les bords — la banniere partenaires, un lavis de
-   * fond — se pose **en dehors** de ce conteneur, et met son propre contenu
-   * dedans.
-   */
-  .largeur-page {
-    margin-inline: auto;
-    width: 100%;
-    max-width: 1600px;
-    padding-inline: 1rem;
+@keyframes montee {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes eclosion {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes chatoiement {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+@keyframes battement {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.06); opacity: 0.85; }
+}
+
+@keyframes glissement {
+  from { opacity: 0; transform: translateX(-14px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Quelqu'un qui a demandé moins de mouvement ne doit pas subir le fil
+   aimanté ni les apparitions. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 
-  @media (width >= 64rem) {
-    .largeur-page {
-      padding-inline: 2rem;
-    }
-  }
-
-  @media (width >= 96rem) {
-    .largeur-page {
-      padding-inline: 3rem;
-    }
-  }
-
-  /* Masque la barre de defilement des puces de filtre sans empecher
-     le defilement tactile. */
-  .defilement-discret {
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-  }
-  .defilement-discret::-webkit-scrollbar {
-    display: none;
+  .fil-vertical {
+    scroll-snap-type: none;
   }
 }

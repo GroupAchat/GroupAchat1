@@ -1,27 +1,15 @@
 <!doctype html>
-<html lang="fr">
+<html lang="fr" data-profil="administrateur">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- Chrome neutre (SPEC §1.2) : ni orange ni bleu. Les deux chromes de
-         marque appartiennent aux deux publics ; l'outil interne n'en porte
-         aucun, et cette neutralite evite de confondre une capture d'ecran
-         interne avec le produit. `surface-douce`, donc, et pas `primaire`
-         comme sur index.html. -->
-    <meta name="theme-color" content="#F7F8FA" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="/logos/marque.svg" />
+    <meta name="theme-color" content="#1e3a8a" />
+    <meta name="robots" content="noindex" />
     <title>Group Achat — Administration</title>
-    <!-- `noindex` : l'ecran A1 affiche les montants detenus, les files de
-         travail et les alertes de fraude. Rien de tout cela n'a sa place dans
-         un moteur de recherche, meme sans donnee personnelle. -->
-    <meta name="robots" content="noindex, nofollow" />
-    <meta
-      name="description"
-      content="Tableau de bord interne de Group Achat : alertes, files de travail et indicateurs."
-    />
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/admin/main.tsx"></script>
+    <div id="racine"></div>
+    <script type="module" src="/src/main-admin.tsx"></script>
   </body>
 </html>

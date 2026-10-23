@@ -1,32 +1,31 @@
 {
-  "name": "groupachat-frontend",
+  "name": "group-achat-frontend",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
-  "engines": {
-    "node": ">=22"
-  },
   "scripts": {
     "dev": "vite",
     "dev:admin": "vite --config vite.admin.config.ts",
-    "build": "tsc -b && vite build && vite build --config vite.admin.config.ts",
-    "preview": "vite preview",
-    "preview:admin": "vite preview --config vite.admin.config.ts",
-    "typecheck": "tsc -b --noEmit"
+    "build": "tsc -b && vite build",
+    "build:admin": "tsc -b && vite build --config vite.admin.config.ts",
+    "apercu": "vite preview"
   },
   "dependencies": {
-    "qrcode-generator": "^2.0.4",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "framer-motion": "11.18.2",
+    "lucide-react": "^0.511.0",
+    "qrcode": "1.5.4",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-router-dom": "7.6.2"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.1.11",
-    "@types/node": "^26.6.4",
-    "@types/react": "^19.1.8",
-    "@types/react-dom": "^19.1.6",
-    "@vitejs/plugin-react": "^4.6.0",
-    "tailwindcss": "^4.1.11",
-    "typescript": "^5.8.3",
-    "vite": "^7.0.0"
+    "@tailwindcss/vite": "4.1.11",
+    "@types/qrcode": "1.5.5",
+    "@types/react": "19.1.8",
+    "@types/react-dom": "19.1.6",
+    "@vitejs/plugin-react": "4.6.0",
+    "tailwindcss": "4.1.11",
+    "typescript": "5.8.3",
+    "vite": "6.3.5"
   }
 }

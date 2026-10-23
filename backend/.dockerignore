@@ -1,41 +1,13 @@
-# Ce que le contexte de construction ne doit pas transporter.
-#
-# Chaque fichier listé ici est un fichier que Docker n'envoie pas au démon, ne
-# met pas en cache, et surtout n'embarque pas dans l'image.
-
-# ── Les secrets, avant tout ────────────────────────────────────────────────
-# `.env` contient le mot de passe PostgreSQL, la clé de signature et le jeton
-# d'administration. Dans une image, ils y seraient **en clair et pour
-# toujours** : une couche d'image ne s'efface pas, et quiconque récupère
-# l'image récupère le fichier. Les variables arrivent par l'environnement au
-# lancement, jamais par le contexte.
-.env
-
-# ── L'environnement virtuel ────────────────────────────────────────────────
-# Plusieurs centaines de méga-octets, et surtout des binaires compilés **pour
-# Windows** : ils ne fonctionneraient pas dans une image Linux. Les
-# dépendances sont réinstallées dans l'image depuis `requirements.txt`.
+# Ce qui n'a rien à faire dans l'image.
 .venv/
-
-# ── Les données locales ────────────────────────────────────────────────────
-db.sqlite3
-.pgdata/
-.pgdata.log
-
-# Les courriels écrits en développement portent des noms et des adresses.
-.courriels/
-
-# Produit par `collectstatic` — l'image le reconstruit elle-même.
-staticfiles/
-
 __pycache__/
-*.pyc
-*.pyo
-
-# ── La documentation et l'outillage ────────────────────────────────────────
-README.md
-outils/
-
-# Inutile dans l'image, et susceptible d'invalider le cache à chaque commit.
-.git/
-.gitignore
+*.py[cod]
+*.sqlite3
+base-de-secours.sqlite3
+medias/
+statiques/
+.pytest_cache/
+*.log
+# Les secrets vivent dans l'environnement du conteneur, jamais dans une
+# couche d'image — une image se pousse, se partage et s'inspecte.
+.env

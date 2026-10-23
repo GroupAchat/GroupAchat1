@@ -1,14 +1,16 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import "./index.css";
-import App from "./App";
 
-const racine = document.getElementById("root");
-if (!racine) {
-  throw new Error("Element #root introuvable dans index.html");
-}
+import App from "@/App";
+import "@/index.css";
 
-createRoot(racine).render(
+// Le thème choisi est appliqué avant le premier rendu : lu après, il
+// provoquerait un éclair blanc sur un écran réglé en sombre.
+const themeEnregistre = localStorage.getItem("ga-theme");
+if (themeEnregistre === "clair") document.documentElement.dataset.theme = "light";
+if (themeEnregistre === "sombre") document.documentElement.dataset.theme = "dark";
+
+createRoot(document.getElementById("racine")!).render(
   <StrictMode>
     <App />
   </StrictMode>,

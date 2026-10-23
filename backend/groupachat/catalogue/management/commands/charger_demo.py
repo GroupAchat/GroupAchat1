@@ -1,879 +1,577 @@
 # -*- coding: utf-8 -*-
-"""Charge le jeu de démonstration du §3 de la spec des écrans.
+"""Peuple la base d'un jeu de données prêt à présenter.
+
+La démonstration doit montrer la plateforme **à tous les stades à la fois** :
+une campagne qui collecte, une financée en attente de décaissement, une en
+distribution avec ses codes, une terminée, une annulée avec ses
+remboursements. Sinon il faut attendre devant le public que quelque chose se
+passe.
+
+Elle crée aussi **deux groupeurs** : un validé, pour dérouler le parcours, et
+un en attente, pour montrer la porte fermée du KYC.
 
     python manage.py charger_demo
-
-**Les additions doivent tomber juste : un jury vérifie.** Cette commande monte
-exactement le fil rouge — C1, 32 commandes à 4 000 F, 128 000 F collectés,
-1 500 F de frais, 126 500 F retirables — pour qu'on puisse interroger l'API et
-retrouver les chiffres de la maquette.
-
-Elle est **idempotente** : on peut la relancer sans créer de doublons, ce qui
-évite de devoir effacer la base entre deux démonstrations.
-
-## D'où vient le catalogue
-
-Des seize groupages de ``donnees_demo/catalogue.json``, et non plus d'une liste
-écrite dans ce fichier.
-
-Ce JSON a été **extrait des constantes TypeScript du front**, qui étaient la
-source du catalogue tant que l'interface ne parlait pas à l'API. Les deux
-auraient divergé en une semaine : le front affichait seize produits avec leurs
-caractéristiques et leurs points de remise, la base en contenait quatre sans
-rien de tout cela. Brancher l'interface sur l'API aurait fait disparaître douze
-produits et vidé l'écran 3.
-
-**La base est désormais la seule source**, et c'est ce que signifie « brancher
-le front » : le `src/donnees/groupages.ts` d'origine n'a plus de lecteur.
 """
 
 from __future__ import annotations
 
-import json
 from datetime import timedelta
-from decimal import Decimal
-from pathlib import Path
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
 
-from groupachat.catalogue.models import Campagne, PalierPrix
-from groupachat.commandes.models import (
-    Commande,
-    Justificatif,
-    Retrait,
-    annuler_campagne,
-    cloturer_campagne,
-    enregistrer_paiement,
-    demander_le_retrait,
-    executer_le_retrait,
+from groupachat.catalogue.models import Campagne, Categorie, PalierPrix, Produit
+from groupachat.commandes.models import Litige, Participation
+from groupachat.comptes.models import DossierKYC, Reputation, Utilisateur
+from groupachat.echanges.models import (
+    Commentaire,
+    DemandeProduit,
+    InteretDemande,
+    JaimeCommentaire,
+    Notification,
 )
-from groupachat.comptes.models import Acheteur, Groupeur, PieceKyc
-from groupachat.echanges.models import Demande, Question
-
-#: Le catalogue, à côté du code qui le charge.
-CATALOGUE = (
-    Path(__file__).resolve().parent.parent.parent / "donnees_demo" / "catalogue.json"
+from groupachat.paiements.services import (
+    cloturer,
+    demander_decaissement,
+    encaisser,
+    executer_decaissement,
+    mettre_a_disposition,
+    valider_retrait,
 )
 
-#: Les trois pseudonymes du §3, et rien d'autre.
-GROUPEURS = [
-    ("Mama Gro", "Akossiwa Mensah", "+22891000001"),
-    ("Chez Sika", "Sika Adjo", "+22891000002"),
-    ("Lomé Deals", "Kodjo Amegan", "+22891000003"),
+MOT_DE_PASSE = "demo2026Groupe"
+
+RAYONS = [
+    ("Alimentation", "panier", []),
+    ("Électronique", "puce", ["Téléphonie", "Électroménager"]),
+    ("Maison", "maison", []),
+    ("Mode", "vetement", []),
 ]
 
-QUARTIERS = ("Tokoin", "Agoe", "Be", "Adidogome", "Nyekonakpoe", "Hedzranawoe")
-
-#: Des dossiers **en attente d'examen**, qui alimentent l'écran A2 (§13.6).
-#:
-#: Sans eux, la file de l'administrateur est vide et l'écran de recrutement ne
-#: se démontre pas — alors que c'est le seul écran du produit où une décision
-#: humaine engage la promesse faite à l'acheteur (§10.5).
-#:
-#: Les quatre cas ne sont pas interchangeables : ils couvrent les quatre
-#: décisions que l'administrateur doit savoir prendre.
-DOSSIERS_EN_ATTENTE = [
-    {
-        # Le cas simple : tout concorde, il n'y a qu'à valider.
-        "pseudonyme": "Adjo Textile",
-        "nom_complet": "Adjo Mensah",
-        "telephone": "+22891000010",
-        "courriel": "adjo.textile@example.tg",
-        "titulaire": "Adjo Mensah",
-        "jours": 1,
-        "pieces": ("piece-recto", "piece-verso", "selfie"),
-    },
-    {
-        # Le cas qui **arrête tout** : le compte de retrait n'est pas à son
-        # nom (contrôle n° 2 du §10.5). Le formulaire le refuse à la saisie —
-        # ce dossier représente donc un compte modifié après le dépôt, qui est
-        # le signal d'alerte numéro un.
-        "pseudonyme": "Gros Bonnet",
-        "nom_complet": "Yao Komlan",
-        "telephone": "+22891000011",
-        "courriel": "",
-        "titulaire": "Afi Kossi",
-        "jours": 3,
-        "pieces": ("piece-recto", "piece-verso", "selfie"),
-    },
-    {
-        # Le cas le plus fréquent : il manque une pièce. Il se renvoie « à
-        # compléter », il ne se refuse pas.
-        "pseudonyme": "Kossi Électro",
-        "nom_complet": "Kossi Agbeko",
-        "telephone": "+22891000012",
-        "courriel": "kossi@example.tg",
-        "titulaire": "Kossi Agbeko",
-        "jours": 4,
-        "pieces": ("piece-recto", "selfie"),
-    },
-    {
-        # Le cas qui doit sauter aux yeux : **six jours d'attente**, au-delà
-        # des 48 h annoncées au groupeur à l'inscription. Et sans courriel :
-        # la décision ne pourra lui être annoncée que par téléphone.
-        "pseudonyme": "Marché Hedzranawoe",
-        "nom_complet": "Afiwa Dogbe",
-        "telephone": "+22891000013",
-        "courriel": "",
-        "titulaire": "Afiwa Dogbe",
-        "jours": 6,
-        "pieces": ("piece-recto", "piece-verso", "selfie"),
-    },
+ACHETEURS = [
+    ("91002233", "Ama", "Mensah"),
+    ("92003344", "Yao", "Dossou"),
+    ("93004455", "Akouvi", "Adjo"),
+    ("94005566", "Kodjo", "Agbeko"),
+    ("95006677", "Afi", "Lawson"),
 ]
-
-
-def _texte_de_la_reponse(valeur) -> str:
-    """La réponse, quelle que soit la forme qu'elle a dans le JSON.
-
-    Les deux listes du catalogue ont été écrites à des moments différents et
-    ne la représentent pas pareil : ``questions`` porte un objet
-    ``{auteur, texte, repondueLe}``, ``questionsRecentes`` une simple chaîne.
-    Plutôt que de corriger le JSON — qui est une extraction, pas une source
-    qu'on édite à la main — on accepte les deux ici, en un seul endroit.
-    """
-    if isinstance(valeur, str):
-        return valeur
-    if isinstance(valeur, dict):
-        return valeur.get("texte", "")
-    return ""
-
-
-def _medias(donnees: dict) -> list[dict]:
-    """La liste des médias d'un groupage de démonstration.
-
-    Le fichier de données garde `photo` et `photoAlt` — la couverture, qui
-    existait avant que la fiche en accepte plusieurs — et peut ajouter
-    `photosSupplementaires` et `videos`. Les anciennes entrées continuent donc
-    de se charger sans être réécrites, ce qui évite de toucher seize produits
-    pour en illustrer deux.
-
-    ⚠️ **La couverture passe en premier**, et c'est tout l'intérêt de la
-    construire ici : `Campagne.media` prend la première image de la liste, donc
-    l'ordre décide de ce qui s'affiche sur les cartes et dans le fil.
-    """
-    medias: list[dict] = []
-
-    if donnees.get("photo"):
-        medias.append(
-            {
-                "type": "image",
-                "url": donnees["photo"],
-                "alt": donnees.get("photoAlt", ""),
-            }
-        )
-
-    for photo in donnees.get("photosSupplementaires", []):
-        medias.append(
-            {
-                "type": "image",
-                "url": photo["url"],
-                "alt": photo.get("alt", ""),
-            }
-        )
-
-    for video in donnees.get("videos", []):
-        medias.append(
-            {
-                "type": "video",
-                "url": video["url"],
-                "alt": video.get("alt", ""),
-                "affiche": video.get("affiche", ""),
-            }
-        )
-
-    return medias
 
 
 class Command(BaseCommand):
-    help = "Charge le jeu de démonstration du §3 de la spec des écrans."
+    help = "Charge un jeu de démonstration couvrant tous les états du parcours."
+
+    def add_arguments(self, analyseur):
+        analyseur.add_argument(
+            "--effacer",
+            action="store_true",
+            help="Vide les données existantes avant de recharger.",
+        )
 
     @transaction.atomic
     def handle(self, *args, **options):
-        catalogue = json.loads(CATALOGUE.read_text(encoding="utf-8"))
+        if options["effacer"]:
+            self._effacer()
 
-        groupeurs = {}
-        for pseudonyme, nom, telephone in GROUPEURS:
-            groupeur, _ = Groupeur.objects.get_or_create(
-                pseudonyme=pseudonyme,
-                defaults={
-                    "nom_complet": nom,
-                    "telephone": telephone,
-                    # Leur dossier est validé : sans ça ils ne pourraient rien
-                    # lancer, ce qui est le comportement voulu.
-                    "statut_kyc": Groupeur.StatutKyc.VALIDE,
-                    # ⚠️ **Niveau Établi**, et ce n'est pas une facilité : ces
-                    # trois-là mènent des groupages à 400 000 F dans le jeu de
-                    # démonstration. Les laisser au niveau Entrée — plafond
-                    # 150 000 F — ferait refuser la moitié des paiements, et le
-                    # jeu de données ne raconterait plus rien. Un groupeur qui
-                    # collecte ces montants est, par construction, passé par
-                    # les trois campagnes livrées du §10.4.
-                    #
-                    # Les nouveaux venus de la file KYC, eux, sont au niveau
-                    # Entrée : c'est là que le plafond se démontre.
-                    "niveau": Groupeur.Niveau.ETABLI,
-                    "titulaire_mobile_money": nom,
-                    "numero_mobile_money": telephone,
-                },
+        if Campagne.objects.exists():
+            self.stdout.write(
+                self.style.WARNING(
+                    "Des campagnes existent déjà. Relancez avec --effacer pour repartir à zéro."
+                )
             )
-            groupeurs[pseudonyme] = groupeur
+            return
 
-        self._charger_les_dossiers_en_attente()
+        rayons = self._rayons()
+        admin = self._administrateur()
+        valide, en_attente = self._groupeurs()
+        concurrent = self._second_groupeur(admin)
+        self._dossiers_a_examiner()
+        acheteurs = self._acheteurs()
 
-        par_identifiant = {}
-        for index, donnees in enumerate(catalogue["groupages"], start=1):
-            campagne = self._charger_une_campagne(index, donnees, groupeurs)
-            par_identifiant[donnees["id"]] = campagne
+        self._campagne_en_collecte(valide, rayons, acheteurs)
+        self._autres_collectes(valide, rayons, acheteurs)
+        self._campagne_financee(valide, rayons, acheteurs)
+        self._campagne_en_distribution(valide, rayons, acheteurs, admin)
+        self._campagne_terminee(valide, rayons, acheteurs, admin)
+        self._campagne_annulee(valide, rayons, acheteurs)
+        self._brouillon(valide, rayons)
+        self._offre_concurrente(concurrent, acheteurs)
+        self._demandes(acheteurs, rayons)
+        self._discussions(valide, concurrent, acheteurs, admin)
+        self._litige(acheteurs)
+        self._notifications_lues(acheteurs)
 
-        self._charger_les_questions(catalogue, par_identifiant)
-        self._charger_les_demandes()
-        self._creer_les_etats_de_fin(par_identifiant)
-        self._donner_ses_commandes_a_la_demonstration(par_identifiant)
-        self._amorcer_la_cloche()
+        self._resumer(valide, en_attente, admin)
 
-        self.stdout.write(
-            self.style.SUCCESS(
-                f"Jeu de démonstration chargé — {len(par_identifiant)} groupages."
+    # ── Mise en place ───────────────────────────────────────────────────────
+
+    def _effacer(self):
+        for modele in (Commentaire, InteretDemande, DemandeProduit, Participation,
+                       PalierPrix, Campagne, Produit, Categorie):
+            modele.objects.all().delete()
+        Utilisateur.objects.filter(is_superuser=False).delete()
+        self.stdout.write("Données précédentes effacées.")
+
+    def _rayons(self) -> dict:
+        rayons = {}
+        for ordre, (nom, icone, enfants) in enumerate(RAYONS):
+            parent = Categorie.objects.create(nom=nom, icone=icone, ordre=ordre)
+            rayons[nom] = parent
+            for sous_ordre, enfant in enumerate(enfants):
+                rayons[enfant] = Categorie.objects.create(
+                    nom=enfant, parent=parent, ordre=sous_ordre
+                )
+        return rayons
+
+    def _administrateur(self) -> Utilisateur:
+        admin = Utilisateur.objects.filter(telephone="99000011").first()
+        if admin is None:
+            admin = Utilisateur.objects.create_superuser(
+                "99000011", MOT_DE_PASSE, nom="Équipe", prenom="Group Achat"
             )
+        return admin
+
+    def _groupeurs(self) -> tuple[Utilisateur, Utilisateur]:
+        valide = Utilisateur.objects.create_user(
+            "90001122", MOT_DE_PASSE, nom="Abalo", prenom="Koffi",
+            role=Utilisateur.Role.GROUPEUR, telephone_verifie=True,
         )
+        DossierKYC.objects.create(
+            utilisateur=valide, type_piece=DossierKYC.TypePiece.CNI,
+            numero_piece="CNI-TG-884512", numero_mobile_money="90001122",
+            nom_commerce="Abalo Import Lomé", statut=DossierKYC.Statut.VALIDE,
+            decide_le=timezone.now() - timedelta(days=60),
+        )
+        Reputation.objects.create(groupeur=valide)
 
-    # ── Le catalogue ────────────────────────────────────────────────────────
+        # Celui-ci sert à montrer l'écran d'attente : sans lui, impossible de
+        # présenter ce que voit un groupeur dont le dossier n'est pas tranché.
+        en_attente = Utilisateur.objects.create_user(
+            "90009988", MOT_DE_PASSE, nom="Doe", prenom="Afi",
+            role=Utilisateur.Role.GROUPEUR, telephone_verifie=True,
+        )
+        DossierKYC.objects.create(
+            utilisateur=en_attente, type_piece=DossierKYC.TypePiece.PASSEPORT,
+            numero_piece="TG-P-220199", numero_mobile_money="90009988",
+            nom_commerce="Afi Distribution",
+        )
+        return valide, en_attente
 
-    def _charger_une_campagne(self, index: int, donnees: dict, groupeurs: dict):
-        """Crée une campagne et les commandes payées qui vont avec.
+    def _second_groupeur(self, admin) -> Utilisateur:
+        """Un deuxième groupeur validé, avec un passé.
 
-        Les commandes ne sont pas décoratives : ``acheteurs_confirmes``,
-        ``collecte_sur_les_parts`` et le retrait du groupeur en découlent.
-        Une campagne sans commande afficherait « 0 acheteur confirmé », ce qui
-        est exact mais ne démontre rien.
+        Sans lui, la place de marché n'en est pas une : impossible de montrer
+        deux offres sur le même produit, ni une réputation qui diffère d'un
+        vendeur à l'autre.
         """
-        variante = donnees.get("variante") or {}
+        groupeur = Utilisateur.objects.create_user(
+            "96004477", MOT_DE_PASSE, nom="Amegan", prenom="Essi",
+            role=Utilisateur.Role.GROUPEUR, telephone_verifie=True,
+        )
+        DossierKYC.objects.create(
+            utilisateur=groupeur, type_piece=DossierKYC.TypePiece.CNI,
+            numero_piece="CNI-TG-114027", numero_mobile_money="96004477",
+            nom_commerce="Essi Negoce", statut=DossierKYC.Statut.VALIDE,
+            decide_le=timezone.now() - timedelta(days=120), decide_par=admin,
+        )
+        Reputation.objects.create(
+            groupeur=groupeur, campagnes_terminees=7, campagnes_annulees=1,
+            litiges=1, participants_servis=43, note=4.17,
+        )
+        return groupeur
 
-        # ⚠️ **Le groupeur fait partie de la cle de recherche.** Le titre seul
-        # ne suffit pas : rien ne l'impose unique, et un groupage de
-        # demonstration portant le meme nom faisait echouer tout le chargement
-        # sur « get() returned more than one Campagne ». La campagne d'un
-        # groupeur, elle, est bien identifiee par son titre.
-        campagne, creee = Campagne.objects.get_or_create(
-            titre=donnees["produit"],
-            groupeur=groupeurs[donnees["groupeur"]],
-            defaults={
-                "description": donnees["description"],
-                "contenu_part": donnees["contenuPart"],
-                "categorie": donnees["categorie"],
-                "prix_part": Decimal(str(donnees["prixPart"])),
-                # Le denominateur de la barre de progression (§2.5). Pas de
-                # `.get` avec un repli : un groupage du catalogue qui
-                # l'oublierait doit faire echouer le chargement bruyamment,
-                # plutot que d'afficher une barre inventee.
-                "objectif_participants": donnees["objectifParticipants"],
-                "medias": _medias(donnees),
-                "caracteristiques": donnees.get("caracteristiques", []),
-                "variante_libelle": variante.get("libelle", ""),
-                "variante_options": variante.get("options", []),
-                "quartier_remise": donnees.get("quartier", ""),
-                "point_remise": donnees.get("pointRemise", ""),
-                "remise_le": donnees.get("remiseLe"),
-                # `heuresRestantes` est fixe dans le jeu de démonstration, et
-                # non calculé depuis une date : la maquette doit afficher
-                # « RESTE 2 JOURS » sur C1 quel que soit le jour où on la
-                # montre. On le reconvertit donc en date de clôture au moment
-                # du chargement.
-                "date_fin": timezone.now()
-                + timedelta(hours=donnees["heuresRestantes"]),
-            },
+    def _dossiers_a_examiner(self) -> None:
+        """De quoi remplir la file d'attente de la console d'administration."""
+        candidats = [
+            ("97005588", "Komlan", "Sodji", "Sodji Trading",
+             DossierKYC.TypePiece.CNI, "CNI-TG-556102"),
+            ("98006699", "Nathalie", "Agbo", "NA Cosmetiques",
+             DossierKYC.TypePiece.PASSEPORT, "TG-P-884411"),
+        ]
+        for telephone, prenom, nom, commerce, piece, numero in candidats:
+            compte = Utilisateur.objects.create_user(
+                telephone, MOT_DE_PASSE, nom=nom, prenom=prenom,
+                role=Utilisateur.Role.GROUPEUR, telephone_verifie=True,
+            )
+            DossierKYC.objects.create(
+                utilisateur=compte, type_piece=piece, numero_piece=numero,
+                numero_mobile_money=telephone, nom_commerce=commerce,
+                depose_le=timezone.now() - timedelta(days=2),
+            )
+        self.stdout.write("  - 3 dossiers KYC en attente de decision")
+
+    def _offre_concurrente(self, groupeur, acheteurs) -> None:
+        """Deux groupeurs sur le même produit : l'acheteur compare.
+
+        C'est le coeur de la place de marché, et ça ne se voit que si deux
+        campagnes portent le **même** produit à deux prix différents.
+        """
+        riz = Produit.objects.filter(nom__icontains="riz").first()
+        if riz is None:
+            return
+
+        campagne = Campagne.objects.create(
+            produit=riz, groupeur=groupeur,
+            titre="Riz Delice 25 kg - conteneur d'Essi Negoce",
+            description="Meme reference, livraison une semaine plus tot.",
+            prix_unitaire=17500, quantite_minimale=30,
+            date_limite=timezone.now() + timedelta(days=6),
+            point_remise="Depot Essi, Agoe-Nyive",
+            statut=Campagne.Statut.EN_COURS, publiee_le=timezone.now(),
+        )
+        PalierPrix.objects.create(campagne=campagne, quantite_min=30, prix_unitaire=16000)
+        for acheteur, quantite in zip(acheteurs[1:], (5, 4, 3)):
+            self._payer(campagne, acheteur, quantite)
+        self.stdout.write("  - Offre concurrente sur le riz (comparateur)")
+
+    def _discussions(self, groupeur, concurrent, acheteurs, admin) -> None:
+        """Des fils de discussion vivants, et un message à modérer."""
+        campagnes = list(
+            Campagne.objects.filter(statut=Campagne.Statut.EN_COURS).order_by("id")
+        )
+        if not campagnes:
+            return
+
+        echanges = [
+            ("Est-ce que la garantie couvre la casse a la livraison ?",
+             "Oui, tout colis endommage est remplace - vous verifiez au retrait."),
+            ("On peut passer recuperer en soiree apres 18 h ?",
+             "Le depot reste ouvert jusqu'a 19 h 30 du lundi au samedi."),
+            ("Possible de prendre deux pieces et d'en faire livrer une a Kara ?",
+             "La remise se fait a Lome ; pour Kara je peux indiquer un transporteur."),
+            ("La photo correspond bien au modele exact ?",
+             "Oui, photo prise sur le lot que j'ai en commande."),
+        ]
+
+        for rang, campagne in enumerate(campagnes[: len(echanges)]):
+            question, reponse = echanges[rang]
+            auteur = acheteurs[rang % len(acheteurs)]
+            message = Commentaire.objects.create(
+                campagne=campagne, auteur=auteur, texte=question,
+                cree_le=timezone.now() - timedelta(hours=7 + rang),
+            )
+            Commentaire.objects.create(
+                campagne=campagne, auteur=campagne.groupeur, reponse_a=message,
+                texte=reponse, cree_le=timezone.now() - timedelta(hours=5 + rang),
+            )
+            # Les « j'aime » sont posés un par un plutôt qu'en compteur : le
+            # fil doit savoir qui a déjà aimé, sinon le coeur de chacun est faux.
+            for amateur in acheteurs[: 2 + rang % 3]:
+                if amateur.id != auteur.id:
+                    JaimeCommentaire.objects.create(
+                        commentaire=message, utilisateur=amateur
+                    )
+            message.nombre_jaime = message.jaime.count()
+            message.save(update_fields=["nombre_jaime"])
+
+        avis = Commentaire.objects.create(
+            campagne=campagnes[0], auteur=acheteurs[2],
+            texte="Troisieme commande chez ce groupeur, toujours impeccable.",
+            cree_le=timezone.now() - timedelta(days=1),
+        )
+        for amateur in acheteurs[:4]:
+            if amateur.id != avis.auteur_id:
+                JaimeCommentaire.objects.create(commentaire=avis, utilisateur=amateur)
+        avis.nombre_jaime = avis.jaime.count()
+        avis.save(update_fields=["nombre_jaime"])
+
+        # Un message masqué, pour que la modération ait de quoi montrer.
+        Commentaire.objects.create(
+            campagne=campagnes[0], auteur=acheteurs[4],
+            texte="Arnaque totale, ne commandez jamais ici !!!",
+            cree_le=timezone.now() - timedelta(hours=3),
+            masque_le=timezone.now() - timedelta(hours=2),
+            masque_par=admin,
+            motif_masquage="Accusation sans fondement, aucun litige ouvert.",
         )
 
-        # ⚠️ **Les paliers sont reposes a chaque chargement**, meme sur une
-        # ligne existante — et ils sont d'abord effaces. Sans ce nettoyage, un
-        # rechargement apres modification du catalogue **empilerait** l'ancienne
-        # grille et la nouvelle : deux paliers au meme seuil violeraient la
-        # contrainte d'unicite, et des seuils orphelins resteraient en base.
-        #
-        # `full_clean()` plutot qu'un `create` direct : c'est lui qui refuse une
-        # grille qui monte, et le jeu de demonstration doit passer par les
-        # memes verrous que le formulaire du groupeur.
-        PalierPrix.objects.filter(campagne=campagne).delete()
-        for palier in donnees.get("paliers", []):
-            ligne = PalierPrix(
-                campagne=campagne,
-                quantite_min=palier["quantiteMin"],
-                prix_part=Decimal(str(palier["prixPart"])),
-            )
-            ligne.full_clean()
-            ligne.save()
-
-        if not creee:
-            # ⚠️ **L'objectif se remet a jour meme sur une ligne existante.**
-            # Les groupages d'avant ont recu un objectif deduit de leurs
-            # commandes par la migration 0004, et cette reprise arrondit vers
-            # le haut : aucun groupage ne pouvait donc **depasser** son
-            # objectif, alors que c'est precisement le cas que la barre doit
-            # savoir montrer. On repose la valeur du catalogue, qui fait foi.
-            a_poser = {}
-            if campagne.objectif_participants != donnees["objectifParticipants"]:
-                a_poser["objectif_participants"] = donnees["objectifParticipants"]
-
-            # ⚠️ **Les medias aussi.** Ils sont dans `defaults`, donc une ligne
-            # deja en base gardait son unique photo, et les photos
-            # supplementaires du catalogue n'arrivaient jamais : la galerie de
-            # l'ecran 3 n'affichait pas ses vignettes, et on croyait a un
-            # defaut d'interface alors que c'est la donnee qui manquait.
-            medias = _medias(donnees)
-            if campagne.medias != medias:
-                a_poser["medias"] = medias
-
-            # ⚠️ **La date de fin aussi, et c'est le plus important des trois.**
-            #
-            # `heuresRestantes` est fixe dans le catalogue et converti en date
-            # **au moment du chargement** : la maquette doit afficher « il
-            # reste 2 jours » sur C1 quel que soit le jour ou on la montre.
-            # Mais la date etait dans `defaults`, donc jamais reposee sur une
-            # ligne existante — et le jeu de demonstration **vieillissait**.
-            #
-            # Mesure avant correction : sept groupages `ouverte` avec une date
-            # passee, et un catalogue tombe de douze a huit. Relancer
-            # `charger_demo`, le remede que la documentation recommande, n'y
-            # changeait rien.
-            #
-            # ⚠️ **Le statut n'est pas repose.** Un groupage cloture par la
-            # tache planifiee a un `Retrait` derriere lui : le rouvrir rendrait
-            # retirable un argent deja compte. Pour une demonstration
-            # repartant de zero, c'est `flush` puis `charger_demo`.
-            a_poser["date_fin"] = timezone.now() + timedelta(
-                hours=donnees["heuresRestantes"]
-            )
-
-            if a_poser:
-                Campagne.objects.filter(pk=campagne.pk).update(**a_poser)
-                campagne.refresh_from_db(fields=list(a_poser))
-            return campagne
-
-        for numero in range(donnees["acheteursConfirmes"]):
-            acheteur, _ = Acheteur.objects.get_or_create(
-                telephone=f"+2289{index:02d}{numero:05d}",
-                defaults={"nom": f"Acheteur {numero + 1}"},
-            )
-            enregistrer_paiement(
-                campagne=campagne,
-                acheteur=acheteur,
-                quantite=1,
-                quartier=QUARTIERS[numero % len(QUARTIERS)],
-                repere="repère de démonstration",
-                telephone=acheteur.telephone,
-                variante=(
-                    variante["options"][numero % len(variante["options"])]
-                    if variante.get("options")
-                    else ""
-                ),
-                cle_idempotence=f"demo-{donnees['id']}-{numero}",
-            )
-
-        self._etaler_les_commandes(campagne, index)
-
         self.stdout.write(
-            f"  {campagne.titre} — {donnees['acheteursConfirmes']} commandes, "
-            f"{campagne.collecte_sur_les_parts} F collectés"
+            f"  - Discussions sur {min(len(campagnes), len(echanges))} campagnes "
+            "+ 1 message masque"
+        )
+
+    def _litige(self, acheteurs) -> None:
+        """Une contestation ouverte, pour l'arbitrage côté administration."""
+        part = (
+            Participation.objects.filter(statut=Participation.Statut.PRETE)
+            .exclude(acheteur=acheteurs[0])
+            .first()
+        )
+        if part is None:
+            return
+        Litige.objects.create(
+            participation=part, motif=Litige.Motif.NON_CONFORME,
+            description="Le coloris recu ne correspond pas a celui annonce sur la fiche.",
+            ouvert_le=timezone.now() - timedelta(hours=20),
+        )
+        self.stdout.write("  - 1 litige ouvert a arbitrer")
+
+    def _notifications_lues(self, acheteurs) -> None:
+        """Toutes les notifications ne sont pas neuves.
+
+        Une cloche où tout est non lu paraît fausse : on marque les plus
+        anciennes comme lues pour que le compteur ait l'air d'avoir vécu.
+        """
+        # Tout le monde, pas seulement les acheteurs : le groupeur recoit une
+        # notification par paiement, et une cloche a cinquante non lues ne
+        # ressemble a rien.
+        for acheteur in Utilisateur.objects.all():
+            identifiants = list(
+                Notification.objects.filter(destinataire=acheteur)
+                .order_by("cree_le")
+                .values_list("id", flat=True)
+            )
+            deja_lues = identifiants[: max(0, len(identifiants) - 3)]
+            Notification.objects.filter(id__in=deja_lues).update(
+                lue_le=timezone.now() - timedelta(hours=6)
+            )
+        restantes = Notification.objects.filter(lue_le__isnull=True).count()
+        self.stdout.write(f"  - {restantes} notifications non lues reparties")
+
+    def _acheteurs(self) -> list[Utilisateur]:
+        return [
+            Utilisateur.objects.create_user(
+                telephone, MOT_DE_PASSE, nom=nom, prenom=prenom,
+                telephone_verifie=True,
+            )
+            for telephone, prenom, nom in ACHETEURS
+        ]
+
+    def _campagne(self, groupeur, categorie, nom, marque, prix, minimum,
+                  jours=14, **extra) -> Campagne:
+        produit = Produit.objects.create(
+            categorie=categorie, nom=nom, marque=marque,
+            description=extra.pop("description", ""),
+            caracteristiques=extra.pop("caracteristiques", {}),
+            propose_par=groupeur,
+        )
+        campagne = Campagne.objects.create(
+            produit=produit, groupeur=groupeur,
+            titre=extra.pop("titre", ""),
+            description=extra.pop("conditions", ""),
+            prix_unitaire=prix, quantite_minimale=minimum,
+            date_limite=timezone.now() + timedelta(days=jours),
+            point_remise=extra.pop("point_remise", "Marché d'Adawlato, Lomé"),
+            statut=Campagne.Statut.EN_COURS, publiee_le=timezone.now(),
+            **extra,
         )
         return campagne
 
-    def _etaler_les_commandes(self, campagne, index: int) -> None:
-        """Répartit les commandes sur les quatorze derniers jours.
-
-        ⚠️ **Sans ça, la courbe de collecte de l'écran A1 ne montre rien.**
-        ``passee_le`` est en ``auto_now_add`` : toutes les commandes du jeu de
-        démonstration portent l'instant du chargement, donc la courbe reste
-        plate pendant treize jours puis monte à la verticale. Ce n'est pas une
-        courbe, c'est un trait — et un administrateur à qui on la montre ne
-        peut rien en conclure.
-
-        La répartition n'est pas uniforme : elle **monte vers la fin**, parce
-        que c'est ce que fait un groupage réel — les commandes s'accélèrent à
-        l'approche de la clôture, c'est tout l'effet du compte à rebours du
-        §2.4. Une courbe plate donnerait une fausse idée du produit.
-        """
-        commandes = list(campagne.commandes.order_by("id"))
-        if not commandes:
-            return
-
-        maintenant = timezone.now()
-        total = len(commandes)
-
-        for rang, commande in enumerate(commandes):
-            # ⚠️ **Exposant inférieur à 1**, et le sens compte : `jours`
-            # décroît quand `avancement` croît, donc un exposant > 1 aurait
-            # entassé les commandes sur les jours *anciens* — exactement
-            # l'inverse de ce qu'on veut, et la courbe descendait.
-            avancement = (rang / max(1, total - 1)) ** 0.55
-            jours = 13 - avancement * 13
-            Commande.objects.filter(pk=commande.pk).update(
-                passee_le=maintenant
-                - timedelta(days=jours, hours=(index * 3 + rang) % 24)
-            )
-
-    # ── Les questions publiques ─────────────────────────────────────────────
-
-    def _charger_les_questions(self, catalogue: dict, par_identifiant: dict) -> None:
-        """Les questions de l'écran 10, et celles affichées sur l'écran 3.
-
-        Deux sources dans le JSON, et les deux comptent : ``questions`` porte
-        le jeu détaillé de l'écran 10 — dont une **en vérification**, qui est
-        le seul moyen de démontrer le filtre de modération — tandis que
-        ``questionsRecentes`` porte les deux questions-réponses qu'affiche la
-        fiche produit.
-
-        Elles sont dédupliquées sur le texte : les deux listes se recouvrent
-        par endroits, et une question affichée deux fois sur la même fiche
-        donnerait l'impression d'un bug.
-        """
-        auteur, _ = Acheteur.objects.get_or_create(
-            telephone="+22890000000", defaults={"nom": "Akosua Doe"}
+    def _payer(self, campagne, acheteur, quantite) -> Participation:
+        prix = campagne.prix_pour_quantite(campagne.quantite_reservee + quantite)
+        participation = Participation.objects.create(
+            campagne=campagne, acheteur=acheteur, quantite=quantite,
+            prix_unitaire_applique=prix, montant_total=prix * quantite,
         )
+        encaisser(participation, operateur="tmoney", numero=acheteur.telephone)
+        participation.refresh_from_db()
+        return participation
 
-        deja = set()
+    # ── Les cinq états ──────────────────────────────────────────────────────
 
-        for brute in catalogue.get("questions", []):
-            campagne = par_identifiant.get(brute["groupageId"])
-            if campagne is None:
-                continue
-            cle = (campagne.pk, brute["texte"])
-            if cle in deja:
-                continue
-            deja.add(cle)
-            Question.objects.get_or_create(
-                campagne=campagne,
-                texte=brute["texte"],
-                defaults={
-                    "auteur": auteur,
-                    "etat": brute.get("etat", "publiee"),
-                    # ⚠️ **Les deux sources n'ont pas la même forme.** Ici la
-                    # réponse est un objet `{auteur, texte, repondueLe}` ;
-                    # dans `questionsRecentes`, c'est une chaîne. Passer
-                    # l'objet tel quel l'enregistrait converti en texte Python
-                    # — et le filtre de modération a refusé le charabia qui en
-                    # sortait, ce qui a révélé l'erreur. Il a eu raison : du
-                    # `{'auteur': ...}` affiché à un acheteur aurait été pire
-                    # qu'une réponse manquante.
-                    "reponse": _texte_de_la_reponse(brute.get("reponse")),
-                },
-            )
-
-        for groupage in catalogue["groupages"]:
-            campagne = par_identifiant.get(groupage["id"])
-            if campagne is None:
-                continue
-            for echange in groupage.get("questionsRecentes") or []:
-                cle = (campagne.pk, echange["question"])
-                if cle in deja:
-                    continue
-                deja.add(cle)
-                Question.objects.get_or_create(
-                    campagne=campagne,
-                    texte=echange["question"],
-                    defaults={
-                        "auteur": auteur,
-                        "etat": "publiee",
-                        "reponse": _texte_de_la_reponse(echange.get("reponse")),
-                    },
-                )
-
-    # ── Les fins de parcours, pour l'administration ────────────────────────
-
-    def _creer_les_etats_de_fin(self, par_identifiant: dict) -> None:
-        """Des groupages **arrivés au bout**, dans les quatre états possibles.
-
-        Sans eux, l'écran d'administration n'a rien à montrer : que des
-        groupages ouverts, aucune file, aucune courbe, aucun virement. Or c'est
-        précisément ce que l'administrateur regarde — ce qui s'est terminé, et
-        comment.
-
-        Les quatre cas ne sont pas interchangeables :
-
-        | Groupage | Ce qu'il met à l'épreuve |
-        |---|---|
-        | Huile de palme | **Virement à faire** : clôturé, devis déposé, argent prêt |
-        | Eau de javel | **Devis attendu** : clôturé, le groupeur n'a rien déposé |
-        | Ventilateur | **Annulé par le groupeur** : tout le monde remboursé |
-        | Serviettes | **Livré** : le cas qui fait monter le taux d'aboutissement |
-
-        Le deuxième est le plus utile à montrer : c'est celui où **le groupeur
-        attend**, et où l'administration est le goulot d'étranglement.
-        """
-        a_cloturer = {
-            "C3": ("Huilerie Adjalé, Adidogomé", 185000, True),
-            "C8": ("Grossiste Akodessewa", 72000, False),
-        }
-
-        for identifiant, (fournisseur, montant, avec_devis) in a_cloturer.items():
-            campagne = par_identifiant.get(identifiant)
-            if campagne is None:
-                continue
-
-            # ⚠️ **Rejouer la commande ne doit pas laisser l'ecran A1 vide.**
-            # Le garde-fou se contentait de sauter un groupage qui portait deja
-            # un retrait, et la file « Retraits a executer » restait a zero sur
-            # une base rechargee : le retrait existait, mais personne ne
-            # l'avait demande. On reprend donc celui qui est la.
-            retrait = getattr(campagne, "retrait", None)
-            if retrait is None:
-                retrait = cloturer_campagne(campagne)
-            if avec_devis:
-                Justificatif.objects.get_or_create(
-                    campagne=campagne,
-                    nature=Justificatif.Nature.DEVIS,
-                    defaults={
-                        "fournisseur": fournisseur,
-                        "montant": Decimal(str(montant)),
-                        "reference": f"coffre/devis/{campagne.pk}",
-                    },
-                )
-            # Celui qui a son devis **demande** son retrait : sans ça, la
-            # file « Retraits à exécuter » de l'écran A1 reste vide et
-            # l'administration n'a rien à montrer.
-            if avec_devis and retrait.etat == Retrait.Etat.RETIRABLE:
-                demander_le_retrait(retrait)
-
-            # Reculé de quelques jours : sans ça, « attend depuis 0 jour » et
-            # la colonne d'ancienneté de l'écran ne démontre rien.
-            jours = timedelta(days=4 if avec_devis else 2)
-            Retrait.objects.filter(pk=retrait.pk).update(
-                effectue_le=timezone.now() - jours,
-                demande_le=(timezone.now() - jours) if avec_devis else None,
-            )
-
-        annule = par_identifiant.get("C9")
-        if annule is not None and annule.statut == Campagne.Statut.OUVERTE:
-            annuler_campagne(annule)
-
-        livre = par_identifiant.get("C14")
-        if livre is not None and not hasattr(livre, "retrait"):
-            retrait = cloturer_campagne(livre)
-            Justificatif.objects.create(
-                campagne=livre,
-                nature=Justificatif.Nature.DEVIS,
-                fournisseur="Textile Lomé",
-                montant=Decimal("60000"),
-                reference=f"coffre/devis/{livre.pk}",
-            )
-            demander_le_retrait(retrait)
-            executer_le_retrait(retrait, par="Administration")
-            livre.statut = Campagne.Statut.LIVREE
-            livre.save(update_fields=["statut"])
-            livre.commandes.update(statut="livree")
-
-    # ── Les dossiers KYC en attente ─────────────────────────────────────────
-
-    def _donner_ses_commandes_a_la_demonstration(
-        self, par_identifiant: dict
-    ) -> None:
-        """Attribue à Akosua Doe des commandes du fil rouge.
-
-        ## ⚠️ Le défaut que ceci répare
-
-        **L'acheteuse du §3 n'avait aucune commande.** Les commandes de
-        démonstration étaient réparties sur des acheteurs générés
-        (« Acheteur 54 »), et le compte avec lequel on se connecte pour
-        montrer le produit n'en possédait pas une seule. Conséquence :
-
-        - l'**écran 8** (« Mes commandes ») était vide ;
-        - l'**écran 9** — suivi, `FriseEtapes`, **code de livraison**, refus du
-          colis — était donc inatteignable, alors que c'est l'écran qui porte
-          toute la promesse de livraison ;
-        - le code `K7M-4PQ` que le §3 annonce **n'existait pas en base** ;
-        - et les notifications de commande n'avaient personne à prévenir.
-
-        ## ⚠️ On réassigne, on ne crée pas
-
-        Les additions du §3 doivent tomber juste : un jury vérifie. Ajouter une
-        commande à C1 ferait 33 commandes et 132 000 F collectés au lieu de
-        128 000 F. On **reprend donc des commandes existantes** et on change
-        leur propriétaire : les comptes restent exacts, et l'une d'elles
-        devient simplement la sienne.
-
-        Idempotent : on ne touche qu'aux groupages où elle n'a encore rien.
-        """
-        acheteuse, _ = Acheteur.objects.get_or_create(
-            telephone="+22890000000",
-            defaults={"nom": "Akosua Doe", "quartier": "Tokoin"},
+    def _campagne_en_collecte(self, groupeur, rayons, acheteurs):
+        campagne = self._campagne(
+            groupeur, rayons["Alimentation"], "Sac de riz parfumé 25 kg", "Délice",
+            18000, 20, jours=12,
+            titre="Riz Délice 25 kg — arrivage de novembre",
+            description="Riz parfumé importé de Thaïlande, sac de 25 kg.",
+            caracteristiques={"Poids": "25 kg", "Origine": "Thaïlande",
+                              "Variété": "Jasmin"},
+            conditions="Sacs neufs, scellés. Remise au marché d'Adawlato.",
+            objectif_participants=15,
         )
-        # Son quartier est celui du §3, et il sert de valeur par défaut au
-        # formulaire de commande : un compte de démonstration sans adresse
-        # ferait ressaisir le repère à chaque passage.
-        if not acheteuse.quartier:
-            acheteuse.quartier = "Tokoin"
-            acheteuse.repere = acheteuse.repere or "Face à la pharmacie Sodji"
-            acheteuse.save(update_fields=["quartier", "repere"])
+        PalierPrix.objects.create(campagne=campagne, quantite_min=20, prix_unitaire=16500)
+        PalierPrix.objects.create(campagne=campagne, quantite_min=50, prix_unitaire=15000)
 
-        #: Le groupage clôturé où l'on pose la commande **en livraison**.
-        #:
-        #: ⚠️ **C'est la seule façon d'afficher le code de livraison.**
-        #: L'écran 9 ne le montre que pendant la livraison : sur une commande
-        #: « payée », le `K7M-4PQ` du §3 existerait en base et ne
-        #: s'afficherait nulle part. Il porte aussi le refus du colis, qui
-        #: n'apparaît que dans cet état.
-        #:
-        #: Choisi dynamiquement : quel groupage est clôturé dépend du JSON du
-        #: catalogue, et le coder en dur ici ferait un second endroit à
-        #: corriger le jour où ce JSON change.
-        en_cours = next(
-            (
-                campagne
-                for campagne in par_identifiant.values()
-                if campagne.statut == Campagne.Statut.EN_COURS
-            ),
-            None,
+        for acheteur, quantite in zip(acheteurs, (3, 2, 4, 2)):
+            self._payer(campagne, acheteur, quantite)
+
+        question = Commentaire.objects.create(
+            campagne=campagne, auteur=acheteurs[0],
+            texte="Bonjour, c'est bien du riz parfumé et non du riz brisé ?",
         )
+        Commentaire.objects.create(
+            campagne=campagne, auteur=groupeur, reponse_a=question,
+            texte="Bonjour, oui, riz jasmin parfumé, sacs scellés d'origine.",
+        )
+        Commentaire.objects.create(
+            campagne=campagne, auteur=acheteurs[2],
+            texte="J'ai déjà commandé chez Abalo le mois dernier, tout était nickel.",
+            nombre_jaime=4,
+        )
+        self.stdout.write("  • Campagne en collecte (riz) — 11/20 pièces")
 
-        #: Les quatre états de l'écran 8 qu'on veut pouvoir montrer.
-        #: ``(campagne, code à poser ou None, statut à poser ou None)``
-        a_reprendre = [
-            # En attente de clôture : c'est la détention des fonds qui
-            # rassure, pas encore la garantie (§1.7).
-            (par_identifiant.get("C1"), None, None),
-            # Livré : la frise est complète et le code a disparu.
-            (par_identifiant.get("C14"), None, None),
-            # Annulé : remboursement intégral, livraison comprise.
-            (par_identifiant.get("C9"), None, None),
+    def _autres_collectes(self, groupeur, rayons, acheteurs):
+        """De quoi faire défiler le fil d'accueil.
+
+        Une seule campagne ouverte suffirait à prouver que la mécanique
+        marche, mais pas à montrer le produit : le fil vertical de l'accueil
+        ne se comprend que s'il y a de quoi défiler.
+        """
+        catalogue = [
+            {
+                "categorie": "Téléphonie", "nom": "Écouteurs sans fil", "marque": "Oraimo",
+                "prix": 14000, "minimum": 25, "jours": 9,
+                "titre": "Écouteurs Oraimo — lot de fin d'année",
+                "description": "Bluetooth 5.3, boîtier de charge, 30 h d'autonomie.",
+                "caracteristiques": {"Autonomie": "30 h", "Bluetooth": "5.3"},
+                "paliers": [(25, 12500), (60, 11000)],
+                "parts": (4, 3, 2),
+            },
+            {
+                "categorie": "Maison", "nom": "Matelas orthopédique 160×200", "marque": "Dolidol",
+                "prix": 145000, "minimum": 8, "jours": 18,
+                "titre": "Matelas Dolidol 160×200 — import direct",
+                "description": "Mousse haute densité, housse déhoussable, garantie 5 ans.",
+                "caracteristiques": {"Dimensions": "160 × 200 cm", "Garantie": "5 ans"},
+                "paliers": [(8, 132000)],
+                "parts": (1, 1),
+            },
+            {
+                "categorie": "Alimentation", "nom": "Bidon d'huile végétale 20 L", "marque": "Dinor",
+                "prix": 28000, "minimum": 15, "jours": 5,
+                "titre": "Huile Dinor 20 L — arrivage du port",
+                "description": "Huile de tournesol raffinée, bidon scellé de 20 litres.",
+                "caracteristiques": {"Contenance": "20 L", "Type": "Tournesol"},
+                "paliers": [(15, 26000), (40, 24500)],
+                "parts": (3, 2, 2, 1),
+            },
+            {
+                "categorie": "Mode", "nom": "Pagne wax 6 yards", "marque": "Vlisco",
+                "prix": 32000, "minimum": 12, "jours": 3,
+                "titre": "Pagnes wax Vlisco — collection de saison",
+                "description": "Six yards, coton 100 %, motifs au choix à la commande.",
+                "caracteristiques": {"Longueur": "6 yards", "Matière": "Coton"},
+                "paliers": [(12, 29000)],
+                "parts": (2, 2, 1, 1, 1),
+            },
+            {
+                "categorie": "Électroménager", "nom": "Congélateur coffre 200 L", "marque": "Hisense",
+                "prix": 215000, "minimum": 6, "jours": 21,
+                "titre": "Congélateurs Hisense 200 L — groupage de novembre",
+                "description": "Classe A+, 200 litres, garantie constructeur 2 ans.",
+                "caracteristiques": {"Volume": "200 L", "Classe": "A+", "Garantie": "2 ans"},
+                "paliers": [(6, 198000)],
+                "parts": (1, 1, 1),
+            },
         ]
-        if en_cours is not None:
-            a_reprendre.insert(
-                0, (en_cours, "K7M-4PQ", Commande.Statut.EN_LIVRAISON)
+
+        for fiche in catalogue:
+            campagne = self._campagne(
+                groupeur, rayons[fiche["categorie"]], fiche["nom"], fiche["marque"],
+                fiche["prix"], fiche["minimum"], jours=fiche["jours"],
+                titre=fiche["titre"], description=fiche["description"],
+                caracteristiques=fiche["caracteristiques"],
             )
+            for seuil, prix in fiche["paliers"]:
+                PalierPrix.objects.create(
+                    campagne=campagne, quantite_min=seuil, prix_unitaire=prix
+                )
+            for acheteur, quantite in zip(acheteurs, fiche["parts"]):
+                self._payer(campagne, acheteur, quantite)
 
-        for campagne, code, statut in a_reprendre:
-            if campagne is None:
-                continue
-            if campagne.commandes.filter(acheteur=acheteuse).exists():
-                continue
+        self.stdout.write(f"  • {len(catalogue)} autres campagnes en collecte")
 
-            commande = (
-                campagne.commandes.exclude(acheteur=acheteuse)
-                .order_by("id")
-                .first()
-            )
-            if commande is None:
-                continue
+    def _campagne_financee(self, groupeur, rayons, acheteurs):
+        campagne = self._campagne(
+            groupeur, rayons["Téléphonie"], "Smartphone 128 Go double SIM", "Itel",
+            95000, 5, jours=2,
+            titre="Smartphone Itel 128 Go — lot de novembre",
+            description="Neuf, sous blister, garantie 6 mois.",
+            caracteristiques={"Stockage": "128 Go", "RAM": "6 Go",
+                              "Écran": "6,6 pouces"},
+        )
+        for acheteur, quantite in zip(acheteurs, (2, 1, 1, 1)):
+            self._payer(campagne, acheteur, quantite)
+        cloturer(campagne)
+        demander_decaissement(campagne)
+        self.stdout.write("  • Campagne financée (smartphones) — décaissement à valider")
 
-            commande.acheteur = acheteuse
-            commande.telephone = acheteuse.telephone
-            commande.quartier = "Tokoin"
-            commande.repere = "Face à la pharmacie Sodji"
-            if code is not None:
-                # ⚠️ Le code est unique en base : on ne l'écrase que s'il est
-                # libre, sinon une seconde exécution sur une base à moitié
-                # chargée tomberait sur une violation de contrainte.
-                if not Commande.objects.filter(code_livraison=code).exists():
-                    commande.code_livraison = code
-            champs = [
-                "acheteur",
-                "telephone",
-                "quartier",
-                "repere",
-                "code_livraison",
-            ]
-            if statut is not None:
-                commande.statut = statut
-                champs.append("statut")
-
-            # ⚠️ ``update_fields`` : ``save()`` complet repasserait par
-            # ``full_clean``, qui recalcule les frais de livraison sur le
-            # barème **du jour**. Une commande ancienne parfaitement valable
-            # deviendrait alors impossible à enregistrer.
-            commande.save(update_fields=champs)
-
+    def _campagne_en_distribution(self, groupeur, rayons, acheteurs, admin):
+        campagne = self._campagne(
+            groupeur, rayons["Maison"], "Ventilateur sur pied 3 vitesses", "Binatone",
+            22000, 6, jours=1,
+            titre="Ventilateurs Binatone — arrivage immédiat",
+            description="Trois vitesses, oscillation, garantie 1 an.",
+        )
+        for acheteur, quantite in zip(acheteurs, (2, 2, 1, 2)):
+            self._payer(campagne, acheteur, quantite)
+        cloturer(campagne)
+        decaissement = demander_decaissement(campagne)
+        executer_decaissement(decaissement, admin)
+        mettre_a_disposition(campagne, point_remise="Boutique Abalo, Bè-Kpota")
         self.stdout.write(
-            f"  {Commande.objects.filter(acheteur=acheteuse).count()} commandes "
-            "pour le compte de démonstration"
+            "  • Campagne en distribution (ventilateurs) — codes de retrait actifs"
         )
 
-    def _amorcer_la_cloche(self) -> None:
-        """Donne des notifications au compte de démonstration.
-
-        ⚠️ **Nécessaire, et pour une raison instructive.** Les notifications
-        sont produites par les transitions — ``cloturer_campagne``,
-        ``annuler_campagne``, la réponse à une question. Or cette commande est
-        idempotente : sur une base déjà chargée, elle **saute** ces
-        transitions, puisque les retraits existent déjà. La cloche restait
-        donc vide précisément là où on veut la montrer.
-
-        On rejoue donc la rédaction pour le compte de démonstration — en
-        passant par les **mêmes fonctions** que le produit, pas par des textes
-        écrits ici. Deux rédactions du même message divergeraient en une
-        semaine, et c'est la démonstration qui afficherait l'ancienne.
-
-        Idempotent lui aussi : on ne crée que ce qui manque, par nature.
-        """
-        from groupachat.echanges.models import (
-            Notification,
-            prevenir_de_l_annulation,
-            prevenir_de_l_arrivee,
-            prevenir_de_la_cloture,
+    def _campagne_terminee(self, groupeur, rayons, acheteurs, admin):
+        campagne = self._campagne(
+            groupeur, rayons["Électroménager"], "Blender 1,5 L", "Moulinex",
+            35000, 4, jours=1,
+            titre="Blenders Moulinex — lot d'octobre",
         )
-
-        acheteuse = Acheteur.objects.filter(telephone="+22890000000").first()
-        if acheteuse is None:
-            return
-
-        def manque(nature) -> bool:
-            return not Notification.objects.filter(
-                destinataire=acheteuse, nature=nature
-            ).exists()
-
-        #: Ses commandes sur des groupages déjà clôturés : c'est de celles-là
-        #: que parlent les notifications les plus utiles.
-        commandes = list(
-            Commande.objects.filter(acheteur=acheteuse)
-            .select_related("campagne", "campagne__groupeur")
-            .order_by("-passee_le")
-        )
-
-        cloturees = [
-            commande
-            for commande in commandes
-            if commande.campagne.statut
-            in (Campagne.Statut.EN_COURS, Campagne.Statut.LIVREE)
+        parts = [
+            self._payer(campagne, acheteur, quantite)
+            for acheteur, quantite in zip(acheteurs, (1, 1, 2))
         ]
+        cloturer(campagne)
+        executer_decaissement(demander_decaissement(campagne), admin)
+        mettre_a_disposition(campagne)
+        for participation in parts:
+            participation.refresh_from_db()
+            valider_retrait(campagne, participation.code_retrait, groupeur)
+        self.stdout.write("  • Campagne terminée (blenders) — tous les colis retirés")
 
-        if cloturees:
-            campagne = cloturees[0].campagne
-            if manque(Notification.Nature.GROUPAGE_CLOTURE):
-                prevenir_de_la_cloture(campagne)
-            if manque(Notification.Nature.PRODUIT_ARRIVE):
-                prevenir_de_l_arrivee(campagne)
-                # Le garde-fou du double envoi doit refléter ce qui vient de
-                # partir, sinon l'écran 15 proposerait de l'annoncer encore.
-                if campagne.arrivee_annoncee_le is None:
-                    campagne.arrivee_annoncee_le = timezone.now()
-                    campagne.save(update_fields=["arrivee_annoncee_le"])
+    def _campagne_annulee(self, groupeur, rayons, acheteurs):
+        campagne = self._campagne(
+            groupeur, rayons["Mode"], "Paire de baskets", "Sportif",
+            25000, 30, jours=1,
+            titre="Baskets — minimum non atteint",
+        )
+        self._payer(campagne, acheteurs[0], 1)
+        self._payer(campagne, acheteurs[1], 1)
+        cloturer(campagne)
+        self.stdout.write("  • Campagne annulée (baskets) — participants remboursés")
 
-        annulees = [
-            commande
-            for commande in commandes
-            if commande.campagne.statut == Campagne.Statut.ANNULEE
+    def _brouillon(self, groupeur, rayons):
+        produit = Produit.objects.create(
+            categorie=rayons["Alimentation"], nom="Bidon d'huile 20 L",
+            marque="Dinor", propose_par=groupeur,
+        )
+        Campagne.objects.create(
+            produit=produit, groupeur=groupeur, titre="Huile Dinor 20 L — à publier",
+            prix_unitaire=28000, quantite_minimale=15,
+            date_limite=timezone.now() + timedelta(days=20),
+            point_remise="Marché d'Adawlato, Lomé",
+            statut=Campagne.Statut.BROUILLON,
+        )
+        self.stdout.write("  • Brouillon (huile) — prêt à publier en direct")
+
+    def _demandes(self, acheteurs, rayons):
+        demandes = [
+            ("Panneau solaire 200 W avec batterie", rayons["Électronique"], 120000),
+            ("Sacs de ciment CIMTOGO", rayons["Maison"], 4500),
+            ("Machine à coudre industrielle", rayons["Maison"], 185000),
         ]
-        if annulees and manque(Notification.Nature.GROUPAGE_ANNULE):
-            prevenir_de_l_annulation(annulees[:1])
-
-        # La réponse du groupeur à une de ses questions. ⚠️ On ne la rédige
-        # pas : c'est ``prevenir_d_une_reponse`` qui le fait, à partir de la
-        # réponse réellement enregistrée.
-        if manque(Notification.Nature.REPONSE_QUESTION):
-            from groupachat.echanges.models import prevenir_d_une_reponse
-
-            question = (
-                Question.objects.filter(auteur=acheteuse)
-                .exclude(reponse="")
-                .select_related("campagne", "campagne__groupeur")
-                .first()
+        for index, (titre, categorie, budget) in enumerate(demandes):
+            demande = DemandeProduit.objects.create(
+                auteur=acheteurs[index], titre=titre, categorie=categorie,
+                budget_indicatif=budget,
+                description="Si un groupeur peut en importer, je suis preneur.",
             )
-            if question is not None:
-                prevenir_d_une_reponse(question)
+            interesses = acheteurs[: len(acheteurs) - index]
+            for acheteur in interesses:
+                InteretDemande.objects.create(demande=demande, utilisateur=acheteur)
+            demande.nombre_interets = len(interesses)
+            demande.save(update_fields=["nombre_interets"])
+        self.stdout.write("  • Trois demandes communautaires")
 
+    def _resumer(self, valide, en_attente, admin):
+        self.stdout.write(self.style.SUCCESS("\nJeu de démonstration chargé.\n"))
+        self.stdout.write(f"  Mot de passe commun : {MOT_DE_PASSE}\n")
+        self.stdout.write("  Administrateur      : 99000011")
+        self.stdout.write(f"  Groupeur validé     : {valide.telephone} (Abalo Import)")
         self.stdout.write(
-            f"  {Notification.objects.filter(destinataire=acheteuse).count()} "
-            "notifications pour le compte de démonstration"
+            f"  Groupeur en attente : {en_attente.telephone} (écran de blocage KYC)"
         )
-
-    def _charger_les_demandes(self) -> None:
-        """Ce que les acheteurs réclament — écrans 11, 12 et 19.
-
-        **Un échec de recherche n'est jamais un cul-de-sac** : il mène à
-        l'écran 11, et le fil du groupeur (écran 19) lui montre ces demandes
-        **agrégées** — « 14 personnes à Agoè veulent du riz ». C'est sa
-        matière première : ce que des gens ont dit vouloir, avant même qu'il
-        ait acheté quoi que ce soit.
-
-        ⚠️ **Plusieurs demandes sur le même produit et le même quartier**, et
-        c'est tout l'intérêt : l'écran les regroupe, et un fil où chaque ligne
-        dirait « 1 personne » ne démontrerait pas l'agrégation — il ne
-        montrerait pas non plus ce qui fait décider de lancer un groupage.
-
-        ⚠️ **Le groupeur ne voit jamais qui a demandé.** Les comptes créés ici
-        portent des numéros, et c'est précisément ce que la route agrégée
-        refuse de laisser sortir (§1.7).
-        """
-        souhaits = [
-            ("Riz parfumé 25 kg", "Agoe", "1 sac", 22000, 14),
-            ("Couches bébé taille 4", "Tokoin", "1 carton", 13000, 9),
-            ("Gaz butane 6 kg, recharge", "Be", "1 bouteille", 5500, 7),
-            ("Cahiers 200 pages, lot de 10", "Adidogome", "1 lot", 4000, 6),
-            ("Ventilateur sur pied", "Hedzranawoe", "1 pièce", 14000, 4),
-            ("Ciment 50 kg", "Nyekonakpoe", "5 sacs", 32000, 3),
-            ("Huile de palme 20 L", "Agoe", "1 bidon", 19000, 2),
-        ]
-
-        if Demande.objects.exists():
-            return
-
-        for rang, (produit, quartier, quantite, budget, personnes) in enumerate(
-            souhaits
-        ):
-            for numero in range(personnes):
-                acheteur, _ = Acheteur.objects.get_or_create(
-                    telephone=f"+22871{rang:02d}{numero:04d}",
-                    defaults={"nom": f"Demandeur {numero + 1}"},
-                )
-                demande = Demande.objects.create(
-                    acheteur=acheteur,
-                    produit=produit,
-                    quantite=quantite,
-                    quartier=quartier,
-                    budget_maximum=Decimal(str(budget)),
-                )
-                # Étalées : le fil se trie par ancienneté, et une liste dont
-                # toutes les lignes datent de la même seconde ne le montre pas.
-                Demande.objects.filter(pk=demande.pk).update(
-                    deposee_le=timezone.now()
-                    - timedelta(days=rang * 2 + numero % 3, hours=numero)
-                )
-
-        self.stdout.write(
-            f"  {Demande.objects.count()} demandes d'acheteurs, "
-            f"sur {len(souhaits)} produits"
-        )
-
-    def _charger_les_dossiers_en_attente(self) -> None:
-        """Les dossiers que l'administrateur trouvera dans sa file.
-
-        ⚠️ Deux détours assumés, et commentés parce qu'ils ont l'air d'erreurs :
-
-        - ``Groupeur.save`` refuse un titulaire Mobile Money qui ne concorde
-          pas, ce qui est précisément le contrôle qu'on veut démontrer. Le
-          dossier « Gros Bonnet » est donc écrit par ``update``, qui ne passe
-          pas par ``save`` — comme le ferait un compte modifié hors parcours
-          normal ;
-        - ``cree_le`` est en ``auto_now_add`` : on le recule par ``update``
-          pour que la colonne « attente » de l'écran A2 montre des dossiers de
-          un à six jours. Sans cela, tous datent de l'instant du chargement et
-          le tri par ancienneté ne se voit pas.
-        """
-        for donnees in DOSSIERS_EN_ATTENTE:
-            groupeur, cree = Groupeur.objects.get_or_create(
-                pseudonyme=donnees["pseudonyme"],
-                defaults={
-                    "nom_complet": donnees["nom_complet"],
-                    "telephone": donnees["telephone"],
-                    "courriel": donnees["courriel"],
-                    "titulaire_mobile_money": donnees["nom_complet"],
-                    "numero_mobile_money": donnees["telephone"],
-                    "statut_kyc": Groupeur.StatutKyc.EN_VERIFICATION,
-                },
-            )
-            if not cree:
-                continue
-
-            Groupeur.objects.filter(pk=groupeur.pk).update(
-                titulaire_mobile_money=donnees["titulaire"],
-                cree_le=timezone.now() - timedelta(days=donnees["jours"]),
-            )
-
-            PieceKyc.objects.bulk_create(
-                PieceKyc(
-                    groupeur=groupeur,
-                    nature=nature,
-                    reference=f"coffre/{groupeur.pk}/{nature}",
-                )
-                for nature in donnees["pieces"]
-            )
+        self.stdout.write("  Acheteurs           : " + ", ".join(a[0] for a in ACHETEURS))

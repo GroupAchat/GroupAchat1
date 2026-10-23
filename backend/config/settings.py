@@ -1,82 +1,46 @@
 # -*- coding: utf-8 -*-
 """Réglages de Group Achat.
 
-**PostgreSQL dès que ``DATABASE_URL`` est renseignée**, y compris pour les
-tests. Le cahier des charges l'impose, et le moteur de test doit être celui de
-la production : SQLite et PostgreSQL diffèrent sur les transactions, les
-contraintes et les types, et une suite verte sur l'un peut échouer sur l'autre.
+La configuration vient d'un **seul** fichier : `.env` à la racine du dépôt,
+celui que lisent aussi Docker Compose et Vite. `BASE_DIR` vaut `backend/`, donc
+son parent est la racine.
 
-**SQLite reste le secours**, quand aucune ``DATABASE_URL`` n'est définie. C'est
-ce qui permet de cloner le dépôt et de lancer les tests sans rien installer —
-mais ce n'est pas la configuration de référence, et une suite qui n'aurait
-jamais tourné sur PostgreSQL ne prouverait pas grand-chose.
-
-Pour forcer SQLite malgré une ``DATABASE_URL`` présente — par exemple pour un
-essai rapide hors ligne — mettre ``DJANGO_FORCER_SQLITE=1``.
+PostgreSQL dès que `DATABASE_URL` est renseignée — y compris pour les tests,
+afin que le moteur testé soit celui de la production. SQLite sert de secours
+quand aucune `DATABASE_URL` n'est définie, pour pouvoir cloner et lancer la
+suite sans rien installer. `DJANGO_FORCER_SQLITE=1` force ce secours.
 """
 
 from __future__ import annotations
 
 import os
-import sys
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# ── La configuration vient d'un seul fichier ────────────────────────────────
-#
-# `.env` **a la racine du depot**, et nulle part ailleurs. C'est le meme
-# fichier que lisent Docker Compose et Vite (`envDir: ".."` dans les deux
-# configurations du front).
-#
-# ⚠️ **Il y en avait trois**, et c'etait le probleme : `backend/.env` pour
-# Django, `frontend/.env.local` pour Vite, `.env` pour Compose. Les memes
-# valeurs recopiees trois fois, sans rien pour garantir qu'elles concordent —
-# un `DATABASE_URL` corrige dans l'un et oublie dans l'autre est une panne qui
-# ne se voit qu'au deploiement. Et `CORS_ORIGINES` devait rester d'accord avec
-# `VITE_API_URL`, qui vivait dans un autre fichier.
-#
-# `BASE_DIR` vaut `backend/`, donc le parent est la racine du depot.
-#
-# `override=False` (le defaut) : une variable **deja presente dans
-# l'environnement gagne sur le fichier**. C'est ce qui permet a Compose de
-# passer ses propres valeurs au conteneur — ou le fichier n'existe meme pas,
-# `.dockerignore` le tenant dehors pour que les secrets ne se retrouvent pas
-# en clair dans une couche d'image.
 load_dotenv(BASE_DIR.parent / ".env")
 
 DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
 
-# ── La clé de signature ─────────────────────────────────────────────────────
-#
-# ⚠️ **Elle n'a plus de valeur de repli utilisable hors ``DEBUG``, et c'est
-# volontaire.** Le réglage précédent fournissait
-# ``"dev-seulement-a-remplacer-en-production"`` quelle que soit la situation :
-# un déploiement qui oubliait ``DJANGO_SECRET_KEY`` démarrait donc
-# normalement, avec une clé publique, inscrite dans le dépôt. Les signatures
-# de session et les jetons de réinitialisation devenaient falsifiables par
-# quiconque a lu ce fichier, **sans aucun message pour le signaler**.
-#
-# Désormais le serveur refuse de démarrer. Une panne au démarrage se voit et
-# se corrige ; une clé par défaut en production ne se voit pas.
-#
-# Le repli reste en ``DEBUG``, pour que cloner le dépôt et lancer les tests ne
-# demande aucune configuration — c'est ce que ``backend/README.md`` promet.
+# La clé de signature n'a pas de valeur de repli hors DEBUG : un déploiement
+# qui oublie DJANGO_SECRET_KEY doit échouer bruyamment, pas démarrer avec une
+# clé publique qui rendrait sessions et jetons falsifiables.
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
 if not SECRET_KEY:
-    if DEBUG:
-        SECRET_KEY = "dev-seulement-jamais-en-production"
-    else:
-        from django.core.exceptions import ImproperlyConfigured
-
-        raise ImproperlyConfigured(
-            "DJANGO_SECRET_KEY est absente et DJANGO_DEBUG vaut 0. "
-            "Renseignez-la dans le .env de la racine. Pour en generer une : "
-            'python -c "import secrets; print(secrets.token_urlsafe(50))"'
+    if not DEBUG:
+        raise RuntimeError(
+            "DJANGO_SECRET_KEY est obligatoire hors DEBUG : renseignez-la dans .env"
         )
-ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+    SECRET_KEY = "cle-de-developpement-a-ne-jamais-deployer"
+
+ALLOWED_HOSTS = [
+    h.strip()
+    for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+    if h.strip()
+]
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -90,32 +54,13 @@ INSTALLED_APPS = [
     "groupachat.comptes",
     "groupachat.catalogue",
     "groupachat.commandes",
+    "groupachat.paiements",
     "groupachat.echanges",
 ]
 
-# ── Qui a le droit d'appeler cette API, et depuis ou ────────────────────────
-#
-# Le front et l'API sont **deux serveurs differents** : la boutique sur 5173,
-# l'administration sur 5174, Django sur 8000. Pour un navigateur, ce sont trois
-# origines distinctes, et il bloque les appels de l'une vers l'autre tant que
-# le serveur appele ne dit pas explicitement qu'il les accepte.
-#
-# ⚠️ **`CorsMiddleware` doit rester tout en haut de cette liste.** Il doit
-# repondre aux requetes de controle (`OPTIONS`) que le navigateur envoie
-# *avant* la vraie requete, et il ne le peut que s'il passe avant les
-# middlewares qui pourraient rediriger ou rejeter.
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
-    # ⚠️ **Il sert les fichiers statiques quand ``DEBUG`` est faux**, ce que
-    # Django ne fait pas tout seul : hors DEBUG, ``runserver`` comme Gunicorn
-    # renvoient 404 sur ``/static/``. Sans cette ligne, l'admin Django — qui
-    # est *l'*outil d'administration du §13.6 — s'afficherait sans aucune
-    # feuille de style ni script dans le conteneur.
-    #
-    # Sa place est imposee : **apres** ``SecurityMiddleware`` et **avant** tout
-    # le reste, pour repondre sans traverser les sessions ni le CSRF. Il reste
-    # derriere ``CorsMiddleware``, qui doit rester premier (voir ci-dessus).
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -126,6 +71,8 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = "config.urls"
+WSGI_APPLICATION = "config.wsgi.application"
+ASGI_APPLICATION = "config.asgi.application"
 
 TEMPLATES = [
     {
@@ -142,39 +89,40 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = "config.wsgi.application"
 
-_FORCER_SQLITE = os.environ.get("DJANGO_FORCER_SQLITE") == "1"
+def _base_depuis_url(url: str) -> dict:
+    """Traduit une `DATABASE_URL` postgres en configuration Django."""
+    morceaux = urlparse(url)
+    return {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": morceaux.path.lstrip("/"),
+        "USER": unquote(morceaux.username or ""),
+        "PASSWORD": unquote(morceaux.password or ""),
+        "HOST": morceaux.hostname or "",
+        "PORT": str(morceaux.port or ""),
+    }
 
-if _FORCER_SQLITE or os.environ.get("DATABASE_URL") is None:
+
+_url_base = os.environ.get("DATABASE_URL", "")
+_forcer_sqlite = os.environ.get("DJANGO_FORCER_SQLITE", "0") == "1"
+
+if _url_base and not _forcer_sqlite:
+    DATABASES = {"default": _base_depuis_url(_url_base)}
+else:
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
-            "TEST": {"NAME": ":memory:"},
+            "NAME": BASE_DIR / "base-de-secours.sqlite3",
         }
     }
-    MOTEUR_UTILISE = "sqlite"
-else:
-    import urllib.parse as _url
 
-    _parse = _url.urlparse(os.environ["DATABASE_URL"])
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.postgresql",
-            "NAME": _parse.path.lstrip("/"),
-            "USER": _parse.username or "",
-            "PASSWORD": _parse.password or "",
-            "HOST": _parse.hostname or "localhost",
-            "PORT": str(_parse.port or 5432),
-            # Django cree et detruit `test_<nom>` autour de chaque execution.
-            "TEST": {"NAME": f"test_{_parse.path.lstrip('/')}"},
-        }
-    }
-    MOTEUR_UTILISE = "postgresql"
+AUTH_USER_MODEL = "comptes.Utilisateur"
 
 AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
 LANGUAGE_CODE = "fr-fr"
@@ -182,244 +130,144 @@ TIME_ZONE = "Africa/Lome"
 USE_I18N = True
 USE_TZ = True
 
-STATIC_URL = "static/"
-
-#: Ou ``collectstatic`` depose les fichiers que WhiteNoise servira.
-#:
-#: **Il n'existait pas, et ``collectstatic`` echouait donc** — ce qui ne se
-#: voyait pas tant qu'on ne travaillait qu'en ``DEBUG=1``, ou Django sert les
-#: statiques lui-meme depuis les dossiers des applications.
-#:
-#: Le dossier est hors du depot (ignore par git) : c'est un produit de
-#: construction, reconstruit a chaque image, jamais edite a la main.
-STATIC_ROOT = BASE_DIR / "staticfiles"
-
-#: Compression et empreinte dans le nom des fichiers.
-#:
-#: Les deux comptent pour le §5 du cahier des charges, qui part d'un forfait de
-#: donnees limite : les fichiers sont servis en gzip et en brotli quand le
-#: navigateur les accepte, et leur nom porte une empreinte, donc ils peuvent
-#: etre mis en cache **pour un an** sans risquer de servir une version
-#: perimee.
+STATIC_URL = "statiques/"
+STATIC_ROOT = BASE_DIR / "statiques"
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
-    "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"
-    },
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
 }
+
+MEDIA_URL = "medias/"
+MEDIA_ROOT = BASE_DIR / "medias"
+
+# ── Les applications compilees, servies par Django ──────────────────────────
+#
+# Pas de nginx devant : Coolify fait deja le TLS et le routage par domaine.
+# WhiteNoise sert les fichiers construits par Vite, et `ApplicationCompilee`
+# rend la page d'entree pour tout le reste.
+#
+# Les deux applications deposent leurs fichiers dans le meme dossier : leurs
+# noms portent une empreinte differente (`index-xxxx.js` contre
+# `admin-xxxx.js`), ils ne se marchent donc pas dessus.
+RACINE_WEB = Path(os.environ.get("RACINE_WEB", BASE_DIR / "web"))
+
+# WhiteNoise sert ce dossier **a la racine des URL** : `/assets/index-x.js`
+# plutot que `/statiques/assets/index-x.js`, ce qu'attendent les pages
+# produites par Vite.
+WHITENOISE_ROOT = str(RACINE_WEB) if RACINE_WEB.is_dir() else None
+
+# ⚠️ **Faux a dessein.** A `True`, WhiteNoise rendrait lui-meme `index.html`
+# sur « / » — toujours le meme, quel que soit le domaine. La boutique
+# s'afficherait alors sur `admin.achatgr.com`. On laisse la vue trancher.
+WHITENOISE_INDEX_FILE = False
+
+# Les sous-domaines qui montrent la console d'administration.
+HOTES_ADMINISTRATION = [
+    h.strip()
+    for h in os.environ.get("HOTES_ADMINISTRATION", "admin").split(",")
+    if h.strip()
+]
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# ── Messagerie ──────────────────────────────────────────────────────────────
-#
-# Elle ne sert aujourd'hui qu'à une chose, mais qui compte : **annoncer à un
-# groupeur la décision prise sur son dossier KYC** (§10.5). Voir
-# ``groupachat/notifications.py`` pour les textes et
-# ``groupachat/comptes/annonces.py`` pour l'envoi.
-#
-# ⚠️ **Par défaut, rien ne sort de la machine.** Le backend console écrit le
-# message dans le terminal de ``runserver``. C'est le bon défaut en
-# développement : on relit la formulation exacte qu'un groupeur recevrait, sans
-# risquer d'écrire à quelqu'un depuis un jeu de démonstration.
-#
-# Pour envoyer réellement, renseigner ``SMTP_HOTE`` dans le ``.env`` de la
-# racine — le seul que ce fichier lise, voir plus haut —
-# avec l'identifiant, le mot de passe et le port du fournisseur. Group Achat
-# n'en a pas encore : c'est un des manques listés dans ``backend/README.md``.
-if os.environ.get("SMTP_HOTE"):
-    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-    EMAIL_HOST = os.environ["SMTP_HOTE"]
-    EMAIL_PORT = int(os.environ.get("SMTP_PORT", "587"))
-    EMAIL_HOST_USER = os.environ.get("SMTP_UTILISATEUR", "")
-    EMAIL_HOST_PASSWORD = os.environ.get("SMTP_MOT_DE_PASSE", "")
-    EMAIL_USE_TLS = os.environ.get("SMTP_TLS", "1") == "1"
-else:
-    # ⚠️ **Dans un fichier, pas dans la console**, et c'est une correction et
-    # non une préférence : le backend console écrit sur la sortie standard,
-    # qui sous Windows est en cp1252. Le message de validation contient une
-    # **espace insécable fine** (U+202F) dans « 150 000 F » — celle que le
-    # produit emploie partout ailleurs — et cp1252 ne sait pas l'encoder. Le
-    # courriel partait donc en ``UnicodeEncodeError``, soit une erreur 500 sur
-    # une décision KYC par ailleurs correctement enregistrée.
-    #
-    # Trois corrections étaient possibles : retirer l'espace fine du message,
-    # forcer l'encodage du terminal, ou écrire dans un fichier. La première
-    # abîmerait la typographie pour une raison qui n'a rien à voir avec elle,
-    # la seconde dépend de variables d'environnement qu'on ne contrôle pas
-    # chez les autres. La troisième écrit en UTF-8, et donne en prime un
-    # fichier relisable — ce qu'on veut justement faire de ces messages.
-    #
-    # Un fichier par courriel, dans `backend/.courriels/` (ignoré par git :
-    # ces messages portent des noms et des adresses).
-    EMAIL_BACKEND = "django.core.mail.backends.filebased.EmailBackend"
-    EMAIL_FILE_PATH = BASE_DIR / ".courriels"
-
-#: L'expéditeur. Une adresse à laquelle **on peut répondre** : les messages de
-#: refus invitent explicitement le groupeur à répondre s'il conteste, et une
-#: adresse « ne-pas-repondre » contredirait cette invitation.
-DEFAULT_FROM_EMAIL = os.environ.get(
-    "COURRIEL_EXPEDITEUR", "Group Achat <bonjour@groupachat.tg>"
-)
-
-# ── SMS ─────────────────────────────────────────────────────────────────────
-#
-# Il ne sert qu'à une chose : **le code à quatre chiffres qui ouvre un compte
-# acheteur** (§10.4 bis). Group Achat n'a pas encore de fournisseur.
-#
-# Trois valeurs possibles, et il faut les distinguer :
-#
-# | Valeur | Ce qui se passe |
-# |---|---|
-# | *(vide)* | ⚠️ **La connexion répond 503.** Pas de SMS, pas de compte |
-# | `demonstration` | Le code vaut 1234 et s'affiche à l'écran |
-# | *un fournisseur* | Un code aléatoire est tiré — l'envoi reste à écrire |
-#
-# ⚠️ **Le vide échoue fermé, et ce n'est pas négociable.** Un code fixe mis en
-# ligne pour de vrai donnerait à n'importe qui le compte de n'importe quel
-# numéro. `demonstration` existe pour qu'une démonstration déployée reste
-# utilisable — le conteneur tourne avec `DEBUG=0`, qui est le bon réglage —
-# mais c'est un **opt-in écrit à la main**, visible dans la configuration de
-# déploiement. Un défaut part en production par oubli ; une valeur écrite à la
-# main y part par décision.
-SMS_FOURNISSEUR = os.environ.get("SMS_FOURNISSEUR", "")
-
-#: Le code servi en mode démonstration. Jamais employé autrement.
-CODE_SMS_DEMONSTRATION = os.environ.get("CODE_SMS_DEMONSTRATION", "1234")
-
-# ⚠️ **Une liste d'origines, jamais `CORS_ALLOW_ALL_ORIGINS`.** Le reglage
-# « tout ouvert » est commode en developpement et se retrouve en production
-# une fois sur deux. Il laisserait n'importe quel site ouvert dans le
-# navigateur d'un administrateur appeler `/api/dossiers/` — avec le jeton que
-# cet administrateur vient de saisir, puisque le navigateur le joindrait.
-#
-# `CORS_ORIGINES` se renseigne dans `.env` au deploiement, avec le vrai nom de
-# domaine. Le defaut ne couvre que les ports de developpement local.
 CORS_ALLOWED_ORIGINS = [
-    origine.strip()
-    for origine in os.environ.get(
-        "CORS_ORIGINES",
-        "http://localhost:5173,http://127.0.0.1:5173,"
-        "http://localhost:5174,http://127.0.0.1:5174",
+    o.strip()
+    for o in os.environ.get(
+        "CORS_ORIGINES", "http://localhost:5173,http://localhost:5174"
     ).split(",")
-    if origine.strip()
+    if o.strip()
 ]
 
-#: L'en-tete du jeton d'administration doit etre explicitement autorise.
-#:
-#: Un en-tete que le navigateur ne connait pas n'est pas transmis par defaut :
-#: sans cette ligne, `X-Jeton-Admin` serait silencieusement retire et toutes
-#: les requetes de l'ecran A2 reviendraient en 403 — sans rien dans les
-#: journaux qui dise pourquoi.
-CORS_ALLOW_HEADERS = (
-    "accept",
-    "authorization",
-    "content-type",
-    "origin",
-    "user-agent",
-    "x-jeton-admin",
-)
+# ── Derrière le proxy de Coolify ────────────────────────────────────────────
+#
+# Coolify termine le TLS et parle à nos conteneurs en clair. Sans ce réglage,
+# Django se croirait en HTTP derrière un site en HTTPS : il refuserait toute
+# requête POST au motif que l'origine ne correspond pas, et poserait des
+# cookies non sécurisés.
+#
+# ⚠️ Ce réglage **fait confiance à un en-tête**. Il n'est sûr que parce que
+# nginx le réécrit systématiquement : un client ne peut pas l'imposer.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST = True
 
-#: **Le mode démonstration.** Il suspend l'examen des dossiers de groupeur.
-#:
-#: Quand il est allumé, un dossier déposé est **validé sur-le-champ** : on
-#: traverse l'inscription et on arrive dans l'espace groupeur, sans attendre
-#: qu'un administrateur se connecte. C'est ce qu'il faut pour montrer le
-#: produit à quelqu'un ; ce n'est pas ce qu'il faut en ligne.
-#:
-#: ⚠️ **Ce qu'il suspend est le contrôle central du modèle.** Le §10.5 pose
-#: trois vérifications, et « vous êtes livré, ou remboursé » s'affiche à
-#: l'acheteur sur presque chaque écran. C'est **nous** qui remboursons : le
-#: groupeur retire l'argent à la clôture, donc avant la livraison, et le seul
-#: recours qui reste ce jour-là est un dossier opposable. Allumé en
-#: production, ce réglage ferait garantir des sommes au nom de gens dont
-#: personne n'a rien vérifié.
-#:
-#: D'où le défaut : **éteint, et il faut l'écrire pour l'allumer**. Le faire
-#: suivre ``DEBUG`` semblait pratique et c'était un piège — la suite de tests
-#: aurait tourné avec la validation automatique, c'est-à-dire sans jamais
-#: exercer l'examen des dossiers, qui est précisément ce qu'elle protège.
-#: Six tests sont tombés en une fois, et ils avaient raison.
-#:
-#: C'est le même choix que ``SMS_FOURNISSEUR`` : on demande la démonstration,
-#: elle ne s'invite pas.
-#:
-#: ⚠️ **Et elle ne s'applique jamais à la suite de tests**, quoi que dise le
-#: ``.env`` de la machine. Sans cette condition, allumer la démonstration pour
-#: montrer le produit éteindrait du même coup sept tests du recrutement — ils
-#: passeraient au vert sans rien vérifier, ce qui est pire que de les voir
-#: tomber. Un test qui veut ce mode l'obtient par ``override_settings``, et
-#: c'est écrit dans ``test_recrutement.py``.
-_EN_TEST = "test" in sys.argv
-DEMONSTRATION = not _EN_TEST and os.environ.get("DEMONSTRATION", "") == "1"
 
-#: ⚠️⚠️ **`JETON_ADMIN` a été retiré d'ici, et il ne doit pas revenir.**
-#:
-#: Les routes d'administration étaient gardées par ce **jeton unique et
-#: partagé**, posé dans le `.env` du serveur et recopié à la main par chaque
-#: administrateur. Elles exigent maintenant une **session ouverte contre un mot
-#: de passe**, adossée aux comptes `User` de Django filtrés sur `is_staff`.
-#:
-#: **Aucun repli n'a été laissé**, et c'est le point : accepter encore un
-#: secret partagé « au cas où » aurait rendu le reste décoratif, puisqu'il
-#: suffit du plus faible des deux chemins pour entrer.
-#:
-#: On crée un administrateur par `python manage.py createsuperuser`, et on le
-#: révoque en décochant `is_staff` — ce qui ferme ses sessions en cours à la
-#: requête suivante, sans attendre leur expiration.
-#:
-#: Voir `groupachat/comptes/sessions_admin.py`.
+def _origines_sures() -> list[str]:
+    """Les origines autorisées à écrire (jeton CSRF).
+
+    Django 4 et au-delà vérifient l'en-tête ``Origin`` sur chaque écriture.
+    Oublier cette liste en production donne une panne déroutante : la lecture
+    marche, les formulaires échouent tous en 403.
+
+    On la dérive donc d'``ALLOWED_HOSTS`` plutôt que d'attendre une seconde
+    variable que personne ne pense à renseigner ; ``DJANGO_ORIGINES_SURES``
+    reste là pour les cas particuliers.
+    """
+    explicites = [
+        o.strip() for o in os.environ.get("DJANGO_ORIGINES_SURES", "").split(",")
+        if o.strip()
+    ]
+    if explicites:
+        return explicites
+
+    # ⚠️ Les origines portent un **port**, pas ALLOWED_HOSTS. Dérivée du seul
+    # ALLOWED_HOSTS, la liste donnait « http://localhost » là où le navigateur
+    # annonce « http://localhost:5173 » — et toutes les écritures tombaient en
+    # 403 en développement. Les origines CORS, elles, sont déjà complètes.
+    derivees = list(CORS_ALLOWED_ORIGINS)
+    for hote in ALLOWED_HOSTS:
+        if hote in {"*", ""}:
+            continue
+        schema = "http" if hote.startswith(("localhost", "127.0.0.1")) else "https"
+        origine = f"{schema}://{hote}"
+        if origine not in derivees:
+            derivees.append(origine)
+    return derivees
+
+
+CSRF_TRUSTED_ORIGINS = _origines_sures()
+
+# Hors DEBUG, les cookies ne voyagent qu'en HTTPS. En développement ils
+# doivent rester lisibles sur http://localhost, d'où la condition.
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"
+
+if not DEBUG:
+    SECURE_HSTS_SECONDS = 60 * 60 * 24 * 30
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    # La redirection vers HTTPS est le travail du proxy : la refaire ici
+    # provoquerait une boucle, nginx parlant à Django en clair.
+    SECURE_SSL_REDIRECT = False
+
+# ⚠️ **Sans ceci, aucune requête authentifiée ne passe en inter-origines.**
+# Le client envoie ses appels avec `credentials: "include"` pour transporter
+# le cookie de session ; le navigateur exige alors que la réponse porte
+# `Access-Control-Allow-Credentials: true`, que django-cors-headers ne pose
+# pas de lui-même. Son absence donne une erreur CORS déroutante, où le
+# serveur a pourtant répondu 200.
+CORS_ALLOW_CREDENTIALS = True
 
 REST_FRAMEWORK = {
-    # ⚠️ **Aucun mur d'authentification** (§1.5) : on parcourt le catalogue
-    # librement. Les points d'entrée qui engagent quelque chose — payer,
-    # poser une question, déposer une demande — le vérifient eux-mêmes.
-    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"],
-    "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.SessionAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticatedOrReadOnly",
+    ],
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
-    "PAGE_SIZE": 24,
+    "PAGE_SIZE": 20,
 }
 
-
-# ── La securite du transport, hors developpement ───────────────────────────
+# ── Règles métier ───────────────────────────────────────────────────────────
 #
-# ⚠️ **La CI disait : « Les avertissements restants concernent tous HTTPS, qui
-# se regle au reverse-proxy et non ici. »** C'etait vrai pour deux d'entre eux
-# et faux pour les deux autres : `SESSION_COOKIE_SECURE` et
-# `CSRF_COOKIE_SECURE` sont des reglages **Django**, qu'aucun proxy ne pose a
-# sa place. Ils sont donc poses ici.
-#
-# ⚠️ **Tous sont conditionnes a `not DEBUG`**, et c'est indispensable : en
-# developpement on sert en clair sur `localhost`, et un cookie marque `secure`
-# n'y serait **jamais renvoye par le navigateur**. On se retrouverait
-# deconnecte a chaque requete, sans message, sur un symptome qui ressemble a
-# une panne de session.
-if not DEBUG:
-    #: Les cookies ne partent que sur une connexion chiffree.
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
+# Prélevés une seule fois, au décaissement, sur le total collecté.
+FRAIS_PLATEFORME_FCFA = int(os.environ.get("FRAIS_PLATEFORME_FCFA", "1500"))
 
-    #: Un cookie de session n'a aucune raison d'etre lisible en JavaScript.
-    SESSION_COOKIE_HTTPONLY = True
+# Durée de validité d'un code de vérification SMS, en minutes.
+VALIDITE_CODE_SMS_MINUTES = int(os.environ.get("VALIDITE_CODE_SMS_MINUTES", "10"))
 
-    #: ⚠️ **Celui-ci depend du proxy, et il faut le savoir.** Django ne voit
-    #: que du HTTP en clair derriere un reverse-proxy qui termine le TLS : sans
-    #: cet en-tete, il croit la connexion non chiffree et `SECURE_SSL_REDIRECT`
-    #: provoquerait une **boucle de redirection infinie**.
-    #:
-    #: Le proxy **doit** donc envoyer `X-Forwarded-Proto`. nginx le fait avec
-    #: `proxy_set_header X-Forwarded-Proto $scheme;`. S'il ne le fait pas,
-    #: retirer les deux lignes ci-dessous plutot que de se demander pourquoi
-    #: le site boucle.
-    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-    SECURE_SSL_REDIRECT = os.environ.get("DJANGO_HTTPS", "1") == "1"
+SMS_FOURNISSEUR = os.environ.get("SMS_FOURNISSEUR", "console")
 
-    #: HSTS : le navigateur refusera le HTTP pour ce domaine pendant un an.
-    #:
-    #: ⚠️ **A n'activer qu'une fois le certificat en place et verifie.** Un
-    #: HSTS pose trop tot rend le site **inaccessible** jusqu'a expiration du
-    #: delai, et il n'y a aucun moyen de le retirer a distance : le navigateur
-    #: du visiteur s'en souvient. D'ou le drapeau, qui vaut `0` par defaut.
-    if os.environ.get("DJANGO_HSTS", "0") == "1":
-        SECURE_HSTS_SECONDS = 31536000
-        SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-        SECURE_HSTS_PRELOAD = True
+DEMONSTRATION = os.environ.get("DEMONSTRATION", "0") == "1"

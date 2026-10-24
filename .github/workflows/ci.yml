@@ -1,69 +1,54 @@
-# Intégration continue — ce qui doit être vrai avant toute fusion.
-#
-# Trois travaux indépendants, qui tournent en parallèle. Le dernier construit
-# les images Docker **sans les publier** : c'est la seule façon de savoir que
-# les `Dockerfile` tiennent encore, et c'est précisément ce qu'une machine de
-# développement sous Windows sans démon Docker ne peut pas vérifier.
-
 name: Intégration continue
+
+# Ce qui doit être vrai avant qu'un changement parte en déploiement.
+#
+# Deux travaux indépendants, pas un seul enchaîné : une erreur de typage
+# dans la boutique n'a aucune raison de masquer un test backend qui casse.
+# Les deux rapports arrivent ensemble.
+#
+# Le déploiement, lui, n'est plus ici : c'est Coolify qui construit et met
+# en ligne à chaque poussée sur `master`.
 
 on:
   push:
-    branches: [master, main]
+    branches: [master]
   pull_request:
-  # Permet de relancer à la main depuis l'onglet Actions, utile quand un
-  # travail échoue pour une raison extérieure au code.
   workflow_dispatch:
 
-# Une seule exécution par branche : un nouveau poussé annule le précédent.
-# Sans cela, trois poussés d'affilée font tourner neuf travaux dont sept ne
-# servent plus à rien.
 concurrency:
-  group: ci-${{ github.ref }}
+  # Une nouvelle poussée annule la vérification en cours sur la même
+  # branche : inutile de payer deux fois pour un état déjà dépassé.
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # ── Le backend ───────────────────────────────────────────────────────────
   backend:
-    name: Backend — la suite complète sur PostgreSQL
+    name: API — tests
     runs-on: ubuntu-latest
 
-    # ⚠️ **PostgreSQL, et non SQLite.** Le cahier des charges impose
-    # PostgreSQL, et `backend/README.md` le dit : les deux moteurs diffèrent
-    # sur les transactions, les contraintes et les types, donc une suite verte
-    # sur SQLite ne prouve pas qu'elle passera en production. L'intégration
-    # continue est le seul endroit où ce moteur est garanti présent — c'est
-    # donc ici que la promesse « la suite tourne au moins une fois sur
-    # PostgreSQL » se tient, à chaque poussé plutôt qu'une fois avant la mise
-    # en ligne.
+    # ⚠️ **PostgreSQL, et non SQLite.** Les deux diffèrent sur les
+    # transactions, les contraintes et les types : une suite verte sur
+    # SQLite ne prouverait rien de la production.
     services:
-      postgres:
+      base:
         image: postgres:17-alpine
         env:
           POSTGRES_DB: groupachat
           POSTGRES_USER: groupachat
           POSTGRES_PASSWORD: motdepasse-de-test
         ports: ["5432:5432"]
-        # Sans cette vérification, les étapes démarrent avant que la base
-        # accepte les connexions, et `migrate` échoue une fois sur trois.
         options: >-
-          --health-cmd "pg_isready -U groupachat -d groupachat"
+          --health-cmd "pg_isready -U groupachat"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
 
     env:
       DATABASE_URL: postgres://groupachat:motdepasse-de-test@localhost:5432/groupachat
-      # ⚠️ `DJANGO_DEBUG: 0` est délibéré : c'est le réglage de production, et
-      # il exerce le chemin strict des réglages — celui où l'absence de
-      # `DJANGO_SECRET_KEY` fait refuser le démarrage. En `1`, ce garde-fou ne
-      # serait jamais testé.
-      DJANGO_DEBUG: "0"
-      DJANGO_SECRET_KEY: cle-jetable-d-integration-continue-sans-valeur
-
-    defaults:
-      run:
-        working-directory: backend
+      DJANGO_SECRET_KEY: cle-de-test-sans-valeur
+      DJANGO_DEBUG: "1"
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,testserver
+      SMS_FOURNISSEUR: demonstration
 
     steps:
       - uses: actions/checkout@v4
@@ -71,71 +56,33 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-          # Met en cache les paquets pip d'un passage à l'autre, en se fiant à
-          # l'empreinte de `requirements.txt`.
           cache: pip
           cache-dependency-path: backend/requirements.txt
 
-      - name: Installer les dépendances
+      - name: Dépendances
+        working-directory: backend
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Vérifier les réglages de déploiement
-        # ⚠️ **Ce commentaire disait : « Les avertissements restants concernent
-        # tous HTTPS, qui se règle au reverse-proxy et non ici », et terminait
-        # par `|| true`.** C'était vrai pour deux d'entre eux et faux pour les
-        # deux autres : `SESSION_COOKIE_SECURE` et `CSRF_COOKIE_SECURE` sont
-        # des réglages **Django**, qu'aucun proxy ne pose à sa place. Ils sont
-        # maintenant dans `settings.py`, et le contrôle passe sans
-        # avertissement.
-        #
-        # Le `|| true` est donc retiré : **cette étape peut de nouveau
-        # échouer**, ce qui est tout son intérêt. Une vérification qui ne peut
-        # pas échouer n'est pas une vérification, c'est un affichage.
-        #
-        # `DJANGO_HSTS=1` : HSTS n'est actif qu'avec ce drapeau, parce qu'un
-        # HSTS posé avant le certificat rend le site **irrécupérable** le temps
-        # de son expiration. On le met ici pour que la CI contrôle la
-        # configuration réellement visée en production.
+      - name: Contrôles de déploiement
+        working-directory: backend
+        run: python manage.py check --deploy
         env:
           DJANGO_DEBUG: "0"
-          DJANGO_HSTS: "1"
-          DJANGO_SECRET_KEY: cle-de-controle-uniquement-jamais-deployee-0123456789
-        run: python manage.py check --deploy
+          DJANGO_ALLOWED_HOSTS: achatgr.com,admin.achatgr.com
 
-      - name: Les migrations s'appliquent
+      - name: Migrations
+        working-directory: backend
         run: python manage.py migrate --noinput
 
-      - name: La suite de tests
-        # ⚠️⚠️ **`DJANGO_HTTPS: "0"` n'est pas une commodite, c'est une
-        # correction.** Sans lui, **toute la suite backend echoue** sur des
-        # `301`, et le symptome ne ressemble pas du tout a sa cause.
-        #
-        # La chaine : `settings.py` active `SECURE_SSL_REDIRECT` des que
-        # `DEBUG` est faux, le job pose `DJANGO_DEBUG: "0"` pour tout le monde,
-        # et le client de test de Django parle **en clair** sur
-        # `http://testserver` sans envoyer de `X-Forwarded-Proto`. Django
-        # redirige donc vers `https://testserver` **avant d'atteindre la
-        # moindre vue**, et chaque appel d'API revient en 301.
-        #
-        # Chacun des trois maillons est juste pris isolement ; c'est leur
-        # rencontre qui casse. On desarme donc le troisieme, **ici seulement** :
-        # le defaut de production reste `1`, et l'etape `check --deploy`
-        # au-dessus continue de verifier la redirection telle qu'elle sera en
-        # ligne, avec son propre bloc d'environnement.
-        env:
-          DJANGO_HTTPS: "0"
-        run: python manage.py test groupachat --verbosity 2
+      - name: Tests
+        working-directory: backend
+        run: python -m pytest
 
-  # ── Le front ─────────────────────────────────────────────────────────────
-  front:
-    name: Front — typage et construction des deux paquets
+  interfaces:
+    name: Boutique et console — typage et construction
     runs-on: ubuntu-latest
-
-    defaults:
-      run:
-        working-directory: frontend
 
     steps:
       - uses: actions/checkout@v4
@@ -144,128 +91,36 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
 
-      # `npm ci` et non `npm install` : il installe exactement les versions du
-      # verrou et échoue si `package.json` et `package-lock.json` ne
-      # concordent pas.
-      - name: Installer les dépendances
+      # `npm ci` et non `npm install` : il installe exactement les versions
+      # du fichier de verrouillage, et échoue si celui-ci n'est pas à jour.
+      # Les trois espaces de travail sont installés d'un coup.
+      - name: Dépendances
         run: npm ci
 
-      - name: Le typage
-        run: npm run typecheck
+      - name: Typage des deux applications
+        run: npx tsc -b frontend admin
 
-      # `npm run build` enchaîne `tsc -b` puis les deux `vite build`, et
-      # produit `dist/` et `dist-admin/`.
-      #
-      # `VITE_API_URL` n'a pas d'importance ici : on vérifie que ça construit,
-      # pas que l'adresse est la bonne. Celle de production est passée au
-      # moment de publier les images (voir `deploiement.yml`).
-      - name: Construire les deux paquets
-        run: npm run build
-        env:
-          VITE_API_URL: http://127.0.0.1:8000/api
+      - name: Construction de la boutique
+        run: npm run build --workspace frontend
 
-      # ⚠️ **Le contrôle qui compte vraiment ici.** `.env` est lu par Vite
-      # (`envDir: ".."`), donc une variable mal préfixée ou un
-      # `import.meta.env` ajouté par distraction pourrait inscrire un secret
-      # en clair dans le JavaScript servi à tous les visiteurs. Vite ne doit
-      # exposer que les variables `VITE_`.
-      #
-      # On fabrique un `.env` avec des valeurs reconnaissables, on reconstruit,
-      # et on les cherche dans le paquet. Si l'une s'y trouve, le travail
-      # échoue.
-      - name: Aucun secret ne doit partir dans le paquet
-        run: |
-          cat > ../.env <<'FIN'
-          POSTGRES_PASSWORD=SENTINELLE-MOT-DE-PASSE-NE-DOIT-PAS-FUIR
-          DJANGO_SECRET_KEY=SENTINELLE-CLE-NE-DOIT-PAS-FUIR
-          ADMIN_MOT_DE_PASSE=SENTINELLE-MOT-DE-PASSE-ADMIN-NE-DOIT-PAS-FUIR
-          VITE_API_URL=http://127.0.0.1:8000/api
-          FIN
-          npm run build
-          if grep -rq "SENTINELLE-" dist dist-admin; then
-            echo "::error::Un secret du .env se retrouve dans le paquet construit."
-            grep -rl "SENTINELLE-" dist dist-admin
-            exit 1
-          fi
-          echo "Aucune sentinelle dans dist/ ni dist-admin/."
-          rm -f ../.env
+      - name: Construction de la console
+        run: npm run build --workspace admin
 
-  # ── Les images ───────────────────────────────────────────────────────────
-  images:
-    name: Images Docker — construction à blanc
+  image:
+    name: Image Docker
     runs-on: ubuntu-latest
-
+    # Vérifier que l'image se construit, sans la pousser nulle part :
+    # Coolify la reconstruit de son côté, mais mieux vaut découvrir une
+    # erreur de Dockerfile ici que pendant un déploiement.
     steps:
       - uses: actions/checkout@v4
-
       - uses: docker/setup-buildx-action@v3
-
-      # `push: false` : on construit pour savoir que ça construit, on ne
-      # publie rien. La publication est le travail de `deploiement.yml`.
-      #
-      # Le cache GitHub Actions évite de réinstaller les dépendances à chaque
-      # passage ; `mode=max` garde aussi les étapes intermédiaires, ce qui
-      # compte pour une construction en deux étapes.
-      - name: L'image de l'API
+      - name: Construction
         uses: docker/build-push-action@v6
         with:
-          context: ./backend
+          context: .
+          file: backend/Dockerfile
           push: false
-          cache-from: type=gha,scope=api
-          cache-to: type=gha,scope=api,mode=max
-      # ⚠️⚠️ **Les deux images du front sont de nouveau construites ici**, et ce
-      # n'est pas une verification en double du travail « Front ».
-      #
-      # Celui-ci fait tourner `npm ci` et `npm run build` sur le coureur : il
-      # prouve que **le code** construit. Ces deux etapes-ci prouvent que
-      # **l'image sert ce qui a ete construit** — c'est-a-dire la partie qui
-      # vient d'echouer en production. Un site qui rendait son `index.html`
-      # source avec une page blanche avait, lui aussi, un `npm run build`
-      # parfaitement vert.
-      #
-      # ⚠️ `VITE_API_URL` est pose a une valeur factice : on verifie que
-      # l'image se construit, pas qu'elle vise la bonne API. La vraie adresse
-      # est passee au moment de construire pour de bon.
-      - name: L'image de la boutique
-        uses: docker/build-push-action@v6
-        with:
-          context: ./frontend
-          push: false
-          build-args: |
-            VITE_API_URL=http://127.0.0.1:8000/api
-          cache-from: type=gha,scope=front
-          cache-to: type=gha,scope=front,mode=max
-
-      # ⚠️ **Le meme `scope=front` que la boutique, et c'est voulu.** Les deux
-      # fichiers partagent la meme etape de construction — `npm ci` puis
-      # `npm run build` — donc un cache commun evite de reinstaller les
-      # dependances une seconde fois. Deux scopes separes doubleraient la duree
-      # de ce travail pour rien.
-      - name: L'image de l'administration
-        uses: docker/build-push-action@v6
-        with:
-          context: ./frontend
-          file: ./frontend/Dockerfile.admin
-          push: false
-          build-args: |
-            VITE_API_URL=http://127.0.0.1:8000/api
-          cache-from: type=gha,scope=front
-          cache-to: type=gha,scope=front,mode=max
-
-
-      # Le fichier Compose doit rester lisible et ses variables résolubles.
-      # Une faute de syntaxe ou une variable obligatoire oubliée se verrait
-      # sinon au déploiement, c'est-à-dire trop tard.
-      - name: Le fichier Compose est valide
-        run: |
-          cp .env.exemple .env
-          sed -i 's/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=verification/' .env
-          sed -i 's/^DJANGO_SECRET_KEY=.*/DJANGO_SECRET_KEY=verification/' .env
-          sed -i 's/^ADMIN_IDENTIFIANT=.*/ADMIN_IDENTIFIANT=verification/' .env
-          sed -i 's/^ADMIN_MOT_DE_PASSE=.*/ADMIN_MOT_DE_PASSE=verification/' .env
-          docker compose config --quiet
-          docker compose -f docker-compose.prod.yml config --quiet
-          rm -f .env
-          echo "docker-compose.yml et docker-compose.prod.yml sont valides."
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

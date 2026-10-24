@@ -26,4 +26,8 @@ backend/base-de-secours.sqlite3
 backend/medias/
 backend/statiques/
 
+# Les sauvegardes de base contiennent des donnees personnelles :
+# elles restent sur la machine, jamais dans le depot.
+sauvegardes/
+
 *.log

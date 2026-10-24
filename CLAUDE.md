@@ -14,10 +14,19 @@ variables, de modèles, de routes. Un fichier qui mélange `Participation` et
 ## Où se trouve quoi
 
 ```
-commun/      socle partagé par les deux interfaces — il n'existe qu'en un exemplaire
-frontend/    la boutique : acheteurs et groupeurs          → port 5173
-admin/       la console d'administration                    → port 5174
-backend/     l'API Django et le modèle de données           → port 8000
+backend/              l'API Django                               → port 8000
+  config/             réglages, routes, service des fichiers
+  groupachat/
+    <sujet>/          le domaine : catalogue, commandes, comptes,
+                      echanges, paiements — modèles et vues ensemble
+    espaces/          administration et groupeur : des vues, pas
+                      des applications ; aucun modèle n'y vit
+    noyau/            ce qui traverse tout : accès, limitation
+    tests/            les tests qui traversent plusieurs sujets
+frontend/             les interfaces web
+  commun/             le socle — il n'existe qu'en un exemplaire
+  boutique/           acheteurs et groupeurs                   → port 5173
+  admin/              console d'administration                  → port 5174
 ```
 
 | Document | Ce qu'il contient |
@@ -25,7 +34,7 @@ backend/     l'API Django et le modèle de données           → port 8000
 | [README.md](README.md) | l'architecture, comment démarrer, les comptes de démonstration |
 | [CAHIER_DES_CHARGES.md](CAHIER_DES_CHARGES.md) | les règles métier : séquestre, KYC, frais, codes de retrait |
 | [COOLIFY.md](COOLIFY.md) | le déploiement sur `achatgr.com`, les variables, la sécurité |
-| [commun/README.md](commun/README.md) | ce que le socle contient **et ne doit pas contenir** |
+| [frontend/commun/README.md](frontend/commun/README.md) | ce que le socle contient **et ne doit pas contenir** |
 
 ## Les décisions à ne pas défaire sans raison
 
@@ -58,7 +67,7 @@ refuse le dossier `kyc/`, et une vue séparée vérifie qui demande.
 ## Lancer et vérifier
 
 ```bash
-npm install                        # une fois, à la racine
+cd frontend && npm install         # une fois
 npm run dev                        # boutique
 npm run dev:admin                  # console
 
@@ -98,3 +107,6 @@ Les tests décrivent un comportement attendu, pas une implémentation. Et ils
 doivent **réellement tourner** : `pytest.ini` collecte `tests.py`,
 `test_*.py` et `tests_*.py` — vingt-huit tests avaient dormi sans être
 exécutés parce que le troisième motif manquait.
+
+Un test qui ne porte que sur un sujet reste dans son dossier ; ceux qui en
+traversent plusieurs vont dans `groupachat/tests/`.

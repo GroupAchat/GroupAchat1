@@ -22,7 +22,7 @@ from groupachat.echanges.serialiseurs import (
     DemandeProduitSerialiseur,
     NotificationSerialiseur,
 )
-from groupachat.permissions import (
+from groupachat.noyau.permissions import (
     EstAuteurOuLectureSeule,
     LectureLibreEcritureVerifiee,
 )

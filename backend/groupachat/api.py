@@ -12,7 +12,8 @@ from __future__ import annotations
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from groupachat import vues_admin, vues_groupeur
+from groupachat.espaces import administration as vues_admin
+from groupachat.espaces import groupeur as vues_groupeur
 from groupachat.catalogue import vues as vues_catalogue
 from groupachat.commandes import vues as vues_commandes
 from groupachat.comptes import vues as vues_comptes

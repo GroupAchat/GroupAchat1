@@ -18,7 +18,9 @@ import { defineConfig } from "vite";
  */
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  envDir: "..",
+  // Le `.env` est à la racine du dépôt, deux dossiers plus haut :
+  // c'est le même fichier que lisent Django et Docker Compose.
+  envDir: "../..",
 
   publicDir: fileURLToPath(new URL("../commun/public", import.meta.url)),
 

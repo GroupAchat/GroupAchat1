@@ -6,10 +6,24 @@ Plateforme d'achats groupés au Togo — « livré ou remboursé ».
 
 ```
 GroupAchat/
-├── commun/      le socle partagé par les deux interfaces
-├── frontend/    la boutique — acheteurs et groupeurs
-├── admin/       la console d'administration
-└── backend/     l'API Django et le modèle de données
+├── backend/              l'API Django et le modèle de données
+│   ├── config/           réglages, routes, et ce que Django sert
+│   │   └── service/      interfaces compilées, fichiers téléversés
+│   └── groupachat/
+│       ├── catalogue/    ─┐
+│       ├── commandes/     │  le domaine : un dossier par sujet,
+│       ├── comptes/       │  modèles, sérialiseurs, vues, tests
+│       ├── echanges/      │
+│       ├── paiements/    ─┘
+│       ├── espaces/      administration et groupeur : des vues,
+│       │                 pas des applications — aucun modèle
+│       ├── noyau/        ce qui traverse tout : accès, limitation
+│       ├── tests/        les tests qui traversent plusieurs sujets
+│       └── api.py        l'assemblage des routes
+└── frontend/             les interfaces web
+    ├── commun/           le socle partagé — écrit une seule fois
+    ├── boutique/         acheteurs et groupeurs      → port 5173
+    └── admin/            console d'administration     → port 5174
 ```
 
 **Pourquoi un socle séparé.** La boutique et la console ont besoin du même
@@ -18,15 +32,15 @@ trousse d'interface. Les dupliquer garantirait qu'ils divergent — et une
 divergence sur l'authentification ne se voit qu'en production. Le socle les
 tient donc en **un seul exemplaire**, que les deux importent par `@commun/…`.
 
-Les trois dossiers sont des **espaces de travail npm** : un seul
-`npm install` à la racine, un seul `node_modules`, aucune dépendance
-installée deux fois.
+Les trois dossiers de `frontend/` sont des **espaces de travail npm** : un
+seul `npm install` dans `frontend/`, un seul `node_modules`, aucune
+dépendance installée deux fois.
 
 | Dossier | Ce qu'il contient | Ce qu'il ne contient pas |
 |---|---|---|
-| `commun/` | client API, types, session, boutons et champs, logos, feuille de style | aucune page, aucune route |
-| `frontend/` | fil vertical, catalogue, fiche campagne, espace groupeur | rien de l'administration |
-| `admin/` | KYC, séquestre, décaissements, modération | rien de la boutique |
+| `frontend/commun/` | client API, types, session, boutons et champs, logos, feuille de style | aucune page, aucune route |
+| `frontend/boutique/` | fil vertical, catalogue, fiche campagne, espace groupeur | rien de l'administration |
+| `frontend/admin/` | KYC, séquestre, décaissements, modération | rien de la boutique |
 
 ## Démarrer
 
@@ -36,7 +50,8 @@ python manage.py migrate
 python manage.py charger_demo      # jeu de démonstration
 python manage.py runserver
 
-# Les interfaces, depuis la racine
+# Les interfaces, depuis frontend/
+cd frontend
 npm install
 npm run dev                        # boutique       → http://localhost:5173
 npm run dev:admin                  # administration → http://localhost:5174

@@ -91,20 +91,25 @@ jobs:
         with:
           node-version: "22"
           cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
       # `npm ci` et non `npm install` : il installe exactement les versions
       # du fichier de verrouillage, et échoue si celui-ci n'est pas à jour.
       # Les trois espaces de travail sont installés d'un coup.
       - name: Dépendances
+        working-directory: frontend
         run: npm ci
 
       - name: Typage des deux applications
-        run: npx tsc -b frontend admin
+        working-directory: frontend
+        run: npx tsc -b boutique admin
 
       - name: Construction de la boutique
-        run: npm run build --workspace frontend
+        working-directory: frontend
+        run: npm run build --workspace boutique
 
       - name: Construction de la console
+        working-directory: frontend
         run: npm run build --workspace admin
 
   image:

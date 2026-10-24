@@ -1,5 +1,5 @@
 {
-  "name": "@groupachat/administration",
+  "name": "administration",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -10,12 +10,12 @@
     "apercu": "vite preview"
   },
   "dependencies": {
-    "@groupachat/commun": "*",
     "framer-motion": "11.18.2",
     "lucide-react": "^0.511.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
-    "react-router-dom": "7.6.2"
+    "react-router-dom": "7.6.2",
+    "commun": "*"
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.1.11",

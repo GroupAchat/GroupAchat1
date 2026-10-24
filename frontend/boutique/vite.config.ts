@@ -18,7 +18,9 @@ import { defineConfig } from "vite";
  */
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  envDir: "..",
+  // Le `.env` est à la racine du dépôt, deux dossiers plus haut :
+  // c'est le même fichier que lisent Django et Docker Compose.
+  envDir: "../..",
 
   // Les logos sont servis depuis le socle : une seule marque, déposée une
   // seule fois, pour les deux applications.

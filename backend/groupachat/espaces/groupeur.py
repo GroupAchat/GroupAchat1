@@ -40,7 +40,7 @@ from groupachat.paiements.services import (
     sequestre_de,
     valider_retrait,
 )
-from groupachat.permissions import GroupeurValide
+from groupachat.noyau.permissions import GroupeurValide
 
 _PAYEES = Q(participations__statut__in=Participation.STATUTS_PAYES)
 

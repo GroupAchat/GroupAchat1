@@ -1,31 +1,19 @@
 {
-  "name": "@groupachat/boutique",
+  "name": "groupachat-frontend",
   "private": true,
   "version": "1.0.0",
-  "type": "module",
+  "description": "Les interfaces web : socle partagé, boutique et console d'administration.",
+  "workspaces": [
+    "commun",
+    "boutique",
+    "admin"
+  ],
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "apercu": "vite preview"
-  },
-  "dependencies": {
-    "framer-motion": "11.18.2",
-    "lucide-react": "^0.511.0",
-    "qrcode": "1.5.4",
-    "react": "19.1.0",
-    "react-dom": "19.1.0",
-    "react-router-dom": "7.6.2",
-    "@groupachat/commun": "*"
-  },
-  "devDependencies": {
-    "@tailwindcss/vite": "4.1.11",
-    "@types/qrcode": "1.5.5",
-    "@types/react": "19.1.8",
-    "@types/react-dom": "19.1.6",
-    "@vitejs/plugin-react": "4.6.0",
-    "tailwindcss": "4.1.11",
-    "typescript": "5.8.3",
-    "vite": "6.3.5"
-  },
-  "description": "La boutique : acheteurs et groupeurs."
+    "dev": "npm run dev --workspace boutique",
+    "dev:admin": "npm run dev --workspace admin",
+    "build": "npm run build --workspace boutique",
+    "build:admin": "npm run build --workspace admin",
+    "build:tout": "npm run build && npm run build:admin",
+    "verifier": "tsc -b boutique admin"
+  }
 }

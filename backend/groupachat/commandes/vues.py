@@ -15,7 +15,7 @@ from groupachat.commandes.serialiseurs import (
     ParticipationSerialiseur,
 )
 from groupachat.paiements.services import ErreurPaiement, encaisser
-from groupachat.permissions import NumeroVerifie
+from groupachat.noyau.permissions import NumeroVerifie
 
 
 class ParticipationVueEnsemble(

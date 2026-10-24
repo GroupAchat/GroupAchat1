@@ -25,13 +25,13 @@ from groupachat.comptes.serialiseurs import (
     VerificationSerialiseur,
 )
 from groupachat.comptes.services import envoyer_code
-from groupachat.limitation import (
+from groupachat.noyau.limitation import (
     LimiteConnexion,
     LimiteInscription,
     LimiteRenvoi,
     LimiteVerification,
 )
-from groupachat.permissions import NumeroVerifie
+from groupachat.noyau.permissions import NumeroVerifie
 
 
 def _envoyer_ou_refuser(utilisateur):

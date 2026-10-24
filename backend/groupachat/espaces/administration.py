@@ -30,7 +30,7 @@ from groupachat.paiements.services import (
     cloturer,
     executer_decaissement,
 )
-from groupachat.permissions import EstAdministrateur
+from groupachat.noyau.permissions import EstAdministrateur
 
 
 class DossierKYCAdminVueEnsemble(

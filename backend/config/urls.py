@@ -6,8 +6,8 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path, re_path
 
-from config.vues_fichiers import media_publique, piece_kyc
-from config.vues_spa import ApplicationCompilee
+from config.service.fichiers import media_publique, piece_kyc
+from config.service.application import ApplicationCompilee
 
 urlpatterns = [
     path("administration/", admin.site.urls),

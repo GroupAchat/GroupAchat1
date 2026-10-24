@@ -101,7 +101,7 @@ function Pages() {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.22 }}
-      className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 lg:px-8"
+      className="mx-auto w-full max-w-[86rem] flex-1 px-4 py-6 lg:px-8 lg:py-9"
     >
       <Routes location={emplacement}>
         <Route path="/" element={<TableauAdmin />} />

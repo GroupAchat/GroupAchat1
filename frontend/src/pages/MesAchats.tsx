@@ -38,7 +38,7 @@ export default function MesAchats() {
   const autres = participations.filter((part) => part.statut !== "prete");
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 px-4 py-6">
+    <div className="mx-auto w-full max-w-6xl space-y-6 px-4 py-6 lg:px-8 lg:py-9">
       <header>
         <h1 className="text-2xl font-extrabold">Mes achats</h1>
         <p className="texte-doux text-sm">
@@ -69,18 +69,22 @@ export default function MesAchats() {
               <h2 className="flex items-center gap-2 font-bold">
                 <PackageCheck className="size-5 text-emerald-600" />À retirer maintenant
               </h2>
-              {aRetirer.map((part, rang) => (
-                <LigneAchat key={part.id} participation={part} index={rang} enAvant />
-              ))}
+              <div className="grid gap-3 xl:grid-cols-2">
+                {aRetirer.map((part, rang) => (
+                  <LigneAchat key={part.id} participation={part} index={rang} enAvant />
+                ))}
+              </div>
             </section>
           )}
 
           {autres.length > 0 && (
             <section className="space-y-3">
               {aRetirer.length > 0 && <h2 className="font-bold">Historique</h2>}
-              {autres.map((part, rang) => (
-                <LigneAchat key={part.id} participation={part} index={rang} />
-              ))}
+              <div className="grid gap-3 xl:grid-cols-2">
+                {autres.map((part, rang) => (
+                  <LigneAchat key={part.id} participation={part} index={rang} />
+                ))}
+              </div>
             </section>
           )}
         </>
@@ -193,7 +197,7 @@ export function DetailAchat() {
   const retirable = participation.statut === "prete";
 
   return (
-    <div className="mx-auto max-w-md space-y-5 px-4 py-6">
+    <div className="mx-auto w-full max-w-4xl space-y-5 px-4 py-6 lg:py-9">
       <Link
         to="/mes-achats"
         className="texte-doux inline-flex items-center gap-1.5 text-sm font-semibold"
@@ -209,6 +213,9 @@ export function DetailAchat() {
         </Etiquette>
       </header>
 
+      <div className="grid gap-5 lg:grid-cols-[22rem_minmax(0,1fr)] lg:items-start">
+      {/* Colonne de gauche : le code et l'endroit où le présenter. */}
+      <div className="space-y-5 lg:sticky lg:top-24">
       {participation.code_retrait && (
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
@@ -250,6 +257,10 @@ export function DetailAchat() {
         </div>
       )}
 
+      </div>
+
+      {/* Colonne de droite : le détail de la commande. */}
+      <div className="space-y-5">
       <Carte className="space-y-3 text-sm">
         <Ligne libelle="Quantité" valeur={`${participation.quantite} pièce(s)`} />
         <Ligne
@@ -302,11 +313,13 @@ export function DetailAchat() {
         </div>
       )}
 
-      <Link to={`/campagnes/${campagne.id}`}>
+      <Link to={`/campagnes/${campagne.id}`} className="block">
         <Bouton ton="contour" pleineLargeur>
           Voir la campagne
         </Bouton>
       </Link>
+      </div>
+      </div>
     </div>
   );
 }

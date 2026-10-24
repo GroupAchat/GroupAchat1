@@ -61,7 +61,7 @@ export default function Catalogue() {
   const rayonsPlats = (rayons ?? []).flatMap((rayon) => [rayon, ...rayon.sous_categories]);
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6">
+    <div className="mx-auto w-full max-w-[90rem] px-4 py-6 lg:px-8">
       <div className="verre sticky top-16 z-30 -mx-4 space-y-3 px-4 py-3">
         <div className="flex gap-2">
           <div className="surface flex h-12 flex-1 items-center gap-2 rounded-2xl px-4 focus-within:border-[color:var(--color-accent)]">
@@ -143,7 +143,7 @@ export default function Catalogue() {
           : `${donnees?.count ?? 0} campagne${(donnees?.count ?? 0) > 1 ? "s" : ""}`}
       </p>
 
-      <motion.div layout className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <motion.div layout className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
         {chargement
           ? Array.from({ length: 6 }, (_, rang) => <SqueletteCarte key={rang} />)
           : campagnes.map((campagne, rang) => (

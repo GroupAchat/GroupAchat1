@@ -73,7 +73,7 @@ export default function CampagneGroupeur() {
 
   if (chargement) {
     return (
-      <div className="mx-auto max-w-3xl space-y-4 px-4 py-6">
+      <div className="mx-auto w-full max-w-6xl space-y-5 px-4 py-6 lg:px-8 lg:py-9">
         <Squelette className="h-8 w-48" />
         <Squelette className="h-32" />
         <Squelette className="h-48" />
@@ -216,8 +216,9 @@ export default function CampagneGroupeur() {
         )}
       </Carte>
 
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] lg:items-start">
       {/* ── Suivi nominatif ──────────────────────────────────────────────── */}
-      <section className="space-y-3">
+      <section className="space-y-3 lg:order-1">
         <h2 className="flex items-center gap-2 text-lg font-bold">
           <Users className="size-5" />
           Qui a payé
@@ -275,7 +276,9 @@ export default function CampagneGroupeur() {
         )}
       </section>
 
-      <Carte className="space-y-2 text-sm">
+      {/* Les chiffres de l'offre, gardés sous les yeux pendant qu'on
+          parcourt la liste des participants. */}
+      <Carte className="space-y-2 text-sm lg:sticky lg:top-24">
         <h2 className="font-bold">Détails</h2>
         <Ligne libelle="Prix affiché" valeur={francs(campagne.prix_unitaire)} />
         <Ligne libelle="Prix courant" valeur={francs(campagne.prix_courant)} />
@@ -283,6 +286,8 @@ export default function CampagneGroupeur() {
         <Ligne libelle="Date limite" valeur={dateLongue(campagne.date_limite)} />
         <Ligne libelle="Point de remise" valeur={campagne.point_remise} />
       </Carte>
+
+      </div>
 
       <FeuilleRetrait
         ouverte={feuilleRetrait}

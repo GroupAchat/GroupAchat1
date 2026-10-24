@@ -38,7 +38,7 @@ export default function Communaute() {
   const demandes = donnees?.results ?? [];
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 px-4 py-6">
+    <div className="mx-auto w-full max-w-6xl space-y-5 px-4 py-6 lg:px-8 lg:py-9">
       <header className="flex items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-extrabold">Demandes</h1>
@@ -74,7 +74,7 @@ export default function Communaute() {
           }
         />
       ) : (
-        <ul className="space-y-3">
+        <ul className="grid gap-3 xl:grid-cols-2">
           {demandes.map((demande, rang) => (
             <CarteDemande
               key={demande.id}

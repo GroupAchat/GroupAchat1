@@ -3,13 +3,14 @@ import {
   ArrowLeft,
   BadgeCheck,
   Check,
+  ChevronRight,
   Clock,
-  MapPin,
   Minus,
   Plus,
   ShieldCheck,
   Star,
   TrendingDown,
+  Truck,
   Users,
 } from "lucide-react";
 import { useState } from "react";
@@ -19,13 +20,29 @@ import type { Campagne, Participation } from "@commun/api/types";
 import { Discussion } from "@/composants/Discussion";
 import { Feuille } from "@commun/composants/Feuille";
 import { Jauge } from "@/composants/Jauge";
-import { Alerte, Avatar, Bouton, Carte, Etiquette, fusionner, Squelette } from "@commun/composants/ui";
+import {
+  Alerte,
+  Avatar,
+  Bouton,
+  Carte,
+  Etiquette,
+  fusionner,
+  Squelette,
+} from "@commun/composants/ui";
 import { Visuel } from "@/composants/Visuel";
 import { useSession } from "@commun/contexte/Session";
 import { dateLongue, francs, tempsRestant } from "@commun/outils/formats";
 import { api, useAction, useRequete } from "@commun/outils/requetes";
 
-/** La fiche d'une campagne : tout ce qu'il faut pour décider, puis payer. */
+/**
+ * La fiche d'une campagne.
+ *
+ * **Deux mises en page, un seul code.** Sur téléphone, tout s'empile sous
+ * une grande photo. Sur ordinateur, la disposition des places de marché :
+ * la galerie à gauche, le panneau d'achat **collé en haut** à droite, et
+ * les détails en dessous. L'acheteur garde le prix et le bouton sous les
+ * yeux pendant qu'il lit les caractéristiques — c'est tout l'intérêt.
+ */
 export default function FicheCampagne() {
   const { id } = useParams();
   const naviguer = useNavigate();
@@ -58,15 +75,21 @@ export default function FicheCampagne() {
   const prochainPalier = campagne.paliers.find(
     (palier) => palier.quantite_min > campagne.quantite_reservee,
   );
+  const maximum = campagne.quantite_maximale
+    ? Math.max(1, campagne.quantite_maximale - campagne.quantite_reservee)
+    : 20;
+
+  // Les photos du produit, puis celles du lot réellement proposé.
+  const visuels = [
+    ...campagne.produit.images.map((image) => ({ cle: `p${image.id}`, url: image.image })),
+    ...campagne.medias.map((media) => ({ cle: `m${media.id}`, url: media.image })),
+  ];
 
   return (
-    <div className="pb-28 md:pb-10">
-      {/* ── Visuel ─────────────────────────────────────────────────────────── */}
-      <div className="relative aspect-[4/3] w-full overflow-hidden md:aspect-[21/9]">
-        <Visuel
-          source={campagne.produit.images[0]?.image ?? null}
-          nom={campagne.produit.nom}
-        />
+    <div className="pb-28 lg:pb-14">
+      {/* ── Téléphone : la grande photo d'en-tête ──────────────────────────── */}
+      <div className="relative aspect-[4/3] w-full overflow-hidden lg:hidden">
+        <Visuel source={visuels[0]?.url ?? null} nom={campagne.produit.nom} />
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/25" />
         <button
           onClick={() => naviguer(-1)}
@@ -93,173 +116,338 @@ export default function FicheCampagne() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-3xl space-y-6 px-4 py-6">
-        <motion.header
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="space-y-3"
+      <div className="mx-auto w-full max-w-[88rem] px-4 py-5 lg:px-10 lg:py-7">
+        {/* Fil d'Ariane : sur grand écran, on doit savoir d'où l'on vient. */}
+        <nav
+          className="texte-doux mb-5 hidden items-center gap-1.5 text-sm lg:flex"
+          aria-label="Fil d'Ariane"
         >
-          <h1 className="text-2xl font-extrabold leading-tight">{campagne.titre}</h1>
+          <Link to="/" className="hover:text-[color:var(--color-accent)]">
+            Accueil
+          </Link>
+          <ChevronRight className="size-3.5" />
+          <Link
+            to={`/catalogue?categorie=${campagne.produit.categorie_slug ?? ""}`}
+            className="hover:text-[color:var(--color-accent)]"
+          >
+            {campagne.produit.categorie_nom}
+          </Link>
+          <ChevronRight className="size-3.5" />
+          <span className="truncate text-[color:var(--texte)]">{campagne.titre}</span>
+        </nav>
 
-          <div className="flex items-end gap-2.5">
-            <span className="tabulaire text-3xl font-extrabold text-[color:var(--color-accent)]">
-              {francs(prixUnitaire)}
-            </span>
-            {remise > 0 && (
-              <>
-                <span className="texte-doux tabulaire text-sm line-through">
-                  {francs(campagne.prix_unitaire)}
-                </span>
-                <Etiquette ton="accent">−{remise} %</Etiquette>
-              </>
-            )}
-          </div>
-
-          <Jauge pourcentage={campagne.pourcentage} atteint={campagne.minimum_atteint} />
-          <div className="tabulaire flex items-center justify-between text-sm">
-            <span className="font-semibold">
-              {campagne.quantite_reservee} / {campagne.quantite_minimale} pièces
-            </span>
-            <span className="texte-doux flex items-center gap-1">
-              <Users className="size-4" />
-              {campagne.nombre_participants} participants
-            </span>
-          </div>
-        </motion.header>
-
-        {/* ── Paliers ────────────────────────────────────────────────────── */}
-        {campagne.paliers.length > 0 && (
-          <Carte className="space-y-3">
-            <h2 className="flex items-center gap-2 font-bold">
-              <TrendingDown className="size-4 text-[color:var(--color-accent)]" />
-              Plus on est nombreux, moins c'est cher
-            </h2>
-            <ul className="space-y-2">
-              {campagne.paliers.map((palier) => {
-                const franchi = campagne.quantite_reservee >= palier.quantite_min;
-                return (
-                  <li
-                    key={palier.id}
-                    className={fusionner(
-                      "flex items-center justify-between rounded-xl px-3 py-2.5 text-sm transition-colors",
-                      franchi ? "bg-accent-doux" : "surface-douce",
-                    )}
-                  >
-                    <span className="flex items-center gap-2">
-                      {franchi && (
-                        <Check className="size-4 text-[color:var(--color-accent)]" />
-                      )}
-                      À partir de {palier.quantite_min} pièces
-                    </span>
-                    <span className="tabulaire font-bold">
-                      {francs(palier.prix_unitaire)}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-            {prochainPalier && (
-              <p className="texte-doux text-sm">
-                Encore{" "}
-                <strong className="text-[color:var(--color-accent)]">
-                  {prochainPalier.quantite_min - campagne.quantite_reservee} pièces
-                </strong>{" "}
-                et le prix tombe à {francs(prochainPalier.prix_unitaire)} pour tous.
-              </p>
-            )}
-          </Carte>
-        )}
-
-        {/* ── Groupeur ───────────────────────────────────────────────────── */}
-        <Carte className="flex items-center gap-3">
-          <Avatar
-            nom={campagne.groupeur.nom_commerce || campagne.groupeur.nom_complet}
-            taille={48}
+        {/* ── Galerie + panneau d'achat ───────────────────────────────────── */}
+        <div className="lg:grid lg:grid-cols-[minmax(0,32rem)_minmax(0,1fr)] lg:items-start lg:gap-9 xl:grid-cols-[minmax(0,38rem)_minmax(0,1fr)]">
+          <Galerie
+            visuels={visuels}
+            nom={campagne.produit.nom}
+            className="hidden lg:block lg:sticky lg:top-24"
           />
-          <div className="min-w-0 flex-1">
-            <p className="flex items-center gap-1.5 font-bold">
-              <span className="truncate">
-                {campagne.groupeur.nom_commerce || campagne.groupeur.nom_complet}
-              </span>
-              {campagne.groupeur.badge_confiance && (
-                <BadgeCheck className="size-4 shrink-0 text-[color:var(--color-accent)]" />
-              )}
-            </p>
-            <p className="texte-doux flex flex-wrap items-center gap-x-3 text-sm">
-              {campagne.groupeur.reputation &&
-                Number(campagne.groupeur.reputation.note) > 0 && (
-                  <span className="flex items-center gap-1">
-                    <Star className="size-3.5 fill-amber-400 text-amber-400" />
-                    {campagne.groupeur.reputation.note}/5
-                  </span>
-                )}
-              <span>
-                {campagne.groupeur.reputation?.campagnes_terminees ?? 0} campagne
-                {(campagne.groupeur.reputation?.campagnes_terminees ?? 0) > 1 ? "s" : ""} menée
-                {(campagne.groupeur.reputation?.campagnes_terminees ?? 0) > 1 ? "s" : ""} à terme
-              </span>
-            </p>
-          </div>
-        </Carte>
 
-        {/* ── Garantie ───────────────────────────────────────────────────── */}
-        <div className="flex gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-950/40">
-          <ShieldCheck className="size-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-          <p className="text-sm text-emerald-900 dark:text-emerald-200">
-            <strong>Livré ou remboursé.</strong> Votre part reste consignée : elle
-            n'est versée au groupeur qu'une fois la campagne financée, et vous
-            récupérez tout si le minimum n'est pas atteint.
-          </p>
+          <div className="space-y-5">
+            <header className="space-y-3">
+              <div className="hidden flex-wrap gap-1.5 lg:flex">
+                <Etiquette>{campagne.produit.categorie_nom}</Etiquette>
+                {ouverte ? (
+                  <Etiquette ton="accent">
+                    <Clock className="size-3" />
+                    {tempsRestant(campagne.jours_restants)}
+                  </Etiquette>
+                ) : (
+                  <Etiquette>Collecte close</Etiquette>
+                )}
+                {campagne.minimum_atteint && (
+                  <Etiquette ton="succes">Objectif atteint</Etiquette>
+                )}
+              </div>
+
+              <h1 className="text-2xl font-extrabold leading-tight lg:text-[1.75rem]">
+                {campagne.titre}
+              </h1>
+
+              {campagne.produit.marque && (
+                <p className="texte-doux text-sm">
+                  Marque&nbsp;: <strong>{campagne.produit.marque}</strong>
+                </p>
+              )}
+            </header>
+
+            {/* Le bloc prix : fond doux pour le détacher du reste, comme sur
+                les places de marché où c'est l'information centrale. */}
+            <div className="surface-douce space-y-4 rounded-[var(--radius-carte)] p-5">
+              <div className="flex flex-wrap items-end gap-2.5">
+                <span className="tabulaire text-[2rem] font-extrabold leading-none text-[color:var(--color-accent)]">
+                  {francs(prixUnitaire)}
+                </span>
+                {remise > 0 && (
+                  <>
+                    <span className="texte-doux tabulaire text-sm line-through">
+                      {francs(campagne.prix_unitaire)}
+                    </span>
+                    <Etiquette ton="accent">−{remise} %</Etiquette>
+                  </>
+                )}
+                <span className="texte-doux ml-auto text-sm">la pièce</span>
+              </div>
+
+              {/* Les paliers en tableau : c'est ainsi qu'on lit un prix de
+                  gros, d'un coup d'œil, sans faire le calcul soi-même. */}
+              {campagne.paliers.length > 0 && (
+                <div className="overflow-hidden rounded-2xl border">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="surface text-left">
+                        <th className="px-4 py-2 font-semibold">Quantité atteinte</th>
+                        <th className="px-4 py-2 text-right font-semibold">
+                          Prix unitaire
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <LignePalier
+                        seuil={`1 à ${campagne.paliers[0].quantite_min - 1}`}
+                        prix={campagne.prix_unitaire}
+                        actif={campagne.quantite_reservee < campagne.paliers[0].quantite_min}
+                      />
+                      {campagne.paliers.map((palier, rang) => {
+                        const suivant = campagne.paliers[rang + 1];
+                        const borne = suivant
+                          ? `${palier.quantite_min} à ${suivant.quantite_min - 1}`
+                          : `${palier.quantite_min} et plus`;
+                        const actif =
+                          campagne.quantite_reservee >= palier.quantite_min &&
+                          (!suivant || campagne.quantite_reservee < suivant.quantite_min);
+                        return (
+                          <LignePalier
+                            key={palier.id}
+                            seuil={borne}
+                            prix={palier.prix_unitaire}
+                            actif={actif}
+                          />
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {prochainPalier && (
+                <p className="flex items-start gap-2 text-sm">
+                  <TrendingDown className="mt-0.5 size-4 shrink-0 text-[color:var(--color-accent)]" />
+                  <span>
+                    Encore{" "}
+                    <strong className="text-[color:var(--color-accent)]">
+                      {prochainPalier.quantite_min - campagne.quantite_reservee} pièces
+                    </strong>{" "}
+                    et le prix tombe à {francs(prochainPalier.prix_unitaire)}{" "}
+                    <span className="texte-doux">pour tout le monde.</span>
+                  </span>
+                </p>
+              )}
+            </div>
+
+            {/* Avancement */}
+            <div className="space-y-2">
+              <Jauge pourcentage={campagne.pourcentage} atteint={campagne.minimum_atteint} />
+              <div className="tabulaire flex flex-wrap items-center justify-between gap-2 text-sm">
+                <span className="font-semibold">
+                  {campagne.quantite_reservee} / {campagne.quantite_minimale} pièces
+                </span>
+                <span className="texte-doux flex items-center gap-1">
+                  <Users className="size-4" />
+                  {campagne.nombre_participants} participants
+                </span>
+              </div>
+            </div>
+
+            {/* Achat, sur grand écran : la quantité et le bouton sous le prix,
+                visibles sans défiler. */}
+            {ouverte && !estLeGroupeur && (
+              <div className="hidden items-end gap-4 lg:flex">
+                <div>
+                  <p className="texte-doux mb-1.5 text-sm font-medium">Quantité</p>
+                  <div className="surface flex w-fit items-center gap-1 rounded-full p-1">
+                    <button
+                      onClick={() => setQuantite(Math.max(1, quantite - 1))}
+                      disabled={quantite <= 1}
+                      className="grid size-9 place-items-center rounded-full transition-colors hover:surface-douce disabled:opacity-40"
+                      aria-label="Moins"
+                    >
+                      <Minus className="size-4" />
+                    </button>
+                    <span className="tabulaire w-9 text-center font-bold">{quantite}</span>
+                    <button
+                      onClick={() => setQuantite(Math.min(maximum, quantite + 1))}
+                      disabled={quantite >= maximum}
+                      className="grid size-9 place-items-center rounded-full transition-colors hover:surface-douce disabled:opacity-40"
+                      aria-label="Plus"
+                    >
+                      <Plus className="size-4" />
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <p className="texte-doux mb-1.5 text-sm font-medium">Ma part</p>
+                  <p className="tabulaire text-xl font-extrabold">
+                    {francs(prixUnitaire * quantite)}
+                  </p>
+                </div>
+                <Bouton
+                  taille="lg"
+                  className="ml-auto min-w-48"
+                  onClick={() => setFeuilleOuverte(true)}
+                >
+                  Participer
+                </Bouton>
+              </div>
+            )}
+
+            {estLeGroupeur && (
+              <Link to={`/groupeur/campagnes/${campagne.id}`}>
+                <Bouton ton="contour" pleineLargeur>
+                  Gérer ma campagne
+                </Bouton>
+              </Link>
+            )}
+
+            {/* Garantie et retrait, côte à côte quand il y a la place. */}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="flex gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-950/40">
+                <ShieldCheck className="size-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                <p className="text-sm text-emerald-900 dark:text-emerald-200">
+                  <strong>Livré ou remboursé.</strong> Votre part reste
+                  consignée jusqu'à la livraison.
+                </p>
+              </div>
+              <div className="surface flex gap-3 rounded-2xl p-4 text-sm">
+                <Truck className="size-5 shrink-0 text-[color:var(--color-accent)]" />
+                <div>
+                  <p className="font-semibold">Retrait</p>
+                  <p className="texte-doux">{campagne.point_remise}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Le vendeur */}
+            <Carte className="flex items-center gap-3">
+              <Avatar
+                nom={campagne.groupeur.nom_commerce || campagne.groupeur.nom_complet}
+                taille={46}
+              />
+              <div className="min-w-0 flex-1">
+                <p className="flex items-center gap-1.5 font-bold">
+                  <span className="truncate">
+                    {campagne.groupeur.nom_commerce || campagne.groupeur.nom_complet}
+                  </span>
+                  {campagne.groupeur.badge_confiance && (
+                    <BadgeCheck className="size-4 shrink-0 text-[color:var(--color-accent)]" />
+                  )}
+                </p>
+                <p className="texte-doux flex flex-wrap items-center gap-x-3 text-sm">
+                  {campagne.groupeur.reputation &&
+                    Number(campagne.groupeur.reputation.note) > 0 && (
+                      <span className="flex items-center gap-1">
+                        <Star className="size-3.5 fill-amber-400 text-amber-400" />
+                        {campagne.groupeur.reputation.note}/5
+                      </span>
+                    )}
+                  <span>
+                    {campagne.groupeur.reputation?.campagnes_terminees ?? 0} campagnes
+                    menées à terme
+                  </span>
+                </p>
+              </div>
+              <Link
+                to={`/catalogue?groupeur=${campagne.groupeur.id}`}
+                className="hidden shrink-0 text-sm font-semibold text-[color:var(--color-accent)] hover:underline sm:block"
+              >
+                Ses campagnes
+              </Link>
+            </Carte>
+          </div>
         </div>
 
-        {/* ── Détails ────────────────────────────────────────────────────── */}
-        {(campagne.description || campagne.produit.description) && (
-          <section className="space-y-2">
-            <h2 className="font-bold">Le produit</h2>
-            <p className="texte-doux whitespace-pre-wrap text-[0.95rem] leading-relaxed">
-              {campagne.produit.description}
-            </p>
-            {campagne.description && (
-              <p className="whitespace-pre-wrap text-[0.95rem] leading-relaxed">
-                {campagne.description}
-              </p>
+        {/* ── Détails et discussion ───────────────────────────────────────── */}
+        <div className="mt-10 lg:grid lg:grid-cols-[minmax(0,1fr)_21rem] lg:items-start lg:gap-9">
+          <div className="space-y-7">
+            {(campagne.description || campagne.produit.description) && (
+              <section className="space-y-2">
+                <h2 className="text-lg font-bold">Le produit</h2>
+                {campagne.produit.description && (
+                  <p className="texte-doux whitespace-pre-wrap leading-relaxed">
+                    {campagne.produit.description}
+                  </p>
+                )}
+                {campagne.description && (
+                  <p className="whitespace-pre-wrap leading-relaxed">
+                    {campagne.description}
+                  </p>
+                )}
+              </section>
             )}
-          </section>
-        )}
 
-        {Object.keys(campagne.caracteristiques_offre).length > 0 && (
-          <Carte className="space-y-2">
-            <h2 className="font-bold">Caractéristiques</h2>
-            <dl className="divide-y text-sm">
-              {Object.entries(campagne.caracteristiques_offre).map(([cle, valeur]) => (
-                <div key={cle} className="flex justify-between gap-4 py-2">
-                  <dt className="texte-doux">{cle}</dt>
-                  <dd className="text-right font-medium">{valeur}</dd>
+            {Object.keys(campagne.caracteristiques_offre).length > 0 && (
+              <section className="space-y-3">
+                <h2 className="text-lg font-bold">Caractéristiques</h2>
+                <div className="overflow-hidden rounded-2xl border">
+                  <dl className="divide-y text-sm">
+                    {Object.entries(campagne.caracteristiques_offre).map(
+                      ([cle, valeur], rang) => (
+                        <div
+                          key={cle}
+                          className={fusionner(
+                            "flex justify-between gap-6 px-4 py-2.5",
+                            rang % 2 === 1 && "surface-douce",
+                          )}
+                        >
+                          <dt className="texte-doux">{cle}</dt>
+                          <dd className="text-right font-medium">{valeur}</dd>
+                        </div>
+                      ),
+                    )}
+                  </dl>
                 </div>
-              ))}
-            </dl>
-          </Carte>
-        )}
+              </section>
+            )}
 
-        <Carte className="space-y-2 text-sm">
-          <h2 className="font-bold">Retrait</h2>
-          <p className="flex items-center gap-2">
-            <MapPin className="size-4 shrink-0 text-[color:var(--color-accent)]" />
-            {campagne.point_remise}
-          </p>
-          <p className="texte-doux flex items-center gap-2">
-            <Clock className="size-4 shrink-0" />
-            Collecte jusqu'au {dateLongue(campagne.date_limite)}
-          </p>
-        </Carte>
+            <Discussion campagneId={campagne.id} />
+          </div>
 
-        <Discussion campagneId={campagne.id} />
+          {/* Aparté : ce qu'on veut garder à l'œil pendant la lecture. */}
+          <aside className="mt-8 space-y-4 lg:sticky lg:top-24 lg:mt-0">
+            <Carte className="space-y-3 text-sm">
+              <h2 className="font-bold">En résumé</h2>
+              <Ligne libelle="Prix du jour" valeur={francs(prixUnitaire)} />
+              <Ligne
+                libelle="Minimum"
+                valeur={`${campagne.quantite_minimale} pièces`}
+              />
+              <Ligne
+                libelle="Déjà réservé"
+                valeur={`${campagne.quantite_reservee} pièces`}
+              />
+              <Ligne libelle="Fin de collecte" valeur={dateLongue(campagne.date_limite)} />
+              <Ligne libelle="Point de remise" valeur={campagne.point_remise} />
+            </Carte>
+
+            {ouverte && !estLeGroupeur && (
+              <Bouton
+                taille="lg"
+                pleineLargeur
+                className="hidden lg:flex"
+                onClick={() => setFeuilleOuverte(true)}
+              >
+                Participer — {francs(prixUnitaire * quantite)}
+              </Bouton>
+            )}
+          </aside>
+        </div>
       </div>
 
       {/* ── Barre d'action, collée en bas sur téléphone ──────────────────── */}
       {ouverte && !estLeGroupeur && (
         <div
-          className="verre fixed inset-x-0 bottom-0 z-30 border-t p-3 md:hidden"
+          className="verre fixed inset-x-0 bottom-0 z-30 border-t p-3 lg:hidden"
           style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
         >
           <div className="flex items-center gap-3">
@@ -269,32 +457,10 @@ export default function FicheCampagne() {
                 {francs(prixUnitaire * quantite)}
               </p>
             </div>
-            <Bouton
-              taille="lg"
-              className="flex-1"
-              onClick={() => setFeuilleOuverte(true)}
-            >
+            <Bouton taille="lg" className="flex-1" onClick={() => setFeuilleOuverte(true)}>
               Participer
             </Bouton>
           </div>
-        </div>
-      )}
-
-      {ouverte && !estLeGroupeur && (
-        <div className="mx-auto hidden max-w-3xl px-4 md:block">
-          <Bouton taille="lg" pleineLargeur onClick={() => setFeuilleOuverte(true)}>
-            Participer — {francs(prixUnitaire * quantite)}
-          </Bouton>
-        </div>
-      )}
-
-      {estLeGroupeur && (
-        <div className="mx-auto max-w-3xl px-4">
-          <Link to={`/groupeur/campagnes/${campagne.id}`}>
-            <Bouton ton="contour" pleineLargeur>
-              Gérer ma campagne
-            </Bouton>
-          </Link>
         </div>
       )}
 
@@ -310,6 +476,91 @@ export default function FicheCampagne() {
           await recharger();
         }}
       />
+    </div>
+  );
+}
+
+/**
+ * La galerie de grand écran : une grande image, des vignettes dessous.
+ *
+ * Les vignettes réagissent au **survol** et non au clic seul : c'est le
+ * geste attendu sur une place de marché, et il évite un aller-retour de la
+ * souris pour comparer deux photos.
+ */
+function Galerie({
+  visuels,
+  nom,
+  className,
+}: {
+  visuels: { cle: string; url: string }[];
+  nom: string;
+  className?: string;
+}) {
+  const [actif, setActif] = useState(0);
+
+  return (
+    <div className={className}>
+      <div className="surface overflow-hidden rounded-[var(--radius-carte)]">
+        <div className="aspect-square">
+          <Visuel source={visuels[actif]?.url ?? null} nom={nom} />
+        </div>
+      </div>
+
+      {visuels.length > 1 && (
+        <div className="mt-3 flex gap-2.5 overflow-x-auto pb-1 sans-barre">
+          {visuels.map((visuel, rang) => (
+            <button
+              key={visuel.cle}
+              onMouseEnter={() => setActif(rang)}
+              onFocus={() => setActif(rang)}
+              onClick={() => setActif(rang)}
+              className={fusionner(
+                "size-20 shrink-0 overflow-hidden rounded-xl border-2 transition-all",
+                rang === actif
+                  ? "border-[color:var(--color-accent)]"
+                  : "border-transparent opacity-70 hover:opacity-100",
+              )}
+              aria-label={`Image ${rang + 1}`}
+            >
+              <Visuel source={visuel.url} nom={nom} />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LignePalier({
+  seuil,
+  prix,
+  actif,
+}: {
+  seuil: string;
+  prix: number;
+  actif: boolean;
+}) {
+  return (
+    <tr
+      className={fusionner(
+        "border-t",
+        actif && "bg-accent-doux font-semibold text-[color:var(--color-accent-fort)]",
+      )}
+    >
+      <td className="px-4 py-2.5">
+        {seuil} pièces
+        {actif && <span className="ml-2 text-xs font-bold">· prix actuel</span>}
+      </td>
+      <td className="tabulaire px-4 py-2.5 text-right">{francs(prix)}</td>
+    </tr>
+  );
+}
+
+function Ligne({ libelle, valeur }: { libelle: string; valeur: string }) {
+  return (
+    <div className="flex items-start justify-between gap-4 border-b pb-2 last:border-0 last:pb-0">
+      <span className="texte-doux shrink-0">{libelle}</span>
+      <span className="text-right font-medium">{valeur}</span>
     </div>
   );
 }
@@ -510,13 +761,18 @@ function FeuilleParticipation({
 function SqueletteFiche() {
   return (
     <div>
-      <Squelette className="aspect-[4/3] rounded-none md:aspect-[21/9]" />
-      <div className="mx-auto max-w-3xl space-y-4 px-4 py-6">
-        <Squelette className="h-7 w-3/4" />
-        <Squelette className="h-9 w-40" />
-        <Squelette className="h-3 w-full rounded-full" />
-        <Squelette className="h-28" />
-        <Squelette className="h-20" />
+      <Squelette className="aspect-[4/3] rounded-none lg:hidden" />
+      <div className="mx-auto w-full max-w-[88rem] px-4 py-5 lg:px-10 lg:py-7">
+        <div className="lg:grid lg:grid-cols-[minmax(0,32rem)_minmax(0,1fr)] lg:gap-9 xl:grid-cols-[minmax(0,38rem)_minmax(0,1fr)]">
+          <Squelette className="hidden aspect-square lg:block" />
+          <div className="space-y-4">
+            <Squelette className="h-7 w-3/4" />
+            <Squelette className="h-9 w-40" />
+            <Squelette className="h-36" />
+            <Squelette className="h-3 w-full rounded-full" />
+            <Squelette className="h-20" />
+          </div>
+        </div>
       </div>
     </div>
   );

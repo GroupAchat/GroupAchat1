@@ -81,7 +81,7 @@ export default function NouvelleCampagne() {
   const minimum = Number(offre.quantite_minimale) || 0;
 
   return (
-    <div className="mx-auto max-w-2xl space-y-5 px-4 py-6">
+    <div className="mx-auto w-full max-w-3xl space-y-5 px-4 py-6 lg:py-9">
       <Link
         to="/groupeur/campagnes"
         className="texte-doux inline-flex items-center gap-1.5 text-sm font-semibold"

@@ -45,7 +45,7 @@ export default function TableauDeBord() {
   );
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 px-4 py-6">
+    <div className="mx-auto w-full max-w-[86rem] space-y-6 px-4 py-6 lg:px-8 lg:py-9">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="texte-doux text-sm">Espace groupeur</p>

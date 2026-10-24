@@ -36,7 +36,7 @@ class ParticipationVueEnsemble(
             .select_related("campagne", "campagne__produit",
                             "campagne__produit__categorie", "campagne__groupeur",
                             "campagne__groupeur__reputation")
-            .prefetch_related("campagne__paliers", "campagne__produit__images")
+            .prefetch_related("campagne__paliers", "campagne__produit__medias")
         )
 
     def get_serializer_class(self):

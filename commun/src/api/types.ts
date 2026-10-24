@@ -65,6 +65,20 @@ export interface Categorie {
   nombre_campagnes: number;
 }
 
+/** Une photo ou une vidéo de produit — jusqu'à 3 photos et 2 vidéos. */
+export interface MediaProduit {
+  id: number;
+  genre: "image" | "video";
+  fichier: string;
+  /** Image figée d'une vidéo ; vide pour une photo. */
+  apercu: string | null;
+  /** Ce qu'il faut afficher dans la bande de vignettes, genre compris. */
+  vignette: string | null;
+  legende: string;
+  ordre: number;
+}
+
+/** Photo du lot réellement proposé par le groupeur, sur une campagne. */
 export interface ImageProduit {
   id: number;
   image: string;
@@ -86,7 +100,7 @@ export interface ProduitResume {
 export interface Produit extends Omit<ProduitResume, "image"> {
   description: string;
   caracteristiques: Record<string, string>;
-  images: ImageProduit[];
+  medias: MediaProduit[];
   campagnes_en_cours: number;
   cree_le: string;
 }

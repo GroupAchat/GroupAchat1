@@ -44,6 +44,8 @@ routeur.register("groupeur/campagnes", vues_groupeur.CampagneGroupeurVueEnsemble
                  basename="campagne-groupeur")
 routeur.register("groupeur/produits", vues_groupeur.ProduitGroupeurVueEnsemble,
                  basename="produit-groupeur")
+routeur.register("groupeur/medias", vues_groupeur.MediaProduitVueEnsemble,
+                 basename="media-groupeur")
 
 # ── Administration ──────────────────────────────────────────────────────────
 routeur.register("admin/dossiers", vues_admin.DossierKYCAdminVueEnsemble,

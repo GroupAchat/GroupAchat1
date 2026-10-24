@@ -9,7 +9,13 @@ import pytest
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from groupachat.catalogue.models import Campagne, Categorie, PalierPrix, Produit
+from groupachat.catalogue.models import (
+    Campagne,
+    Categorie,
+    MediaProduit,
+    PalierPrix,
+    Produit,
+)
 from groupachat.commandes.models import Participation
 from groupachat.comptes.models import DossierKYC, Reputation, Utilisateur
 
@@ -230,3 +236,114 @@ class TestNombreDeRequetes:
         peupler(25, 3)
         with django_assert_num_queries(5):
             assert client.get("/api/catalogue/campagnes/?page_size=100").data["count"] == 28
+
+
+class TestMediasProduit:
+    """Trois photos, deux vidéos — pas une de plus."""
+
+    def fichier_image(self, nom="photo.png"):
+        from io import BytesIO
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image
+
+        tampon = BytesIO()
+        Image.new("RGB", (12, 12), "white").save(tampon, format="PNG")
+        return SimpleUploadedFile(nom, tampon.getvalue(), content_type="image/png")
+
+    def fichier_video(self, nom="clip.mp4"):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        # Le contenu importe peu : c'est le plafond qu'on vérifie, pas le codec.
+        return SimpleUploadedFile(nom, b"\x00\x00\x00\x18ftypmp42", content_type="video/mp4")
+
+    @pytest.fixture
+    def produit_du_groupeur(self, groupeur, rayons):
+        return Produit.objects.create(
+            categorie=rayons["alimentation"], nom="Sac de riz", propose_par=groupeur
+        )
+
+    def deposer(self, client, produit, genre="image"):
+        charge = {"produit": produit.id, "genre": genre}
+        if genre == "video":
+            charge["fichier"] = self.fichier_video()
+            charge["apercu"] = self.fichier_image("apercu.png")
+        else:
+            charge["fichier"] = self.fichier_image()
+        return client.post("/api/groupeur/medias/", charge, format="multipart")
+
+    def test_trois_photos_passent_la_quatrieme_non(self, client, groupeur, produit_du_groupeur):
+        client.force_authenticate(user=groupeur)
+        for rang in range(MediaProduit.MAX_IMAGES):
+            reponse = self.deposer(client, produit_du_groupeur)
+            assert reponse.status_code == 201, (rang, reponse.data)
+
+        refus = self.deposer(client, produit_du_groupeur)
+        assert refus.status_code == 400
+        assert "maximum" in str(refus.data)
+
+    def test_deux_videos_passent_la_troisieme_non(self, client, groupeur, produit_du_groupeur):
+        client.force_authenticate(user=groupeur)
+        for _ in range(MediaProduit.MAX_VIDEOS):
+            assert self.deposer(client, produit_du_groupeur, "video").status_code == 201
+
+        refus = self.deposer(client, produit_du_groupeur, "video")
+        assert refus.status_code == 400
+
+    def test_les_deux_plafonds_sont_independants(self, client, groupeur, produit_du_groupeur):
+        """Saturer les photos ne doit pas bloquer les vidéos."""
+        client.force_authenticate(user=groupeur)
+        for _ in range(MediaProduit.MAX_IMAGES):
+            self.deposer(client, produit_du_groupeur)
+        assert self.deposer(client, produit_du_groupeur, "video").status_code == 201
+
+    def test_une_video_sans_apercu_est_refusee(self, client, groupeur, produit_du_groupeur):
+        client.force_authenticate(user=groupeur)
+        reponse = client.post(
+            "/api/groupeur/medias/",
+            {"produit": produit_du_groupeur.id, "genre": "video",
+             "fichier": self.fichier_video()},
+            format="multipart",
+        )
+        assert reponse.status_code == 400
+        assert "apercu" in reponse.data
+
+    def test_le_plafond_tient_aussi_hors_de_l_api(self, produit_du_groupeur):
+        """Un script qui contourne le sérialiseur reste bloqué par le modèle."""
+        from django.core.exceptions import ValidationError
+
+        for _ in range(MediaProduit.MAX_IMAGES):
+            MediaProduit.objects.create(produit=produit_du_groupeur, fichier="produits/x.png")
+
+        surnumeraire = MediaProduit(produit=produit_du_groupeur, fichier="produits/y.png")
+        with pytest.raises(ValidationError):
+            surnumeraire.clean()
+
+    def test_on_ne_depose_pas_sur_le_produit_d_un_autre(
+        self, client, produit_du_groupeur, yao
+    ):
+        from groupachat.comptes.models import DossierKYC, Utilisateur
+
+        autre = Utilisateur.objects.create_user(
+            "94445566", "mdpSolide2026", nom="Autre", prenom="Groupeur",
+            role=Utilisateur.Role.GROUPEUR, telephone_verifie=True,
+        )
+        DossierKYC.objects.create(
+            utilisateur=autre, type_piece=DossierKYC.TypePiece.CNI,
+            numero_piece="CNI-9", numero_mobile_money="94445566",
+            statut=DossierKYC.Statut.VALIDE,
+        )
+        client.force_authenticate(user=autre)
+        assert self.deposer(client, produit_du_groupeur).status_code == 403
+
+    def test_la_vignette_du_catalogue_reste_une_photo(self, produit_du_groupeur):
+        """Une vidéo ne fait pas une vignette."""
+        MediaProduit.objects.create(
+            produit=produit_du_groupeur, genre=MediaProduit.Genre.VIDEO,
+            fichier="produits/clip.mp4", apercu="produits/apercus/a.png", ordre=0,
+        )
+        photo = MediaProduit.objects.create(
+            produit=produit_du_groupeur, fichier="produits/photo.png", ordre=1,
+        )
+        produit_du_groupeur.refresh_from_db()
+        assert produit_du_groupeur.image_principale.name == photo.fichier.name

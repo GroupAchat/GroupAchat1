@@ -12,14 +12,16 @@ from __future__ import annotations
 from django.db.models import Count, Q, Sum
 from django.utils import timezone
 from rest_framework import status, viewsets
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from groupachat.catalogue.models import Campagne, Produit
+from groupachat.catalogue.models import Campagne, MediaProduit, Produit
 from groupachat.catalogue.serialiseurs import (
     CampagneDetailSerialiseur,
     CampagneEcritureSerialiseur,
+    MediaProduitEcritureSerialiseur,
     ProduitEcritureSerialiseur,
     ProduitSerialiseur,
 )
@@ -53,7 +55,7 @@ class CampagneGroupeurVueEnsemble(viewsets.ModelViewSet):
             Campagne.objects.filter(groupeur=self.request.user)
             .select_related("produit", "produit__categorie", "groupeur",
                             "groupeur__reputation", "groupeur__dossier_kyc")
-            .prefetch_related("paliers", "medias", "produit__images")
+            .prefetch_related("paliers", "medias", "produit__medias")
             .annotate(
                 total_pieces=Sum("participations__quantite", filter=_PAYEES, default=0),
                 total_collecte=Sum("participations__montant_total",
@@ -212,6 +214,30 @@ class ProduitGroupeurVueEnsemble(viewsets.ModelViewSet):
 
     def perform_create(self, serialiseur):
         serialiseur.save(propose_par=self.request.user)
+
+
+class MediaProduitVueEnsemble(viewsets.ModelViewSet):
+    """/api/groupeur/medias/ — photos et vidéos des produits du groupeur.
+
+    Trois photos et deux vidéos par produit au maximum. Le plafond est
+    tenu par le sérialiseur **et** par le modèle : une route, une commande
+    d'administration ou un script passent tous par l'un des deux.
+    """
+
+    permission_classes = [GroupeurValide]
+    serializer_class = MediaProduitEcritureSerialiseur
+
+    def get_queryset(self):
+        # Un groupeur ne touche qu'aux produits qu'il a saisis.
+        return MediaProduit.objects.filter(
+            produit__propose_par=self.request.user
+        ).select_related("produit")
+
+    def perform_create(self, serialiseur):
+        produit = serialiseur.validated_data["produit"]
+        if produit.propose_par_id != self.request.user.id:
+            raise PermissionDenied("Ce produit n'est pas le vôtre.")
+        serialiseur.save()
 
 
 class TableauDeBordGroupeurVue(APIView):

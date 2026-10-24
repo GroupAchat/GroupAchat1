@@ -216,7 +216,7 @@ export function LigneCampagne({
         <Carte survol className="flex gap-4">
           <div className="size-20 shrink-0 overflow-hidden rounded-2xl">
             <Visuel
-              source={campagne.produit.images?.[0]?.image ?? null}
+              source={campagne.produit.medias?.[0]?.vignette ?? null}
               nom={campagne.produit.nom}
             />
           </div>

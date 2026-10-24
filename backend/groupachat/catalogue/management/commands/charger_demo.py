@@ -25,7 +25,7 @@ from groupachat.catalogue.models import (
     Campagne,
     Categorie,
     EtatDemonstration,
-    ImageProduit,
+    MediaProduit,
     MediaCampagne,
     PalierPrix,
     Produit,
@@ -58,7 +58,7 @@ from groupachat.paiements.services import (
 # et lui seul, qui décide si un redéploiement remet la démonstration à plat.
 # Laissé inchangé, les nouveautés n'apparaîtraient jamais sur un serveur déjà
 # démarré une fois.
-VERSION_DEMO = "3"
+VERSION_DEMO = "4"
 
 MOT_DE_PASSE = "demo2026Groupe"
 
@@ -162,7 +162,7 @@ class Command(BaseCommand):
             Notification, JaimeCommentaire, Commentaire,
             InteretDemande, DemandeProduit,
             Participation, PalierPrix, MediaCampagne, Campagne,
-            ImageProduit, Produit,
+            MediaProduit, Produit,
             DossierKYC, Reputation, CodeVerification,
         )
         for modele in enchainement:

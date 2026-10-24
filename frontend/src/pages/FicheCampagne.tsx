@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Clock,
   Minus,
+  Play,
   Plus,
   ShieldCheck,
   Star,
@@ -33,6 +34,15 @@ import { Visuel } from "@/composants/Visuel";
 import { useSession } from "@commun/contexte/Session";
 import { dateLongue, francs, tempsRestant } from "@commun/outils/formats";
 import { api, useAction, useRequete } from "@commun/outils/requetes";
+
+/** Un élément de la galerie, photo ou vidéo. */
+interface ElementGalerie {
+  cle: string;
+  genre: "image" | "video";
+  url: string;
+  vignette: string | null;
+  legende: string;
+}
 
 /**
  * La fiche d'une campagne.
@@ -79,17 +89,30 @@ export default function FicheCampagne() {
     ? Math.max(1, campagne.quantite_maximale - campagne.quantite_reservee)
     : 20;
 
-  // Les photos du produit, puis celles du lot réellement proposé.
-  const visuels = [
-    ...campagne.produit.images.map((image) => ({ cle: `p${image.id}`, url: image.image })),
-    ...campagne.medias.map((media) => ({ cle: `m${media.id}`, url: media.image })),
+  // Les médias du produit — jusqu'à trois photos et deux vidéos — puis les
+  // photos du lot réellement proposé par ce groupeur.
+  const visuels: ElementGalerie[] = [
+    ...campagne.produit.medias.map((media) => ({
+      cle: `p${media.id}`,
+      genre: media.genre,
+      url: media.fichier,
+      vignette: media.vignette,
+      legende: media.legende,
+    })),
+    ...campagne.medias.map((media) => ({
+      cle: `m${media.id}`,
+      genre: "image" as const,
+      url: media.image,
+      vignette: media.image,
+      legende: media.legende,
+    })),
   ];
 
   return (
     <div className="pb-28 lg:pb-14">
       {/* ── Téléphone : la grande photo d'en-tête ──────────────────────────── */}
       <div className="relative aspect-[4/3] w-full overflow-hidden lg:hidden">
-        <Visuel source={visuels[0]?.url ?? null} nom={campagne.produit.nom} />
+        <Visuel source={visuels[0]?.vignette ?? null} nom={campagne.produit.nom} />
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/25" />
         <button
           onClick={() => naviguer(-1)}
@@ -487,45 +510,100 @@ export default function FicheCampagne() {
  * geste attendu sur une place de marché, et il évite un aller-retour de la
  * souris pour comparer deux photos.
  */
+/**
+ * La galerie de grand écran : un grand visuel, des vignettes carrées dessous.
+ *
+ * **Les vidéos se lisent sur place**, elles ne renvoient pas ailleurs. Une
+ * vignette de vidéo porte un rond de lecture : sans lui, rien ne distingue
+ * une image figée d'une vidéo, et personne ne clique.
+ *
+ * Les vignettes réagissent au survol **pour les photos seulement**. Changer
+ * de visuel au passage de la souris pendant qu'une vidéo joue couperait la
+ * lecture — c'est agaçant, et c'est exactement ce qu'on fait sans y penser
+ * en déplaçant le curseur.
+ */
 function Galerie({
   visuels,
   nom,
   className,
 }: {
-  visuels: { cle: string; url: string }[];
+  visuels: ElementGalerie[];
   nom: string;
   className?: string;
 }) {
   const [actif, setActif] = useState(0);
+  const courant = visuels[actif];
 
   return (
     <div className={className}>
       <div className="surface overflow-hidden rounded-[var(--radius-carte)]">
         <div className="aspect-square">
-          <Visuel source={visuels[actif]?.url ?? null} nom={nom} />
+          {courant?.genre === "video" ? (
+            <video
+              key={courant.cle}
+              src={courant.url}
+              poster={courant.vignette ?? undefined}
+              controls
+              playsInline
+              preload="metadata"
+              className="size-full bg-black object-contain"
+            >
+              Votre navigateur ne sait pas lire cette vidéo.
+            </video>
+          ) : (
+            <Visuel source={courant?.vignette ?? null} nom={nom} />
+          )}
         </div>
       </div>
 
       {visuels.length > 1 && (
-        <div className="mt-3 flex gap-2.5 overflow-x-auto pb-1 sans-barre">
+        <div className="sans-barre mt-3 flex gap-2.5 overflow-x-auto pb-1">
           {visuels.map((visuel, rang) => (
             <button
               key={visuel.cle}
-              onMouseEnter={() => setActif(rang)}
+              onMouseEnter={() => {
+                // On ne suit le survol que si rien ne joue : voir plus haut.
+                if (visuel.genre !== "video" && courant?.genre !== "video") {
+                  setActif(rang);
+                }
+              }}
               onFocus={() => setActif(rang)}
               onClick={() => setActif(rang)}
               className={fusionner(
-                "size-20 shrink-0 overflow-hidden rounded-xl border-2 transition-all",
+                "relative size-20 shrink-0 overflow-hidden rounded-xl border-2 transition-all",
                 rang === actif
                   ? "border-[color:var(--color-accent)]"
                   : "border-transparent opacity-70 hover:opacity-100",
               )}
-              aria-label={`Image ${rang + 1}`}
+              aria-label={
+                visuel.legende ||
+                `${visuel.genre === "video" ? "Vidéo" : "Photo"} ${rang + 1}`
+              }
+              aria-current={rang === actif}
             >
-              <Visuel source={visuel.url} nom={nom} />
+              <Visuel source={visuel.vignette} nom={nom} />
+              {visuel.genre === "video" && (
+                <span className="absolute inset-0 grid place-items-center bg-black/35">
+                  <span className="grid size-7 place-items-center rounded-full bg-white/90 text-black">
+                    <Play className="size-3.5 fill-current" />
+                  </span>
+                </span>
+              )}
             </button>
           ))}
         </div>
+      )}
+
+      {/* Le décompte rassure sur ce qui reste à voir. */}
+      {visuels.length > 1 && (
+        <p className="texte-doux mt-2 text-xs">
+          {visuels.filter((v) => v.genre === "image").length} photo
+          {visuels.filter((v) => v.genre === "image").length > 1 ? "s" : ""}
+          {visuels.some((v) => v.genre === "video") &&
+            ` · ${visuels.filter((v) => v.genre === "video").length} vidéo${
+              visuels.filter((v) => v.genre === "video").length > 1 ? "s" : ""
+            }`}
+        </p>
       )}
     </div>
   );

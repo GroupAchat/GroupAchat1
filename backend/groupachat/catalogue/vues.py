@@ -46,7 +46,7 @@ def campagnes_avec_avancement():
         Campagne.objects.filter(statut__in=STATUTS_PUBLICS)
         .select_related("produit", "produit__categorie", "groupeur",
                         "groupeur__reputation", "groupeur__dossier_kyc")
-        .prefetch_related("produit__images", "paliers", "medias")
+        .prefetch_related("produit__medias", "paliers", "medias")
         .annotate(
             total_pieces=Sum("participations__quantite", filter=_PAYEES, default=0),
             total_collecte=Sum("participations__montant_total", filter=_PAYEES, default=0),
@@ -97,7 +97,7 @@ class ProduitVueEnsemble(viewsets.ReadOnlyModelViewSet):
         produits = (
             Produit.objects.filter(actif=True)
             .select_related("categorie")
-            .prefetch_related("images")
+            .prefetch_related("medias")
             .annotate(
                 campagnes_en_cours=Count(
                     "campagnes",

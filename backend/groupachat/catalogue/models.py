@@ -131,29 +131,109 @@ class Produit(models.Model):
 
     @property
     def image_principale(self):
-        # ``all()`` puis indexation, et non ``first()`` : celui-ci relance une
-        # requête même quand les images viennent d'être préchargées.
-        images = list(self.images.all())
-        return images[0] if images else None
+        """La photo qui représente le produit dans les listes.
+
+        Une vidéo ne fait pas une vignette : on ne retient que les photos,
+        et à défaut l'aperçu d'une vidéo.
+
+        ``all()`` puis filtrage en mémoire, et non un ``filter()`` en base :
+        la vue précharge les médias, et un filtre repartirait en base — une
+        requête de plus par vignette du catalogue.
+        """
+        medias = list(self.medias.all())
+        for media in medias:
+            if media.genre == MediaProduit.Genre.IMAGE:
+                return media.fichier
+        for media in medias:
+            if media.apercu:
+                return media.apercu
+        return None
 
 
-class ImageProduit(models.Model):
-    """Photo de référence du produit. La première sert de vignette."""
+class MediaProduit(models.Model):
+    """Photo ou vidéo d'un produit.
+
+    **Un seul modèle pour les deux**, et non deux tables : une galerie se
+    parcourt dans un ordre unique, où photos et vidéos se mêlent. Les
+    séparer obligerait à les recoller à l'affichage, et à inventer une règle
+    pour trancher les égalités d'ordre.
+
+    Les plafonds — trois photos, deux vidéos — tiennent à l'usage : les
+    groupeurs photographient au téléphone, sur une connexion mesurée. Au
+    delà, la fiche devient lente à charger pour l'acheteur sans rien lui
+    apprendre de plus.
+    """
+
+    class Genre(models.TextChoices):
+        IMAGE = "image", "Photo"
+        VIDEO = "video", "Vidéo"
+
+    MAX_IMAGES = 3
+    MAX_VIDEOS = 2
 
     produit = models.ForeignKey(
-        Produit, on_delete=models.CASCADE, related_name="images", verbose_name="produit"
+        Produit, on_delete=models.CASCADE, related_name="medias", verbose_name="produit"
     )
-    image = models.ImageField("image", upload_to="produits/")
+    genre = models.CharField(
+        "type", max_length=10, choices=Genre.choices, default=Genre.IMAGE
+    )
+
+    # `FileField` et non `ImageField` : une vidéo n'est pas une image, et
+    # Pillow refuserait de l'ouvrir pour la valider.
+    fichier = models.FileField("fichier", upload_to="produits/")
+
+    # L'image figée qu'on montre avant la lecture. Sans elle, une vidéo
+    # apparaît comme un rectangle noir dans la galerie.
+    apercu = models.ImageField(
+        "aperçu de la vidéo", upload_to="produits/apercus/", blank=True
+    )
     legende = models.CharField("légende", max_length=160, blank=True)
     ordre = models.PositiveSmallIntegerField("ordre d'affichage", default=0)
 
     class Meta:
-        verbose_name = "image de produit"
-        verbose_name_plural = "images de produit"
+        verbose_name = "média de produit"
+        verbose_name_plural = "médias de produit"
         ordering = ["ordre", "id"]
+        indexes = [models.Index(fields=["produit", "genre", "ordre"])]
 
     def __str__(self) -> str:
-        return self.legende or f"Image {self.ordre} de {self.produit.nom}"
+        return self.legende or f"{self.get_genre_display()} de {self.produit.nom}"
+
+    @property
+    def est_video(self) -> bool:
+        return self.genre == self.Genre.VIDEO
+
+    @property
+    def vignette(self):
+        """Ce qu'on affiche dans la bande de vignettes.
+
+        Pour une vidéo, son aperçu ; faute d'aperçu, rien — l'interface
+        dessine alors un fond de remplacement plutôt qu'une image cassée.
+        """
+        if self.est_video:
+            return self.apercu or None
+        return self.fichier
+
+    def clean(self) -> None:
+        """Fait respecter les plafonds avant l'enregistrement.
+
+        Posé sur le modèle et pas seulement sur le formulaire : un import,
+        une commande d'administration ou un script contournerait un contrôle
+        qui ne vivrait que dans le sérialiseur.
+        """
+        from django.core.exceptions import ValidationError
+
+        if not self.produit_id:
+            return
+        deja = MediaProduit.objects.filter(
+            produit_id=self.produit_id, genre=self.genre
+        ).exclude(pk=self.pk).count()
+        plafond = self.MAX_VIDEOS if self.est_video else self.MAX_IMAGES
+        if deja >= plafond:
+            libelle = "vidéos" if self.est_video else "photos"
+            raise ValidationError(
+                {"genre": f"Ce produit a déjà {plafond} {libelle}, le maximum."}
+            )
 
 
 class Campagne(models.Model):

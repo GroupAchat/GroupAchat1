@@ -9,7 +9,7 @@ from rest_framework import serializers
 from groupachat.catalogue.models import (
     Campagne,
     Categorie,
-    ImageProduit,
+    MediaProduit,
     MediaCampagne,
     PalierPrix,
     Produit,
@@ -33,10 +33,25 @@ class CategorieSerialiseur(serializers.ModelSerializer):
         return CategorieSerialiseur(enfants, many=True, context=self.context).data
 
 
-class ImageProduitSerialiseur(serializers.ModelSerializer):
+class MediaProduitSerialiseur(serializers.ModelSerializer):
+    """Une photo ou une vidéo, avec de quoi l'afficher sans deviner.
+
+    `vignette` évite à l'interface de choisir entre le fichier et l'aperçu
+    selon le genre : la règle est décidée ici, une fois.
+    """
+
+    vignette = serializers.SerializerMethodField()
+
     class Meta:
-        model = ImageProduit
-        fields = ["id", "image", "legende", "ordre"]
+        model = MediaProduit
+        fields = ["id", "genre", "fichier", "apercu", "vignette", "legende", "ordre"]
+
+    def get_vignette(self, media) -> str | None:
+        fichier = media.vignette
+        if not fichier:
+            return None
+        requete = self.context.get("request")
+        return requete.build_absolute_uri(fichier.url) if requete else fichier.url
 
 
 class ProduitResumeSerialiseur(serializers.ModelSerializer):
@@ -63,14 +78,14 @@ class ProduitResumeSerialiseur(serializers.ModelSerializer):
 class ProduitSerialiseur(serializers.ModelSerializer):
     """La fiche produit complète."""
 
-    images = ImageProduitSerialiseur(many=True, read_only=True)
+    medias = MediaProduitSerialiseur(many=True, read_only=True)
     categorie_nom = serializers.CharField(source="categorie.nom", read_only=True)
     campagnes_en_cours = serializers.IntegerField(read_only=True, default=0)
 
     class Meta:
         model = Produit
         fields = ["id", "nom", "slug", "marque", "description", "caracteristiques",
-                  "categorie", "categorie_nom", "images", "campagnes_en_cours",
+                  "categorie", "categorie_nom", "medias", "campagnes_en_cours",
                   "cree_le"]
 
 
@@ -238,6 +253,50 @@ class CampagneEcritureSerialiseur(serializers.ModelSerializer):
         if paliers is not None:
             self._remplacer_paliers(campagne, paliers)
         return campagne
+
+
+class MediaProduitEcritureSerialiseur(serializers.ModelSerializer):
+    """Dépôt d'une photo ou d'une vidéo sur un produit.
+
+    Le plafond est vérifié ici **en plus** du modèle : la validation du
+    modèle rend une erreur correcte mais brutale, celle-ci la rattache au
+    bon champ et donne un message que l'interface peut afficher.
+    """
+
+    class Meta:
+        model = MediaProduit
+        fields = ["id", "produit", "genre", "fichier", "apercu", "legende", "ordre"]
+
+    def validate(self, donnees):
+        produit = donnees.get("produit") or getattr(self.instance, "produit", None)
+        genre = donnees.get("genre") or getattr(self.instance, "genre", None)
+        if produit is None or genre is None:
+            return donnees
+
+        deja = MediaProduit.objects.filter(produit=produit, genre=genre)
+        if self.instance is not None:
+            deja = deja.exclude(pk=self.instance.pk)
+
+        plafond = (
+            MediaProduit.MAX_VIDEOS
+            if genre == MediaProduit.Genre.VIDEO
+            else MediaProduit.MAX_IMAGES
+        )
+        if deja.count() >= plafond:
+            libelle = "vidéos" if genre == MediaProduit.Genre.VIDEO else "photos"
+            raise serializers.ValidationError(
+                {"genre": f"Ce produit a déjà {plafond} {libelle}, le maximum."}
+            )
+
+        # Une vidéo sans aperçu apparaît comme un rectangle noir dans la
+        # galerie : on le dit au dépôt plutôt que de le découvrir à l'écran.
+        if genre == MediaProduit.Genre.VIDEO and not (
+            donnees.get("apercu") or getattr(self.instance, "apercu", None)
+        ):
+            raise serializers.ValidationError(
+                {"apercu": "Ajoutez une image d'aperçu pour la vidéo."}
+            )
+        return donnees
 
 
 class ProduitEcritureSerialiseur(serializers.ModelSerializer):

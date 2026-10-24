@@ -183,3 +183,81 @@ class TestCloisonnement:
         )
         assert reponse.status_code == 400
         assert "trop lourde" in str(reponse.data).lower()
+
+
+class TestJeuDeDemonstration:
+    """Le rechargement au déploiement, et ce qu'il ne doit pas casser.
+
+    Ces tests gardent une promesse précise : **une poussée qui change le jeu
+    de données le fait apparaître**, et une poussée qui n'y touche pas
+    laisse la démonstration en place.
+    """
+
+    def executer(self, **options):
+        from django.core.management import call_command
+
+        call_command("charger_demo", **options)
+
+    def test_le_premier_chargement_pose_la_version(self):
+        from groupachat.catalogue.management.commands.charger_demo import VERSION_DEMO
+        from groupachat.catalogue.models import Campagne, EtatDemonstration
+
+        self.executer(synchroniser=True)
+        assert Campagne.objects.exists()
+        assert EtatDemonstration.objects.get().version == VERSION_DEMO
+
+    def test_a_version_egale_rien_ne_bouge(self):
+        """Un redéploiement sans changement ne doit rien détruire."""
+        from groupachat.catalogue.models import Campagne
+        from groupachat.comptes.models import Utilisateur
+
+        self.executer(synchroniser=True)
+        campagnes = Campagne.objects.count()
+
+        # Quelqu'un s'inscrit pendant la démonstration : son compte doit
+        # survivre au redéploiement suivant.
+        Utilisateur.objects.create_user(
+            "90999999", "mdpSolide2026", nom="Visiteur", prenom="De passage",
+            telephone_verifie=True,
+        )
+
+        self.executer(synchroniser=True)
+        assert Campagne.objects.count() == campagnes
+        assert Utilisateur.objects.filter(telephone="90999999").exists()
+
+    def test_une_version_differente_remet_le_jeu_a_plat(self, monkeypatch):
+        """Et surtout : sans lever d'erreur d'intégrité.
+
+        L'effacement traverse des relations protégées — `Transaction`
+        protège `Participation`, `Decaissement` protège `Campagne`, et un
+        sous-rayon protège son parent. Dans le désordre, il laisserait la
+        base à moitié vidée.
+        """
+        from groupachat.catalogue.management.commands import charger_demo
+        from groupachat.catalogue.models import Campagne, Categorie, EtatDemonstration
+        from groupachat.comptes.models import Utilisateur
+
+        self.executer(synchroniser=True)
+        Utilisateur.objects.create_user(
+            "90999999", "mdpSolide2026", nom="Visiteur", prenom="De passage",
+            telephone_verifie=True,
+        )
+
+        monkeypatch.setattr(charger_demo, "VERSION_DEMO", "version-suivante")
+        self.executer(synchroniser=True)
+
+        assert EtatDemonstration.objects.get().version == "version-suivante"
+        assert Campagne.objects.exists(), "le jeu doit être rechargé, pas seulement effacé"
+        assert Categorie.objects.filter(parent__isnull=False).exists()
+        assert not Utilisateur.objects.filter(telephone="90999999").exists()
+
+    def test_l_equipe_survit_a_un_rechargement(self, administrateur, monkeypatch):
+        """Effacer les comptes de l'équipe couperait l'accès à la console."""
+        from groupachat.catalogue.management.commands import charger_demo
+        from groupachat.comptes.models import Utilisateur
+
+        self.executer(synchroniser=True)
+        monkeypatch.setattr(charger_demo, "VERSION_DEMO", "version-suivante")
+        self.executer(synchroniser=True)
+
+        assert Utilisateur.objects.filter(pk=administrateur.pk).exists()

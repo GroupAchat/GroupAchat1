@@ -354,3 +354,28 @@ class MediaCampagne(models.Model):
 
     def __str__(self) -> str:
         return self.legende or f"Image {self.ordre} de {self.campagne}"
+
+class EtatDemonstration(models.Model):
+    """Quelle version du jeu de démonstration est en place.
+
+    Sans ce repère, un redéploiement laissait la base intacte et **les
+    nouveautés du jeu de données n'apparaissaient jamais** : la commande de
+    chargement s'arrête dès qu'elle trouve des campagnes. On comparait donc
+    du code neuf à des données figées au premier démarrage.
+
+    En notant la version chargée, le démarrage sait distinguer deux cas :
+    la version du code est la même — on ne touche à rien, les comptes créés
+    pendant la démonstration survivent ; elle a changé — on remet le jeu à
+    plat et les nouveautés apparaissent, comme si le code venait d'être
+    mis à jour.
+    """
+
+    version = models.CharField("version du jeu", max_length=40)
+    chargee_le = models.DateTimeField("chargée le", default=timezone.now)
+
+    class Meta:
+        verbose_name = "état de la démonstration"
+        verbose_name_plural = "état de la démonstration"
+
+    def __str__(self) -> str:
+        return f"Jeu de démonstration {self.version}"

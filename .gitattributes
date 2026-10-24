@@ -1,0 +1,20 @@
+# ⚠️ **Les scripts shell doivent rester en fins de ligne Unix.**
+#
+# Un `entrypoint.sh` en CRLF fait échouer le conteneur avec un message
+# trompeur : « exec /application/entrypoint.sh: no such file or directory ».
+# Le fichier est pourtant là — c'est `/bin/sh\r` que le noyau cherche, à
+# cause du retour chariot collé au shebang.
+#
+# Sous Windows, un outil qui réécrit un fichier texte convertit volontiers
+# en CRLF sans le dire. Cette règle rattrape l'erreur à chaque extraction.
+*.sh text eol=lf
+entrypoint.sh text eol=lf
+Dockerfile text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Les fichiers binaires ne se convertissent pas.
+*.png binary
+*.jpg binary
+*.webp binary
+*.pdf binary

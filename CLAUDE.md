@@ -75,6 +75,11 @@ lisent Django, Vite et Docker Compose. Pas de second fichier par dossier.
 ⚠️ **`VITE_API_URL` doit rester vide.** Le client retombe alors sur `/api`,
 relayé depuis la même origine. Une adresse absolue rouvre le CORS.
 
+**Le jeu de démonstration suit un numéro de version.** `VERSION_DEMO` dans
+`charger_demo.py` décide si un redéploiement remet les données à plat.
+**À incrémenter dès qu'on touche au jeu** — sinon les ajouts n'apparaissent
+jamais sur un serveur déjà démarré une fois.
+
 ## Ce qui est simulé
 
 Aucun SMS n'est envoyé — le code s'affiche à l'écran. Aucun paiement n'est

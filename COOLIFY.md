@@ -161,9 +161,33 @@ conserve entre les déploiements. Pensez à les inclure dans vos sauvegardes.
 
 ## 7. Mettre à jour
 
-Coolify reconstruit à chaque envoi sur la branche suivie. Les migrations
-s'appliquent au démarrage, `charger_demo` ne fait rien si des campagnes
-existent déjà : un redéploiement ne duplique pas les données.
+Coolify reconstruit à chaque envoi sur la branche suivie, et les migrations
+s'appliquent au démarrage.
+
+**Le jeu de démonstration suit un numéro de version.** Au démarrage, le
+conteneur compare `VERSION_DEMO`, inscrit dans
+[`charger_demo.py`](backend/groupachat/catalogue/management/commands/charger_demo.py),
+à la version notée en base :
+
+| | Ce qui se passe |
+|---|---|
+| Versions identiques | rien n'est touché — les comptes créés pendant une démonstration survivent |
+| Versions différentes | le jeu est remis à plat et rechargé : **les nouveautés apparaissent en même temps que le code** |
+
+⚠️ **Incrémentez `VERSION_DEMO` dès que vous modifiez le jeu de données.**
+Sans ça, vos ajouts n'apparaîtront jamais sur un serveur déjà démarré une
+fois : la commande verrait la même version et passerait son tour.
+
+⚠️ **Un changement de version efface les comptes créés sur le site** (ceux
+de l'équipe survivent). C'est voulu pour une démonstration ; mettez
+`CHARGER_DEMO=0` dès que de vrais utilisateurs s'inscrivent.
+
+Pour repartir totalement de zéro, il faut détruire le volume — un
+redéploiement ne le touche jamais :
+
+```bash
+docker compose down -v        # ⚠️ détruit la base et les fichiers téléversés
+```
 
 ## 8. Essayer la pile en local
 

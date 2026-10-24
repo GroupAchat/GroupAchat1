@@ -21,9 +21,22 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
 
-from groupachat.catalogue.models import Campagne, Categorie, PalierPrix, Produit
+from groupachat.catalogue.models import (
+    Campagne,
+    Categorie,
+    EtatDemonstration,
+    ImageProduit,
+    MediaCampagne,
+    PalierPrix,
+    Produit,
+)
 from groupachat.commandes.models import Litige, Participation
-from groupachat.comptes.models import DossierKYC, Reputation, Utilisateur
+from groupachat.comptes.models import (
+    CodeVerification,
+    DossierKYC,
+    Reputation,
+    Utilisateur,
+)
 from groupachat.echanges.models import (
     Commentaire,
     DemandeProduit,
@@ -31,6 +44,7 @@ from groupachat.echanges.models import (
     JaimeCommentaire,
     Notification,
 )
+from groupachat.paiements.models import Decaissement, Sequestre, Transaction
 from groupachat.paiements.services import (
     cloturer,
     demander_decaissement,
@@ -39,6 +53,12 @@ from groupachat.paiements.services import (
     mettre_a_disposition,
     valider_retrait,
 )
+
+# ⚠️ **À incrémenter dès qu'on touche au jeu de données.** C'est ce numéro,
+# et lui seul, qui décide si un redéploiement remet la démonstration à plat.
+# Laissé inchangé, les nouveautés n'apparaîtraient jamais sur un serveur déjà
+# démarré une fois.
+VERSION_DEMO = "3"
 
 MOT_DE_PASSE = "demo2026Groupe"
 
@@ -67,16 +87,38 @@ class Command(BaseCommand):
             action="store_true",
             help="Vide les données existantes avant de recharger.",
         )
+        analyseur.add_argument(
+            "--synchroniser",
+            action="store_true",
+            help=(
+                "Recharge seulement si la version du jeu a changé. "
+                "C'est le mode utilisé au démarrage d'un conteneur."
+            ),
+        )
 
     @transaction.atomic
     def handle(self, *args, **options):
-        if options["effacer"]:
-            self._effacer()
+        etat = EtatDemonstration.objects.first()
 
-        if Campagne.objects.exists():
+        if options["synchroniser"]:
+            if etat is not None and etat.version == VERSION_DEMO:
+                self.stdout.write(
+                    f"Jeu de démonstration déjà en version {VERSION_DEMO} : "
+                    "rien à faire."
+                )
+                return
+            # Version absente ou différente : on repart d'une base propre.
+            # Sans cet effacement, le rechargement buterait sur les comptes
+            # et les campagnes déjà présents.
+            if etat is not None or Campagne.objects.exists():
+                self._effacer()
+        elif options["effacer"]:
+            self._effacer()
+        elif Campagne.objects.exists():
             self.stdout.write(
                 self.style.WARNING(
-                    "Des campagnes existent déjà. Relancez avec --effacer pour repartir à zéro."
+                    "Des campagnes existent déjà. Relancez avec --effacer pour "
+                    "repartir à zéro, ou --synchroniser pour suivre la version."
                 )
             )
             return
@@ -101,15 +143,41 @@ class Command(BaseCommand):
         self._litige(acheteurs)
         self._notifications_lues(acheteurs)
 
+        EtatDemonstration.objects.create(version=VERSION_DEMO)
         self._resumer(valide, en_attente, admin)
 
     # ── Mise en place ───────────────────────────────────────────────────────
 
     def _effacer(self):
-        for modele in (Commentaire, InteretDemande, DemandeProduit, Participation,
-                       PalierPrix, Campagne, Produit, Categorie):
+        """Vide le jeu précédent, des feuilles vers la racine.
+
+        ⚠️ **L'ordre n'est pas décoratif.** `Transaction` protège
+        `Participation`, `Decaissement` protège `Campagne`, et `Campagne`
+        protège son groupeur : supprimer dans le désordre lève une erreur
+        d'intégrité et laisse la base à moitié vidée — exactement le genre
+        de panne qui ne se voit qu'au déploiement suivant.
+        """
+        enchainement = (
+            Litige, Transaction, Decaissement, Sequestre,
+            Notification, JaimeCommentaire, Commentaire,
+            InteretDemande, DemandeProduit,
+            Participation, PalierPrix, MediaCampagne, Campagne,
+            ImageProduit, Produit,
+            DossierKYC, Reputation, CodeVerification,
+        )
+        for modele in enchainement:
             modele.objects.all().delete()
+
+        # Les rayons se suppriment en deux temps : `Categorie.parent` est
+        # protégé, et un effacement en bloc bute sur les sous-rayons qui
+        # retiennent leur parent.
+        Categorie.objects.filter(parent__isnull=False).delete()
+        Categorie.objects.all().delete()
+
+        # Les comptes de l'équipe survivent : ils ne viennent pas du jeu de
+        # démonstration, et les effacer couperait l'accès à la console.
         Utilisateur.objects.filter(is_superuser=False).delete()
+        EtatDemonstration.objects.all().delete()
         self.stdout.write("Données précédentes effacées.")
 
     def _rayons(self) -> dict:

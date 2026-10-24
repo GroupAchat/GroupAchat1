@@ -50,11 +50,20 @@ fi
 
 # ── Jeu de démonstration ────────────────────────────────────────────────────
 #
-# `charger_demo` s'arrête de lui-même si des campagnes existent déjà : un
-# redéploiement ne duplique donc rien.
+# `--synchroniser` compare la version du jeu inscrite dans le code à celle
+# notée en base :
+#
+#   identiques  → on ne touche à rien. Les comptes créés pendant une
+#                 démonstration survivent au redéploiement.
+#   différentes → le jeu est remis à plat et rechargé, donc **les
+#                 nouveautés apparaissent** en même temps que le code.
+#
+# ⚠️ Sans ce mode, la commande s'arrêtait dès qu'elle trouvait des
+# campagnes : sur un serveur déjà démarré une fois, aucun ajout au jeu de
+# données ne serait jamais apparu.
 if [ "${CHARGER_DEMO}" = "1" ]; then
     echo "→ Jeu de démonstration…"
-    python manage.py charger_demo
+    python manage.py charger_demo --synchroniser
 fi
 
 echo "→ Gunicorn sur le port 8000."

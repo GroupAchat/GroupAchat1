@@ -11,11 +11,11 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 
-import type { Notification, Page } from "@/api/types";
-import { Bouton, fusionner, Squelette } from "@/composants/ui";
-import { useSession } from "@/contexte/Session";
-import { depuis } from "@/outils/formats";
-import { api } from "@/outils/requetes";
+import type { Notification, Page } from "@commun/api/types";
+import { Bouton, fusionner, Squelette } from "@commun/composants/ui";
+import { useSession } from "@commun/contexte/Session";
+import { depuis } from "@commun/outils/formats";
+import { api } from "@commun/outils/requetes";
 
 /**
  * La cloche de la barre du haut.

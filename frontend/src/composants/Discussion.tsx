@@ -3,11 +3,11 @@ import { BadgeCheck, Heart, MessageCircle, Send } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
-import type { Commentaire, Page } from "@/api/types";
-import { Avatar, Bouton, EtatVide, fusionner, Squelette } from "@/composants/ui";
-import { useSession } from "@/contexte/Session";
-import { depuis } from "@/outils/formats";
-import { api, useAction, useRequete } from "@/outils/requetes";
+import type { Commentaire, Page } from "@commun/api/types";
+import { Avatar, Bouton, EtatVide, fusionner, Squelette } from "@commun/composants/ui";
+import { useSession } from "@commun/contexte/Session";
+import { depuis } from "@commun/outils/formats";
+import { api, useAction, useRequete } from "@commun/outils/requetes";
 
 /**
  * Le fil de discussion sous une campagne.

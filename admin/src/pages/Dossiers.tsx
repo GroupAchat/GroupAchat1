@@ -2,8 +2,8 @@ import { motion } from "framer-motion";
 import { BadgeCheck, FileCheck2, Phone, ShieldX, Wallet } from "lucide-react";
 import { useState } from "react";
 
-import type { DossierKYC, Page } from "@/api/types";
-import { Feuille } from "@/composants/Feuille";
+import type { DossierKYC, Page } from "@commun/api/types";
+import { Feuille } from "@commun/composants/Feuille";
 import {
   Alerte,
   Avatar,
@@ -13,9 +13,9 @@ import {
   EtatVide,
   Squelette,
   ZoneTexte,
-} from "@/composants/ui";
-import { dateLongue, telephoneLisible } from "@/outils/formats";
-import { api, useAction, useRequete } from "@/outils/requetes";
+} from "@commun/composants/ui";
+import { dateLongue, telephoneLisible } from "@commun/outils/formats";
+import { api, useAction, useRequete } from "@commun/outils/requetes";
 
 /**
  * La vérification des dossiers de confiance.

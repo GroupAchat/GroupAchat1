@@ -18,28 +18,35 @@ FROM node:22-alpine AS front
 
 WORKDIR /front
 
-COPY frontend/package.json frontend/package-lock.json ./
+# Les manifestes d'abord, le code ensuite : tant que les dépendances ne
+# bougent pas, Docker réutilise la couche d'installation. Les trois espaces
+# de travail sont déclarés ici, sinon `npm ci` refuse de résoudre les liens
+# entre eux.
+COPY package.json package-lock.json ./
+COPY commun/package.json commun/
+COPY frontend/package.json frontend/
+COPY admin/package.json admin/
 RUN npm ci
 
-COPY frontend/ ./
+COPY tsconfig.base.json ./
+COPY commun/ commun/
+COPY frontend/ frontend/
+COPY admin/ admin/
 
 # Vite inscrit les variables VITE_* **dans le code compilé** : ce sont des
 # arguments de construction, pas des variables d'exécution. Laissé vide, le
 # client vise « /api » sur sa propre origine — ce qu'on veut.
 ARG VITE_API_URL=""
 ARG VITE_DEMONSTRATION="1"
-ENV VITE_API_URL=$VITE_API_URL \
-    VITE_DEMONSTRATION=$VITE_DEMONSTRATION
+ENV VITE_API_URL=$VITE_API_URL     VITE_DEMONSTRATION=$VITE_DEMONSTRATION
 
-RUN npm run build && npm run build:admin
+RUN npm run build --workspace frontend     && npm run build --workspace admin
 
-# Les deux applications se rejoignent dans un seul dossier. Leurs fichiers
-# portent des empreintes distinctes (`index-xxxx.js` contre `admin-xxxx.js`),
-# ils ne s'écrasent donc pas ; seules les deux pages d'entrée cohabitent.
-RUN mkdir -p /web \
-    && cp -r dist/. /web/ \
-    && cp -r dist-admin/. /web/ \
-    && ls /web/index.html /web/admin.html
+# Les deux applications se rejoignent dans un seul dossier. Les fichiers de
+# la console portent le préfixe « admin- », ils n'écrasent donc rien ; seule
+# sa page d'entrée doit être renommée, puisque les deux s'appellent
+# `index.html` dans leur dossier d'origine.
+RUN mkdir -p /web/assets     && cp -r frontend/dist/. /web/     && cp -r admin/dist/assets/. /web/assets/     && cp admin/dist/index.html /web/admin.html     && ls /web/index.html /web/admin.html
 
 
 # ── 2. L'API ────────────────────────────────────────────────────────────────

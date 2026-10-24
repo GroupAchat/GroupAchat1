@@ -1,0 +1,28 @@
+# Le contexte de construction est la racine du dépôt : sans ce fichier,
+# Docker enverrait node_modules et tout l'historique git au démon — des
+# centaines de mégaoctets à chaque construction.
+node_modules/
+**/node_modules/
+.git/
+.github/
+
+# Produits de construction : l'image les refabrique.
+**/dist/
+**/dist-admin/
+**/.vite*/
+*.tsbuildinfo
+
+# Python
+backend/.venv/
+**/__pycache__/
+*.py[cod]
+**/.pytest_cache/
+backend/base-de-secours.sqlite3
+backend/medias/
+backend/statiques/
+
+# Les secrets vivent dans l'environnement du conteneur, jamais dans une
+# couche d'image — une image se pousse, se partage et s'inspecte.
+.env
+
+*.log

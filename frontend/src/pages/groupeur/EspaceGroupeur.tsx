@@ -2,11 +2,11 @@ import { motion } from "framer-motion";
 import { Clock3, FileCheck2, Hourglass, ShieldAlert, Store } from "lucide-react";
 import { Link, Outlet } from "react-router-dom";
 
-import type { EtatGroupeur } from "@/api/types";
-import { Bouton, Carte, Squelette } from "@/composants/ui";
-import { useSession } from "@/contexte/Session";
-import { dateLongue } from "@/outils/formats";
-import { useRequete } from "@/outils/requetes";
+import type { EtatGroupeur } from "@commun/api/types";
+import { Bouton, Carte, Squelette } from "@commun/composants/ui";
+import { useSession } from "@commun/contexte/Session";
+import { dateLongue } from "@commun/outils/formats";
+import { useRequete } from "@commun/outils/requetes";
 
 /**
  * La porte de l'espace groupeur.

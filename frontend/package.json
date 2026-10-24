@@ -1,13 +1,11 @@
 {
-  "name": "group-achat-frontend",
+  "name": "@groupachat/boutique",
   "private": true,
   "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:admin": "vite --config vite.admin.config.ts",
     "build": "tsc -b && vite build",
-    "build:admin": "tsc -b && vite build --config vite.admin.config.ts",
     "apercu": "vite preview"
   },
   "dependencies": {
@@ -16,7 +14,8 @@
     "qrcode": "1.5.4",
     "react": "19.1.0",
     "react-dom": "19.1.0",
-    "react-router-dom": "7.6.2"
+    "react-router-dom": "7.6.2",
+    "@groupachat/commun": "*"
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.1.11",
@@ -27,5 +26,6 @@
     "tailwindcss": "4.1.11",
     "typescript": "5.8.3",
     "vite": "6.3.5"
-  }
+  },
+  "description": "La boutique : acheteurs et groupeurs."
 }

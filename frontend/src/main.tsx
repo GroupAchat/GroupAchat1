@@ -2,7 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import App from "@/App";
-import "@/index.css";
+import "@commun/index.css";
 
 // Le thème choisi est appliqué avant le premier rendu : lu après, il
 // provoquerait un éclair blanc sur un écran réglé en sombre.

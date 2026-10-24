@@ -3,7 +3,7 @@ import { X } from "lucide-react";
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 
-import { fusionner } from "@/composants/ui";
+import { fusionner } from "@commun/composants/ui";
 
 /**
  * Une feuille qui monte du bas de l'écran.

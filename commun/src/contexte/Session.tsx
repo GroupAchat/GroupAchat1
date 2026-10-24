@@ -8,8 +8,8 @@ import {
   type ReactNode,
 } from "react";
 
-import { api, ErreurApi } from "@/api/client";
-import type { Utilisateur } from "@/api/types";
+import { api, ErreurApi } from "@commun/api/client";
+import type { Utilisateur } from "@commun/api/types";
 
 /**
  * Qui est connecté, et de quelle couleur est son univers.

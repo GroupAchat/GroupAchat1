@@ -2,11 +2,11 @@ import { motion } from "framer-motion";
 import { BadgeCheck, Clock, MapPin, Users } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import type { CampagneResume } from "@/api/types";
+import type { CampagneResume } from "@commun/api/types";
 import { Jauge } from "@/composants/Jauge";
-import { Etiquette } from "@/composants/ui";
+import { Etiquette } from "@commun/composants/ui";
 import { Visuel } from "@/composants/Visuel";
-import { francs, tempsRestant } from "@/outils/formats";
+import { francs, tempsRestant } from "@commun/outils/formats";
 
 /** La vignette du catalogue, en grille. */
 export function CarteCampagne({

@@ -11,10 +11,10 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import type { TableauDeBordAdmin } from "@/api/types";
-import { Carte, Squelette } from "@/composants/ui";
-import { francs } from "@/outils/formats";
-import { useRequete } from "@/outils/requetes";
+import type { TableauDeBordAdmin } from "@commun/api/types";
+import { Carte, Squelette } from "@commun/composants/ui";
+import { francs } from "@commun/outils/formats";
+import { useRequete } from "@commun/outils/requetes";
 
 /** La supervision : l'argent détenu, ce qu'il reste à traiter. */
 export default function TableauAdmin() {

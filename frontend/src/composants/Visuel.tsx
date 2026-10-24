@@ -1,6 +1,6 @@
 import { Package } from "lucide-react";
 
-import { fusionner } from "@/composants/ui";
+import { fusionner } from "@commun/composants/ui";
 
 /**
  * L'image d'un produit, ou son remplacement quand il n'y en a pas.

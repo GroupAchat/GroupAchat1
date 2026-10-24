@@ -10,10 +10,10 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import type { Notification, Page } from "@/api/types";
-import { Bouton, EtatVide, fusionner, Squelette } from "@/composants/ui";
-import { depuis } from "@/outils/formats";
-import { api, useAction, useRequete } from "@/outils/requetes";
+import type { Notification, Page } from "@commun/api/types";
+import { Bouton, EtatVide, fusionner, Squelette } from "@commun/composants/ui";
+import { depuis } from "@commun/outils/formats";
+import { api, useAction, useRequete } from "@commun/outils/requetes";
 
 /** La cloche : ce qui s'est passé pendant qu'on regardait ailleurs. */
 const ICONES: Record<string, typeof Bell> = {

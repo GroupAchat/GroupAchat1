@@ -3,7 +3,7 @@ import { ArrowLeft, Plus, Trash2, TrendingDown } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import type { Campagne, Categorie, Produit } from "@/api/types";
+import type { Campagne, Categorie, Produit } from "@commun/api/types";
 import {
   Alerte,
   Bouton,
@@ -11,9 +11,9 @@ import {
   Champ,
   fusionner,
   ZoneTexte,
-} from "@/composants/ui";
-import { francs } from "@/outils/formats";
-import { api, useAction, useRequete } from "@/outils/requetes";
+} from "@commun/composants/ui";
+import { francs } from "@commun/outils/formats";
+import { api, useAction, useRequete } from "@commun/outils/requetes";
 
 interface Palier {
   quantite_min: string;

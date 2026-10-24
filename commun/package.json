@@ -1,0 +1,15 @@
+{
+  "name": "@groupachat/commun",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Client API, session, trousse d'interface — partagés par la boutique et la console.",
+  "main": "src/index.ts",
+  "dependencies": {
+    "framer-motion": "11.18.2",
+    "lucide-react": "0.511.0",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-router-dom": "7.6.2"
+  }
+}

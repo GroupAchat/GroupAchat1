@@ -15,15 +15,15 @@ import {
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
-import type { Campagne, Participation } from "@/api/types";
+import type { Campagne, Participation } from "@commun/api/types";
 import { Discussion } from "@/composants/Discussion";
-import { Feuille } from "@/composants/Feuille";
+import { Feuille } from "@commun/composants/Feuille";
 import { Jauge } from "@/composants/Jauge";
-import { Alerte, Avatar, Bouton, Carte, Etiquette, fusionner, Squelette } from "@/composants/ui";
+import { Alerte, Avatar, Bouton, Carte, Etiquette, fusionner, Squelette } from "@commun/composants/ui";
 import { Visuel } from "@/composants/Visuel";
-import { useSession } from "@/contexte/Session";
-import { dateLongue, francs, tempsRestant } from "@/outils/formats";
-import { api, useAction, useRequete } from "@/outils/requetes";
+import { useSession } from "@commun/contexte/Session";
+import { dateLongue, francs, tempsRestant } from "@commun/outils/formats";
+import { api, useAction, useRequete } from "@commun/outils/requetes";
 
 /** La fiche d'une campagne : tout ce qu'il faut pour décider, puis payer. */
 export default function FicheCampagne() {

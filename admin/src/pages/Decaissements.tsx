@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import { Banknote, Check, EyeOff, MessageSquareWarning, RotateCcw } from "lucide-react";
 import { useState } from "react";
 
-import type { Commentaire, Decaissement, Page } from "@/api/types";
+import type { Commentaire, Decaissement, Page } from "@commun/api/types";
 import {
   Alerte,
   Avatar,
@@ -11,9 +11,9 @@ import {
   Etiquette,
   EtatVide,
   Squelette,
-} from "@/composants/ui";
-import { dateLongue, depuis, francs, telephoneLisible } from "@/outils/formats";
-import { api, useAction, useRequete } from "@/outils/requetes";
+} from "@commun/composants/ui";
+import { dateLongue, depuis, francs, telephoneLisible } from "@commun/outils/formats";
+import { api, useAction, useRequete } from "@commun/outils/requetes";
 
 /**
  * La libération des fonds.

@@ -16,14 +16,14 @@ import {
   useLocation,
 } from "react-router-dom";
 
-import type { Utilisateur } from "@/api/types";
-import { Marque } from "@/composants/Marque";
-import { Alerte, Avatar, Bouton, Carte, Champ, fusionner } from "@/composants/ui";
-import { FournisseurSession, useSession } from "@/contexte/Session";
-import Decaissements, { Moderation } from "@/pages/admin/Decaissements";
-import Dossiers from "@/pages/admin/Dossiers";
-import TableauAdmin from "@/pages/admin/TableauAdmin";
-import { api, useAction } from "@/outils/requetes";
+import type { Utilisateur } from "@commun/api/types";
+import { Marque } from "@commun/composants/Marque";
+import { Alerte, Avatar, Bouton, Carte, Champ, fusionner } from "@commun/composants/ui";
+import { FournisseurSession, useSession } from "@commun/contexte/Session";
+import Decaissements, { Moderation } from "@/pages/Decaissements";
+import Dossiers from "@/pages/Dossiers";
+import TableauAdmin from "@/pages/TableauAdmin";
+import { api, useAction } from "@commun/outils/requetes";
 
 /**
  * La console d'administration, sur son propre port et sa propre page.
@@ -189,7 +189,7 @@ function ConnexionAdmin() {
   );
 }
 
-function Console() {
+function Coque() {
   const { utilisateur, chargement } = useSession();
 
   // La teinte de l'administration est le bleu, comme l'espace groupeur : on
@@ -217,10 +217,10 @@ function Console() {
   );
 }
 
-export default function AppAdmin() {
+export default function Console() {
   return (
     <FournisseurSession>
-      <Console />
+      <Coque />
     </FournisseurSession>
   );
 }

@@ -12,11 +12,11 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import type { CampagneResume } from "@/api/types";
+import type { CampagneResume } from "@commun/api/types";
 import { Jauge } from "@/composants/Jauge";
-import { Avatar, Bouton, fusionner } from "@/composants/ui";
+import { Avatar, Bouton, fusionner } from "@commun/composants/ui";
 import { Visuel } from "@/composants/Visuel";
-import { francs, tempsRestant } from "@/outils/formats";
+import { francs, tempsRestant } from "@commun/outils/formats";
 
 /**
  * Le fil vertical de l'accueil, sur téléphone.

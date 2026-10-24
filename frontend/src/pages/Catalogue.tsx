@@ -3,11 +3,11 @@ import { Search, SlidersHorizontal, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
-import { parametres } from "@/api/client";
-import type { CampagneResume, Categorie, Page } from "@/api/types";
+import { parametres } from "@commun/api/client";
+import type { CampagneResume, Categorie, Page } from "@commun/api/types";
 import { CarteCampagne, SqueletteCarte } from "@/composants/CarteCampagne";
-import { EtatVide, fusionner } from "@/composants/ui";
-import { useRequete } from "@/outils/requetes";
+import { EtatVide, fusionner } from "@commun/composants/ui";
+import { useRequete } from "@commun/outils/requetes";
 
 const TRIS = [
   { cle: "recent", libelle: "Récentes" },

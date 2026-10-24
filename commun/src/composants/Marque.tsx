@@ -1,5 +1,5 @@
-import { LOGOS } from "@/composants/logos";
-import { fusionner } from "@/composants/ui";
+import { LOGOS } from "@commun/composants/logos";
+import { fusionner } from "@commun/composants/ui";
 
 /**
  * Le logo : l'emblème, puis le nom.

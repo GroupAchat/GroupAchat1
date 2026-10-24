@@ -12,9 +12,9 @@ import { useEffect } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import { Cloche } from "@/composants/Cloche";
-import { Marque } from "@/composants/Marque";
-import { Avatar, fusionner } from "@/composants/ui";
-import { useSession } from "@/contexte/Session";
+import { Marque } from "@commun/composants/Marque";
+import { Avatar, fusionner } from "@commun/composants/ui";
+import { useSession } from "@commun/contexte/Session";
 
 /**
  * L'ossature de la boutique : barre du haut, onglets du bas.

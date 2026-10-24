@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { api, ErreurApi } from "@/api/client";
+import { api, ErreurApi } from "@commun/api/client";
 
 /**
  * Un petit crochet de lecture, sans bibliothèque de cache.

@@ -11,14 +11,14 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import type { Campagne, Page, TableauDeBordGroupeur } from "@/api/types";
+import type { Campagne, Page, TableauDeBordGroupeur } from "@commun/api/types";
 import { Anneau } from "@/composants/Jauge";
 import { Jauge } from "@/composants/Jauge";
-import { Bouton, Carte, Etiquette, EtatVide, Squelette } from "@/composants/ui";
+import { Bouton, Carte, Etiquette, EtatVide, Squelette } from "@commun/composants/ui";
 import { Visuel } from "@/composants/Visuel";
-import { useSession } from "@/contexte/Session";
-import { francs, tempsRestant } from "@/outils/formats";
-import { useRequete } from "@/outils/requetes";
+import { useSession } from "@commun/contexte/Session";
+import { francs, tempsRestant } from "@commun/outils/formats";
+import { useRequete } from "@commun/outils/requetes";
 
 const LIBELLES_STATUT: Record<string, { texte: string; ton: "neutre" | "accent" | "succes" | "alerte" }> = {
   brouillon: { texte: "Brouillon", ton: "neutre" },

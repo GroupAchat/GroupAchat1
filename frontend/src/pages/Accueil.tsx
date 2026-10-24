@@ -2,11 +2,11 @@ import { motion } from "framer-motion";
 import { ArrowRight, QrCode, ShieldCheck, Sparkles, Wallet } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import type { CampagneResume, Categorie, Page } from "@/api/types";
+import type { CampagneResume, Categorie, Page } from "@commun/api/types";
 import { CarteCampagne, SqueletteCarte } from "@/composants/CarteCampagne";
 import { FilCampagnes } from "@/composants/FilCampagnes";
-import { Bouton, EtatVide } from "@/composants/ui";
-import { useRequete } from "@/outils/requetes";
+import { Bouton, EtatVide } from "@commun/composants/ui";
+import { useRequete } from "@commun/outils/requetes";
 
 /**
  * L'accueil, en deux formes selon l'écran.

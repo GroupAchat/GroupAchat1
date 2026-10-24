@@ -1,8 +1,29 @@
 # Les variables de `docker-compose.yml` : mot de passe PostgreSQL, clé de
-# signature Django, jeton d'administration. Le dépôt ne contient que
-# `.env.exemple`, sans secret — un identifiant commité est un identifiant brûlé.
+# signature Django. Le dépôt ne contient que `.env.exemple`, sans secret —
+# un identifiant commité est un identifiant brûlé.
 .env
 
-# Les paquets construits par les images du front.
-frontend/dist/
-frontend/dist-admin/
+# ── Dépendances ─────────────────────────────────────────────────────────────
+#
+# Un seul `node_modules` à la racine, puisque les trois dossiers sont des
+# espaces de travail npm. Les formes locales restent listées : npm en crée
+# un par espace dès qu'une version diverge.
+node_modules/
+**/node_modules/
+
+# ── Produits de construction ────────────────────────────────────────────────
+**/dist/
+**/dist-admin/
+**/.vite*/
+*.tsbuildinfo
+
+# ── Python ──────────────────────────────────────────────────────────────────
+backend/.venv/
+**/__pycache__/
+*.py[cod]
+**/.pytest_cache/
+backend/base-de-secours.sqlite3
+backend/medias/
+backend/statiques/
+
+*.log

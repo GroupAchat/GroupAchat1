@@ -16,8 +16,8 @@ import {
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
-import type { Campagne, Participant } from "@/api/types";
-import { Feuille } from "@/composants/Feuille";
+import type { Campagne, Participant } from "@commun/api/types";
+import { Feuille } from "@commun/composants/Feuille";
 import { Jauge } from "@/composants/Jauge";
 import {
   Alerte,
@@ -29,9 +29,9 @@ import {
   EtatVide,
   fusionner,
   Squelette,
-} from "@/composants/ui";
-import { codeLisible, dateLongue, francs, telephoneLisible } from "@/outils/formats";
-import { api, useAction, useRequete } from "@/outils/requetes";
+} from "@commun/composants/ui";
+import { codeLisible, dateLongue, francs, telephoneLisible } from "@commun/outils/formats";
+import { api, useAction, useRequete } from "@commun/outils/requetes";
 
 /**
  * Le pilotage d'une campagne par son groupeur.

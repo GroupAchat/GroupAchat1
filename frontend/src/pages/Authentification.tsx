@@ -3,12 +3,12 @@ import { ArrowLeft, MessageSquareCode, ShieldCheck } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import type { Utilisateur } from "@/api/types";
-import { Marque } from "@/composants/Marque";
-import { Alerte, Bouton, Champ, fusionner } from "@/composants/ui";
-import { useSession } from "@/contexte/Session";
-import { telephoneLisible } from "@/outils/formats";
-import { api, useAction } from "@/outils/requetes";
+import type { Utilisateur } from "@commun/api/types";
+import { Marque } from "@commun/composants/Marque";
+import { Alerte, Bouton, Champ, fusionner } from "@commun/composants/ui";
+import { useSession } from "@commun/contexte/Session";
+import { telephoneLisible } from "@commun/outils/formats";
+import { api, useAction } from "@commun/outils/requetes";
 
 interface ReponseVerification {
   sms_simule: boolean;

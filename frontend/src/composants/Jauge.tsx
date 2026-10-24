@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 
-import { fusionner } from "@/composants/ui";
+import { fusionner } from "@commun/composants/ui";
 
 /**
  * La jauge de collecte — l'élément le plus regardé de toute l'application.

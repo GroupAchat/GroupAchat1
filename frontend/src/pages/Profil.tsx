@@ -14,7 +14,7 @@ import {
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import type { DossierKYC } from "@/api/types";
+import type { DossierKYC } from "@commun/api/types";
 import {
   Alerte,
   Avatar,
@@ -23,10 +23,10 @@ import {
   Champ,
   Etiquette,
   fusionner,
-} from "@/composants/ui";
-import { useSession } from "@/contexte/Session";
-import { dateLongue, telephoneLisible } from "@/outils/formats";
-import { api, useAction, useRequete } from "@/outils/requetes";
+} from "@commun/composants/ui";
+import { useSession } from "@commun/contexte/Session";
+import { dateLongue, telephoneLisible } from "@commun/outils/formats";
+import { api, useAction, useRequete } from "@commun/outils/requetes";
 
 /** Le profil : identité, badge de confiance, réglages. */
 export default function Profil() {

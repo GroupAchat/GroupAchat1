@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from "react";
 import { forwardRef } from "react";
 
-import { initiales, teinteDe } from "@/outils/formats";
+import { initiales, teinteDe } from "@commun/outils/formats";
 
 /** La petite trousse de composants partagée par les deux applications. */
 

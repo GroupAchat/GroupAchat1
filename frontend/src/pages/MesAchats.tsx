@@ -13,12 +13,12 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import QRCode from "qrcode";
 
-import type { Page, Participation, StatutParticipation } from "@/api/types";
+import type { Page, Participation, StatutParticipation } from "@commun/api/types";
 import { Jauge } from "@/composants/Jauge";
-import { Bouton, Carte, Etiquette, EtatVide, Squelette } from "@/composants/ui";
+import { Bouton, Carte, Etiquette, EtatVide, Squelette } from "@commun/composants/ui";
 import { Visuel } from "@/composants/Visuel";
-import { codeLisible, dateLongue, francs } from "@/outils/formats";
-import { useRequete } from "@/outils/requetes";
+import { codeLisible, dateLongue, francs } from "@commun/outils/formats";
+import { useRequete } from "@commun/outils/requetes";
 
 const TONS: Record<StatutParticipation, "neutre" | "accent" | "succes" | "alerte" | "danger"> = {
   en_attente_paiement: "alerte",

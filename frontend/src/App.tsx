@@ -2,7 +2,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import { BarreOnglets, EnTete, RetourEnHaut } from "@/composants/Coque";
-import { FournisseurSession } from "@/contexte/Session";
+import { FournisseurSession } from "@commun/contexte/Session";
 import Accueil from "@/pages/Accueil";
 import { Connexion, Inscription } from "@/pages/Authentification";
 import Catalogue from "@/pages/Catalogue";

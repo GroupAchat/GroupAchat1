@@ -3,8 +3,8 @@ import { Flame, Hand, Lightbulb, Plus } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
-import type { Categorie, DemandeProduit, Page } from "@/api/types";
-import { Feuille } from "@/composants/Feuille";
+import type { Categorie, DemandeProduit, Page } from "@commun/api/types";
+import { Feuille } from "@commun/composants/Feuille";
 import {
   Alerte,
   Avatar,
@@ -16,10 +16,10 @@ import {
   fusionner,
   Squelette,
   ZoneTexte,
-} from "@/composants/ui";
-import { useSession } from "@/contexte/Session";
-import { depuis, francs } from "@/outils/formats";
-import { api, useAction, useRequete } from "@/outils/requetes";
+} from "@commun/composants/ui";
+import { useSession } from "@commun/contexte/Session";
+import { depuis, francs } from "@commun/outils/formats";
+import { api, useAction, useRequete } from "@commun/outils/requetes";
 
 /**
  * L'espace communautaire : ce que les acheteurs réclament.

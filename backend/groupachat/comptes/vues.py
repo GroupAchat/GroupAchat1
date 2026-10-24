@@ -10,7 +10,12 @@ from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from groupachat.comptes.models import CodeVerification, DossierKYC, Utilisateur
+from groupachat.comptes.models import (
+    CodeVerification,
+    DossierKYC,
+    TropDeCodes,
+    Utilisateur,
+)
 from groupachat.comptes.serialiseurs import (
     ConnexionSerialiseur,
     DossierKYCSerialiseur,
@@ -20,7 +25,28 @@ from groupachat.comptes.serialiseurs import (
     VerificationSerialiseur,
 )
 from groupachat.comptes.services import envoyer_code
+from groupachat.limitation import (
+    LimiteConnexion,
+    LimiteInscription,
+    LimiteRenvoi,
+    LimiteVerification,
+)
 from groupachat.permissions import NumeroVerifie
+
+
+def _envoyer_ou_refuser(utilisateur):
+    """Émet un code, ou rend la réponse de refus si le plafond est atteint.
+
+    Rend (charge, refus) : l'un des deux vaut ``None``. On distingue les deux
+    plutôt que de laisser remonter l'exception, pour que l'interface affiche
+    « réessayez dans une heure » au lieu d'une erreur serveur.
+    """
+    try:
+        return _reponse_envoi(envoyer_code(utilisateur)), None
+    except TropDeCodes as trop:
+        return None, Response(
+            {"detail": str(trop)}, status=status.HTTP_429_TOO_MANY_REQUESTS
+        )
 
 
 def _reponse_envoi(resultat) -> dict:
@@ -41,17 +67,20 @@ class InscriptionVue(APIView):
     """POST /api/comptes/inscription/"""
 
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [LimiteInscription]
 
     @transaction.atomic
     def post(self, requete):
         serialiseur = InscriptionSerialiseur(data=requete.data)
         serialiseur.is_valid(raise_exception=True)
         utilisateur = serialiseur.save()
-        resultat = envoyer_code(utilisateur)
+        charge, refus = _envoyer_ou_refuser(utilisateur)
+        if refus is not None:
+            return refus
         return Response(
             {
                 "utilisateur": UtilisateurSerialiseur(utilisateur).data,
-                "verification": _reponse_envoi(resultat),
+                "verification": charge,
             },
             status=status.HTTP_201_CREATED,
         )
@@ -66,6 +95,7 @@ class VerificationVue(APIView):
     """
 
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [LimiteVerification]
 
     @transaction.atomic
     def post(self, requete):
@@ -121,6 +151,7 @@ class RenvoiCodeVue(APIView):
     """POST /api/comptes/renvoyer-code/"""
 
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [LimiteRenvoi]
 
     def post(self, requete):
         serialiseur = RenvoiCodeSerialiseur(data=requete.data)
@@ -133,13 +164,15 @@ class RenvoiCodeVue(APIView):
         # inconnu » transformerait cette route en annuaire des inscrits.
         if utilisateur is None or utilisateur.telephone_verifie:
             return Response({"sms_simule": True})
-        return Response(_reponse_envoi(envoyer_code(utilisateur)))
+        charge, refus = _envoyer_ou_refuser(utilisateur)
+        return refus if refus is not None else Response(charge)
 
 
 class ConnexionVue(APIView):
     """POST /api/comptes/connexion/"""
 
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [LimiteConnexion]
 
     def post(self, requete):
         serialiseur = ConnexionSerialiseur(data=requete.data)
@@ -163,7 +196,10 @@ class ConnexionVue(APIView):
         if not utilisateur.telephone_verifie:
             # Compte créé mais jamais vérifié : on renvoie un code plutôt que
             # de le laisser devant une interface qui refusera tout.
-            charge["verification"] = _reponse_envoi(envoyer_code(utilisateur))
+            verification, refus = _envoyer_ou_refuser(utilisateur)
+            if refus is not None:
+                return refus
+            charge["verification"] = verification
         return Response(charge)
 
 

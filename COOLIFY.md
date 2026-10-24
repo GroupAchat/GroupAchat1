@@ -81,7 +81,41 @@ particulier.
 port. En production tout vient de la même origine : laissez la valeur par
 défaut.
 
-## 3. Ce qui est figé à la construction
+## 3. Réglages de sécurité
+
+Les quatre portes d'entrée du compte sont limitées en débit. Les valeurs par
+défaut conviennent ; ces variables existent pour les ajuster sans toucher au
+code.
+
+| Variable | Défaut | Ce qu'elle limite |
+|---|---|---|
+| `LIMITE_VERIFICATION` | `12/hour` | essais de code, **par numéro** |
+| `LIMITE_RENVOI` | `4/hour` | demandes d'un nouveau code, **par numéro** |
+| `LIMITE_CONNEXION` | `60/hour` | tentatives de connexion, par adresse IP |
+| `LIMITE_INSCRIPTION` | `20/hour` | créations de compte, par adresse IP |
+
+**Pourquoi « par numéro » et pas « par adresse IP » pour les deux
+premières** : au Togo, beaucoup d'abonnés mobiles partagent une même IP
+publique derrière la traduction d'adresses de l'opérateur. Une limite posée
+sur l'IP bloquerait tout un quartier parce qu'une personne insiste. Les
+limites par IP sont donc volontairement larges.
+
+Un second garde-fou, celui-là **tenu en base**, plafonne à cinq le nombre de
+codes qu'un compte peut recevoir en une heure. Il résiste au redémarrage et
+ne dépend pas du nombre de processus Gunicorn, contrairement aux limites de
+débit qui s'appuient sur le cache mémoire.
+
+> Avec plusieurs processus Gunicorn, chacun tient son propre compteur de
+> débit : la limite réelle est multipliée d'autant. Pour un comptage exact,
+> il faudrait un cache partagé (Redis). Le plafond en base, lui, est exact
+> quoi qu'il arrive.
+
+**Les pièces d'identité ne sont jamais servies publiquement.** Le chemin
+`/medias/` refuse le dossier `kyc/` ; les pièces passent par `/pieces/<id>/
+<côté>/`, qui ne répond qu'au propriétaire du dossier et à l'équipe, et
+interdit toute mise en cache.
+
+## 4. Ce qui est figé à la construction
 
 ⚠️ **Vite inscrit les variables `VITE_*` dans le code compilé.** Les changer
 dans Coolify après coup n'a aucun effet : il faut **reconstruire** l'image.
@@ -90,7 +124,7 @@ C'est pourquoi `VITE_API_URL` est volontairement vide dans le Compose — le
 client retombe alors sur `/api`, relayé par nginx. Rien à régler, et rien à
 reconstruire si le domaine change.
 
-## 4. Les volumes
+## 5. Les volumes
 
 | Volume | Contenu | Conséquence d'une perte |
 |---|---|---|
@@ -103,7 +137,7 @@ reconstruits à chaque déploiement, il n'y a rien à conserver.
 Les deux sont déclarés dans le Compose, donc Coolify les crée et les
 conserve entre les déploiements. Pensez à les inclure dans vos sauvegardes.
 
-## 5. Le premier déploiement
+## 6. Le premier déploiement
 
 1. Renseignez les variables ci-dessus.
 2. Déployez. Le conteneur `api` attend PostgreSQL, applique les migrations,
@@ -125,13 +159,13 @@ conserve entre les déploiements. Pensez à les inclure dans vos sauvegardes.
 > **Mettez `CHARGER_DEMO=0` dès que le site est public.** Ces comptes ont des
 > mots de passe connus, et l'un d'eux est administrateur.
 
-## 6. Mettre à jour
+## 7. Mettre à jour
 
 Coolify reconstruit à chaque envoi sur la branche suivie. Les migrations
 s'appliquent au démarrage, `charger_demo` ne fait rien si des campagnes
 existent déjà : un redéploiement ne duplique pas les données.
 
-## 7. Essayer la pile en local
+## 8. Essayer la pile en local
 
 ```bash
 docker compose up --build
@@ -150,7 +184,7 @@ ses cookies de session qu'en HTTPS : en local, où il n'y a pas de TLS, la
 connexion échouerait sans message clair. Sur Coolify, qui sert en HTTPS,
 c'est bien `0` qu'il faut.
 
-## 8. Ce qui reste simulé
+## 9. Ce qui reste simulé
 
 Le site déployé est une **démonstration fonctionnelle**, pas une plateforme
 en exploitation :

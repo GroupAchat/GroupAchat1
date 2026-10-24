@@ -209,8 +209,10 @@ export interface DossierKYC {
   utilisateur: Utilisateur;
   type_piece: "cni" | "passeport" | "carte_consulaire";
   numero_piece: string;
-  piece_recto: string | null;
-  piece_verso: string | null;
+  /** Adresses protégées, servies par une vue qui vérifie qui demande.
+   *  Les champs `piece_recto`/`piece_verso` sont en écriture seule côté API. */
+  lien_recto: string | null;
+  lien_verso: string | null;
   numero_mobile_money: string;
   nom_commerce: string;
   statut: StatutKYC;

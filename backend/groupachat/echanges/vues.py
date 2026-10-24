@@ -6,7 +6,7 @@ from __future__ import annotations
 from django.db import IntegrityError, transaction
 from django.db.models import F, Prefetch
 from django.utils import timezone
-from rest_framework import mixins, status, viewsets
+from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
@@ -207,6 +207,10 @@ class NotificationVueEnsemble(
 ):
     """/api/notifications/ — la cloche."""
 
+    # Explicite, même si la valeur par défaut suffisait : une permission
+    # héritée est une permission qu'on oublie de relire le jour où la
+    # valeur par défaut change.
+    permission_classes = [permissions.IsAuthenticated]
     serializer_class = NotificationSerialiseur
 
     def get_queryset(self):

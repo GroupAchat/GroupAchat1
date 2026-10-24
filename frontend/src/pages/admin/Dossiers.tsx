@@ -196,9 +196,9 @@ function FeuilleDecision({
             <Ligne libelle="Déposé le" valeur={dateLongue(dossier.depose_le)} />
           </dl>
 
-          {dossier.piece_recto ? (
+          {dossier.lien_recto ? (
             <img
-              src={dossier.piece_recto}
+              src={dossier.lien_recto}
               alt="Pièce d'identité"
               className="w-full rounded-2xl border"
             />

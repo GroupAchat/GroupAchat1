@@ -140,6 +140,20 @@ STORAGES = {
 MEDIA_URL = "medias/"
 MEDIA_ROOT = BASE_DIR / "medias"
 
+# ── Plafonds d'envoi ────────────────────────────────────────────────────────
+#
+# Une photo de pièce d'identité prise au téléphone pèse quelques mégaoctets ;
+# au-delà de huit, il ne s'agit plus d'une pièce d'identité. Sans plafond,
+# Django accepte un fichier de n'importe quelle taille dès lors qu'il part
+# sur disque — de quoi remplir le volume avec un seul envoi.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 8 * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = 4 * 1024 * 1024
+TAILLE_MAX_PIECE_OCTETS = int(os.environ.get("TAILLE_MAX_PIECE_OCTETS", 8 * 1024 * 1024))
+
+# Un formulaire honnête n'a pas cent champs : la limite coupe court aux
+# envois conçus pour saturer l'analyse de la requête.
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 200
+
 # ── Les applications compilees, servies par Django ──────────────────────────
 #
 # Pas de nginx devant : Coolify fait deja le TLS et le routage par domaine.
@@ -258,6 +272,17 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
+    # Les quatre portes d'entrée du compte. Voir `groupachat/limitation.py`
+    # pour le choix « par numéro » plutôt que « par adresse IP ».
+    "DEFAULT_THROTTLE_RATES": {
+        # Vise un numéro précis : serré, personne d'autre n'est gêné.
+        "verification": os.environ.get("LIMITE_VERIFICATION", "12/hour"),
+        "renvoi_code": os.environ.get("LIMITE_RENVOI", "4/hour"),
+        # Vise une adresse IP, souvent partagée par tout un quartier
+        # derrière la traduction d'adresses d'un opérateur : large.
+        "connexion": os.environ.get("LIMITE_CONNEXION", "60/hour"),
+        "inscription": os.environ.get("LIMITE_INSCRIPTION", "20/hour"),
+    },
 }
 
 # ── Règles métier ───────────────────────────────────────────────────────────

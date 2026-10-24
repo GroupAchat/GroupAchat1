@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from django.conf import settings
 from django.contrib.auth import password_validation
 from rest_framework import serializers
 
@@ -145,6 +146,30 @@ class DossierKYCSerialiseur(serializers.ModelSerializer):
     # et refuserait « +228 90 00 11 22 » avant même la normalisation.
     numero_mobile_money = serializers.CharField(max_length=20)
 
+    # ⚠️ **En écriture seule.** Rendus tels quels, ces champs donneraient
+    # l'URL du fichier sous « /medias/kyc/… », lisible par quiconque la
+    # devine. Ils servent à déposer ; ce sont `lien_recto` et `lien_verso`
+    # qui servent à relire, et ils passent par une vue qui vérifie qui
+    # demande.
+    piece_recto = serializers.ImageField(write_only=True, required=False)
+    piece_verso = serializers.ImageField(write_only=True, required=False)
+    lien_recto = serializers.SerializerMethodField()
+    lien_verso = serializers.SerializerMethodField()
+
+    def _lien(self, dossier, cote: str) -> str | None:
+        fichier = dossier.piece_recto if cote == "recto" else dossier.piece_verso
+        if not fichier:
+            return None
+        chemin = f"/pieces/{dossier.pk}/{cote}/"
+        requete = self.context.get("request")
+        return requete.build_absolute_uri(chemin) if requete else chemin
+
+    def get_lien_recto(self, dossier) -> str | None:
+        return self._lien(dossier, "recto")
+
+    def get_lien_verso(self, dossier) -> str | None:
+        return self._lien(dossier, "verso")
+
     class Meta:
         model = DossierKYC
         fields = [
@@ -154,6 +179,8 @@ class DossierKYCSerialiseur(serializers.ModelSerializer):
             "numero_piece",
             "piece_recto",
             "piece_verso",
+            "lien_recto",
+            "lien_verso",
             "numero_mobile_money",
             "nom_commerce",
             "statut",
@@ -163,6 +190,26 @@ class DossierKYCSerialiseur(serializers.ModelSerializer):
             "decide_par",
         ]
         read_only_fields = ["statut", "motif_rejet", "depose_le", "decide_le"]
+
+    def _verifier_piece(self, fichier):
+        """Refuse une pièce trop lourde.
+
+        Le plafond global de Django porte sur la requête entière ; celui-ci
+        donne un message compréhensible sur le bon champ, au lieu d'une
+        erreur de requête trop grande sans indication.
+        """
+        if fichier and fichier.size > settings.TAILLE_MAX_PIECE_OCTETS:
+            maximum = settings.TAILLE_MAX_PIECE_OCTETS // (1024 * 1024)
+            raise serializers.ValidationError(
+                f"Image trop lourde : {maximum} Mo au maximum."
+            )
+        return fichier
+
+    def validate_piece_recto(self, fichier):
+        return self._verifier_piece(fichier)
+
+    def validate_piece_verso(self, fichier):
+        return self._verifier_piece(fichier)
 
     def validate_numero_mobile_money(self, valeur: str) -> str:
         numero = Utilisateur.objects.normaliser_telephone(valeur)

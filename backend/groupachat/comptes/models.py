@@ -147,6 +147,10 @@ class Utilisateur(AbstractBaseUser, PermissionsMixin):
         )
 
 
+class TropDeCodes(Exception):
+    """Trop de codes de vérification demandés pour un même numéro."""
+
+
 class CodeVerification(models.Model):
     """Code à six chiffres envoyé par SMS pour vérifier un numéro.
 
@@ -155,6 +159,15 @@ class CodeVerification(models.Model):
     """
 
     MAX_TENTATIVES = 5
+
+    # Nombre de codes qu'un compte peut recevoir en une heure.
+    #
+    # ⚠️ **C'est la limite qui tient réellement.** Celle des cinq essais ne
+    # vaut que *par code* : sans ce plafond, il suffisait d'en redemander un
+    # neuf pour repartir à zéro, et un code à six chiffres finissait par
+    # tomber. Comptée en base, elle résiste au redémarrage et ne dépend pas
+    # du nombre de processus, contrairement à une limite tenue en cache.
+    MAX_CODES_PAR_HEURE = 5
 
     utilisateur = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -178,11 +191,22 @@ class CodeVerification(models.Model):
 
     @classmethod
     def emettre(cls, utilisateur) -> "CodeVerification":
-        """Crée un code neuf et périme les précédents du même utilisateur."""
-        cls.objects.filter(utilisateur=utilisateur, consomme_le__isnull=True).update(
-            expire_le=timezone.now()
-        )
+        """Crée un code neuf et périme les précédents du même utilisateur.
+
+        Lève :class:`TropDeCodes` au-delà de :attr:`MAX_CODES_PAR_HEURE`.
+        """
         maintenant = timezone.now()
+        recents = cls.objects.filter(
+            utilisateur=utilisateur, cree_le__gte=maintenant - timedelta(hours=1)
+        ).count()
+        if recents >= cls.MAX_CODES_PAR_HEURE:
+            raise TropDeCodes(
+                "Trop de codes demandés pour ce numéro. Réessayez dans une heure."
+            )
+
+        cls.objects.filter(utilisateur=utilisateur, consomme_le__isnull=True).update(
+            expire_le=maintenant
+        )
         return cls.objects.create(
             utilisateur=utilisateur,
             # secrets et non random : c'est le seul rempart contre quelqu'un

@@ -9,6 +9,7 @@ import {
   PackageCheck,
   Phone,
   Rocket,
+  Scale,
   ScanLine,
   Send,
   Users,
@@ -64,6 +65,14 @@ export default function CampagneGroupeur() {
     await api.post(`/groupeur/campagnes/${id}/cloturer/`);
     await tout();
   });
+  const maintenir = useAction(async () => {
+    await api.post(`/api/groupeur/campagnes/${id}/maintenir/`);
+    await tout();
+  });
+  const annuler = useAction(async (motif: string) => {
+    await api.post(`/api/groupeur/campagnes/${id}/annuler/`, { motif });
+    await tout();
+  });
   const miseADisposition = useAction(async (point: string) => {
     await api.post(`/groupeur/campagnes/${id}/mise-a-disposition/`, {
       point_remise: point,
@@ -87,7 +96,11 @@ export default function CampagneGroupeur() {
   const payes = (participants ?? []).filter((p) => p.statut !== "en_attente_paiement");
   const retires = payes.filter((p) => p.statut === "retiree").length;
   const erreurAction =
-    publier.erreur?.message ?? cloturer.erreur?.message ?? miseADisposition.erreur?.message;
+    publier.erreur?.message ??
+    cloturer.erreur?.message ??
+    maintenir.erreur?.message ??
+    annuler.erreur?.message ??
+    miseADisposition.erreur?.message;
 
   return (
     <div className="mx-auto max-w-3xl space-y-5 px-4 py-6">
@@ -160,6 +173,31 @@ export default function CampagneGroupeur() {
               >
                 Clôturer la collecte
               </Bouton>
+            }
+          />
+        )}
+
+        {campagne.statut === "minimum_non_atteint" && (
+          <Etape
+            icone={Scale}
+            titre="Le minimum n'a pas été atteint — à vous de décider"
+            texte={`La collecte s'est close à ${campagne.quantite_reservee} pièces sur ${campagne.quantite_minimale}. L'argent des participants reste consigné : vous pouvez maintenir la commande malgré le nombre, ou y renoncer et les faire rembourser. Sans réponse, ils seront remboursés automatiquement.`}
+            action={
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Bouton
+                  chargement={maintenir.envoi}
+                  onClick={() => void maintenir.lancer(undefined as never)}
+                >
+                  Je maintiens
+                </Bouton>
+                <Bouton
+                  ton="contour"
+                  chargement={annuler.envoi}
+                  onClick={() => void annuler.lancer("")}
+                >
+                  Renoncer et rembourser
+                </Bouton>
+              </div>
             }
           />
         )}
@@ -308,6 +346,7 @@ export default function CampagneGroupeur() {
 function etiquetteStatut(statut: string): string {
   const table: Record<string, string> = {
     brouillon: "Brouillon",
+    minimum_non_atteint: "Minimum non atteint",
     en_cours: "Collecte en cours",
     financee: "Financée",
     decaissee: "Fonds reçus",

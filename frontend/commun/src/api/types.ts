@@ -5,6 +5,8 @@ export type Role = "acheteur" | "groupeur" | "administrateur";
 export type StatutCampagne =
   | "brouillon"
   | "en_cours"
+  /** Délai passé sans le minimum : le groupeur doit dire s'il maintient. */
+  | "minimum_non_atteint"
   | "financee"
   | "decaissee"
   | "approvisionnement"

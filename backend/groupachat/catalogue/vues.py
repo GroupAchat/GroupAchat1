@@ -9,6 +9,7 @@ qu'on cherche justement à rassurer.
 from __future__ import annotations
 
 from django.db.models import Count, Prefetch, Q, Sum
+from django.utils import timezone
 from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -22,15 +23,29 @@ from groupachat.catalogue.serialiseurs import (
 )
 from groupachat.commandes.models import Participation
 
-# Une campagne n'apparaît au catalogue qu'une fois publiée : un brouillon
-# n'est l'affaire que de son groupeur.
-STATUTS_PUBLICS = [
+# ⚠️ **Deux listes, et la distinction compte.**
+#
+# `STATUTS_LISTES` décide de ce qui s'affiche au catalogue : une
+# campagne dont le délai est passé n'y a plus sa place, on ne peut
+# plus la rejoindre.
+#
+# `STATUTS_CONSULTABLES` décide de ce qui reste **ouvrable par son
+# adresse**. Une participante qui a payé doit pouvoir rouvrir la fiche
+# depuis son historique — y retrouver le produit, le point de remise
+# et les messages échangés avec le groupeur — même si le groupage n'a
+# pas abouti. Renvoyer 404 lui effacerait sa propre commande.
+STATUTS_LISTES = [
     Campagne.Statut.EN_COURS,
     Campagne.Statut.FINANCEE,
     Campagne.Statut.DECAISSEE,
     Campagne.Statut.APPROVISIONNEMENT,
     Campagne.Statut.DISTRIBUTION,
     Campagne.Statut.TERMINEE,
+]
+
+STATUTS_CONSULTABLES = STATUTS_LISTES + [
+    Campagne.Statut.MINIMUM_NON_ATTEINT,
+    Campagne.Statut.ANNULEE,
 ]
 
 _PAYEES = Q(participations__statut__in=Participation.STATUTS_PAYES)
@@ -43,7 +58,7 @@ def campagnes_avec_avancement():
     afficher vingt vignettes coûterait quarante requêtes de plus.
     """
     return (
-        Campagne.objects.filter(statut__in=STATUTS_PUBLICS)
+        Campagne.objects.filter(statut__in=STATUTS_CONSULTABLES)
         .select_related("produit", "produit__categorie", "groupeur",
                         "groupeur__reputation", "groupeur__dossier_kyc")
         .prefetch_related("produit__medias", "paliers", "medias")
@@ -157,6 +172,8 @@ class CampagneVueEnsemble(viewsets.ReadOnlyModelViewSet):
         campagnes = campagnes_avec_avancement()
         parametres = self.request.query_params
 
+        # La fiche s'ouvre quel que soit le sort de la campagne ; seul
+        # un brouillon reste privé, et son groupeur a son propre espace.
         if self.action == "retrieve":
             return campagnes.annotate(
                 nombre_commentaires=Count(
@@ -170,8 +187,18 @@ class CampagneVueEnsemble(viewsets.ReadOnlyModelViewSet):
         # une liste ouverte sur les campagnes terminées donnerait l'impression
         # d'une place de marché morte.
         statut = parametres.get("statut", Campagne.Statut.EN_COURS)
-        if statut != "tous":
-            campagnes = campagnes.filter(statut=statut)
+        campagnes = (
+            campagnes.filter(statut__in=STATUTS_LISTES)
+            if statut == "tous"
+            else campagnes.filter(statut=statut)
+        )
+
+        # ⚠️ Une collecte dépassée doit quitter la liste **tout de
+        # suite**, sans attendre la tâche horaire de clôture. Sinon
+        # elle reste visible jusqu'à une heure après son échéance, et
+        # quelqu'un peut encore tenter d'y participer.
+        if statut == Campagne.Statut.EN_COURS:
+            campagnes = campagnes.filter(date_limite__gt=timezone.now())
 
         if (categorie := parametres.get("categorie")):
             campagnes = campagnes.filter(

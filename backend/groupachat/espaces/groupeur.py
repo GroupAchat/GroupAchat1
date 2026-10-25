@@ -34,7 +34,12 @@ from groupachat.commandes.serialiseurs import (
 from groupachat.paiements.models import Decaissement
 from groupachat.paiements.services import (
     ErreurPaiement,
+    # Renommés : les actions de la vue portent les mêmes noms, et lire
+    # `maintenir(campagne)` dans une méthode `maintenir` fait douter de ce
+    # qu'on appelle.
+    annuler as annuler_la_campagne,
     cloturer,
+    maintenir as maintenir_la_campagne,
     demander_decaissement,
     mettre_a_disposition,
     sequestre_de,
@@ -139,6 +144,33 @@ class CampagneGroupeurVueEnsemble(viewsets.ModelViewSet):
         campagne = self.get_object()
         statut = cloturer(campagne)
         return Response({"statut": statut})
+
+    @action(detail=True, methods=["post"])
+    def maintenir(self, requete, pk=None):
+        """Maintient la commande malgré un minimum manqué.
+
+        C'est la raison pour laquelle la clôture ne rembourse pas :
+        un groupeur qui a déjà négocié avec son fournisseur, ou qui
+        complète de sa poche, peut vouloir livrer quand même.
+        """
+        campagne = self.get_object()
+        try:
+            maintenir_la_campagne(campagne)
+        except ErreurPaiement as erreur:
+            return Response({"detail": str(erreur)},
+                            status=status.HTTP_400_BAD_REQUEST)
+        return self._reponse_campagne(campagne)
+
+    @action(detail=True, methods=["post"])
+    def annuler(self, requete, pk=None):
+        """Renonce au groupage et rend sa mise à chaque participant."""
+        campagne = self.get_object()
+        try:
+            annuler_la_campagne(campagne, motif=requete.data.get("motif", ""))
+        except ErreurPaiement as erreur:
+            return Response({"detail": str(erreur)},
+                            status=status.HTTP_400_BAD_REQUEST)
+        return self._reponse_campagne(campagne)
 
     @action(detail=True, methods=["post"], url_path="demander-retrait")
     def demander_retrait(self, requete, pk=None):

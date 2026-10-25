@@ -14,6 +14,7 @@ est branché, seule :func:`_executer_paiement` change.
 from __future__ import annotations
 
 import secrets
+from datetime import timedelta
 
 from django.conf import settings
 from django.db import transaction
@@ -192,10 +193,21 @@ def rembourser(participation: Participation, motif: str = "") -> Transaction | N
 
 @transaction.atomic
 def cloturer(campagne: Campagne) -> str:
-    """Ferme la collecte et décide du sort de la campagne.
+    """Ferme la collecte à la date limite et décide de la suite.
 
-    Minimum atteint, la campagne est financée ; sinon elle est annulée et
-    **tout le monde est remboursé**, sans que personne ait à réclamer.
+    Deux issues, et une seule est définitive :
+
+    - **minimum atteint** → la campagne est financée, le groupeur peut
+      demander ses fonds ;
+    - **minimum manqué** → la campagne passe en attente de décision. Elle
+      quitte le catalogue, les participants sont prévenus que le groupage
+      n'a pas abouti, **mais l'argent ne repart pas**.
+
+    ⚠️ **Le remboursement automatique à la date limite serait une erreur
+    produit.** Un groupeur peut très bien décider de maintenir la commande
+    malgré le nombre — parce qu'il a déjà négocié avec son fournisseur, ou
+    parce qu'il complète de sa poche. Rembourser d'office lui retirerait
+    cette possibilité et ferait échouer des groupages qui auraient abouti.
     """
     if campagne.statut != Campagne.Statut.EN_COURS:
         return campagne.statut
@@ -208,20 +220,13 @@ def cloturer(campagne: Campagne) -> str:
         sequestre.statut = Sequestre.Statut.BLOQUE
         sequestre.save(update_fields=["statut"])
         campagne.save(update_fields=["statut", "cloturee_le"])
-
-        for participation in campagne.participations.filter(
-            statut=Participation.Statut.PAYEE
-        ).select_related("acheteur"):
-            Notification.objects.create(
-                destinataire=participation.acheteur,
-                genre=Notification.Genre.CAMPAGNE_FINANCEE,
-                titre="Campagne financée",
-                message=(
-                    f"« {campagne.titre} » a atteint son objectif. "
-                    "Le groupeur va s'approvisionner."
-                ),
-                campagne=campagne,
-            )
+        _prevenir_participants(
+            campagne,
+            Notification.Genre.CAMPAGNE_FINANCEE,
+            "Campagne financée",
+            f"« {campagne.titre} » a atteint son objectif. "
+            "Le groupeur va s'approvisionner.",
+        )
         Notification.objects.create(
             destinataire=campagne.groupeur,
             genre=Notification.Genre.CAMPAGNE_FINANCEE,
@@ -232,30 +237,174 @@ def cloturer(campagne: Campagne) -> str:
         )
         return campagne.statut
 
-    campagne.statut = Campagne.Statut.ANNULEE
-    campagne.motif_annulation = "Minimum de pièces non atteint à la date limite."
-    campagne.save(update_fields=["statut", "cloturee_le", "motif_annulation"])
+    # Minimum manqué : on ferme, on prévient, on attend le groupeur.
+    campagne.statut = Campagne.Statut.MINIMUM_NON_ATTEINT
+    campagne.save(update_fields=["statut", "cloturee_le"])
+    sequestre.statut = Sequestre.Statut.BLOQUE
+    sequestre.save(update_fields=["statut"])
 
+    manque = max(0, campagne.quantite_minimale - campagne.quantite_reservee)
+    _prevenir_participants(
+        campagne,
+        Notification.Genre.GROUPAGE_NON_ABOUTI,
+        "Le groupage n'a pas abouti",
+        f"« {campagne.titre} » s'est terminée à {campagne.quantite_reservee} "
+        f"pièces sur {campagne.quantite_minimale} — il en manquait {manque}. "
+        "Votre part reste consignée : le groupeur peut encore décider de "
+        "maintenir la commande. Vous serez prévenu de sa décision.",
+    )
+    Notification.objects.create(
+        destinataire=campagne.groupeur,
+        genre=Notification.Genre.DECISION_ATTENDUE,
+        titre="Décision attendue",
+        message=(
+            f"« {campagne.titre} » s'est close à {campagne.quantite_reservee} "
+            f"pièces sur {campagne.quantite_minimale}. Maintenez-vous la "
+            f"commande ? Sans réponse sous {settings.DELAI_DECISION_JOURS} "
+            "jours, les participants seront remboursés."
+        ),
+        campagne=campagne,
+        lien=f"/groupeur/campagnes/{campagne.id}",
+    )
+    return campagne.statut
+
+
+@transaction.atomic
+def maintenir(campagne: Campagne) -> Campagne:
+    """Le groupeur maintient la commande malgré le minimum manqué.
+
+    La campagne rejoint le cours normal : elle est financée, et la suite —
+    décaissement, approvisionnement, distribution — ne change pas.
+    """
+    if campagne.statut != Campagne.Statut.MINIMUM_NON_ATTEINT:
+        raise ErreurPaiement("Cette campagne n'attend pas de décision.")
+
+    campagne.statut = Campagne.Statut.FINANCEE
+    campagne.save(update_fields=["statut"])
+
+    _prevenir_participants(
+        campagne,
+        Notification.Genre.CAMPAGNE_MAINTENUE,
+        "Le groupage est maintenu",
+        f"Bonne nouvelle : le groupeur maintient « {campagne.titre} » malgré "
+        "le nombre. Votre commande suit son cours.",
+    )
+    return campagne
+
+
+@transaction.atomic
+def annuler(campagne: Campagne, motif: str = "") -> Campagne:
+    """Annule la campagne et rend sa mise à chaque participant.
+
+    Seule porte de sortie vers le remboursement : ni la clôture ni le temps
+    qui passe ne remboursent d'eux-mêmes — il faut une décision, celle du
+    groupeur, celle de l'équipe, ou celle de la tâche d'échéance.
+    """
+    if campagne.statut not in (
+        Campagne.Statut.MINIMUM_NON_ATTEINT,
+        Campagne.Statut.EN_COURS,
+        Campagne.Statut.FINANCEE,
+    ):
+        raise ErreurPaiement("Cette campagne ne peut plus être annulée.")
+
+    campagne.statut = Campagne.Statut.ANNULEE
+    campagne.motif_annulation = motif or "Groupage non abouti."
+    if campagne.cloturee_le is None:
+        campagne.cloturee_le = timezone.now()
+    campagne.save(update_fields=["statut", "motif_annulation", "cloturee_le"])
+
+    _prevenir_participants(
+        campagne,
+        Notification.Genre.CAMPAGNE_ANNULEE,
+        "Groupage annulé",
+        f"« {campagne.titre} » n'aboutira pas. Vous êtes intégralement "
+        "remboursé, sans rien avoir à demander.",
+    )
     for participation in campagne.participations.filter(
         statut=Participation.Statut.PAYEE
     ).select_related("acheteur"):
-        Notification.objects.create(
-            destinataire=participation.acheteur,
-            genre=Notification.Genre.CAMPAGNE_ANNULEE,
-            titre="Campagne annulée",
-            message=(
-                f"« {campagne.titre} » n'a pas atteint son minimum. "
-                "Vous êtes intégralement remboursé."
-            ),
-            campagne=campagne,
-        )
-        rembourser(participation, motif="campagne annulée")
+        rembourser(participation, motif="groupage non abouti")
 
+    sequestre = sequestre_de(campagne)
     sequestre.refresh_from_db()
     sequestre.statut = Sequestre.Statut.REMBOURSE
     sequestre.solde_le = timezone.now()
     sequestre.save(update_fields=["statut", "solde_le"])
-    return campagne.statut
+
+    # La réputation retient aussi les campagnes qui n'ont pas abouti : une
+    # note qui ne peut que monter ne dit plus rien de personne.
+    from groupachat.comptes.models import Reputation
+
+    reputation, _ = Reputation.objects.get_or_create(groupeur=campagne.groupeur)
+    reputation.campagnes_annulees += 1
+    _recalculer_note(reputation)
+    return campagne
+
+
+def _prevenir_participants(campagne, genre, titre, message) -> int:
+    """Envoie la même nouvelle à tous ceux qui ont payé."""
+    destinataires = campagne.participations.filter(
+        statut__in=Participation.STATUTS_PAYES
+    ).select_related("acheteur")
+    Notification.objects.bulk_create(
+        [
+            Notification(
+                destinataire=part.acheteur,
+                genre=genre,
+                titre=titre,
+                message=message,
+                campagne=campagne,
+                lien=f"/campagnes/{campagne.id}",
+            )
+            for part in destinataires
+        ]
+    )
+    return destinataires.count()
+
+
+# ── Les tâches d'échéance ───────────────────────────────────────────────────
+#
+# Appelées par `manage.py cloturer_les_campagnes_echues`, à faire tourner
+# une fois par heure. Sans elles, une campagne dépassée resterait au
+# catalogue et l'argent dormirait sans que personne ne soit prévenu.
+
+
+def cloturer_les_echus() -> list[tuple[int, str]]:
+    """Ferme toutes les collectes dont la date limite est passée."""
+    echues = Campagne.objects.filter(
+        statut=Campagne.Statut.EN_COURS, date_limite__lte=timezone.now()
+    )
+    return [(campagne.id, cloturer(campagne)) for campagne in echues]
+
+
+def rembourser_les_indecis() -> list[int]:
+    """Rembourse les campagnes laissées sans décision trop longtemps.
+
+    C'est le garde-fou de la règle « l'argent ne repart pas tout seul » :
+    il la borne, sans la contredire. Le groupeur garde tout son délai ;
+    passé celui-ci, l'acheteur récupère sa mise sans avoir à réclamer.
+
+    À ``DELAI_DECISION_JOURS = 0``, la tâche ne fait rien : seule une
+    décision humaine peut alors débloquer la situation.
+    """
+    if settings.DELAI_DECISION_JOURS <= 0:
+        return []
+
+    limite = timezone.now() - timedelta(days=settings.DELAI_DECISION_JOURS)
+    oubliees = Campagne.objects.filter(
+        statut=Campagne.Statut.MINIMUM_NON_ATTEINT, cloturee_le__lte=limite
+    )
+    rendues = []
+    for campagne in oubliees:
+        annuler(
+            campagne,
+            motif=(
+                f"Sans décision du groupeur {settings.DELAI_DECISION_JOURS} "
+                "jours après la clôture."
+            ),
+        )
+        rendues.append(campagne.id)
+    return rendues
 
 
 @transaction.atomic
@@ -436,6 +585,16 @@ def _crediter_reputation(campagne: Campagne) -> None:
     # Note sur cinq : la part des campagnes menées à terme, amputée des
     # litiges. Un groupeur sans historique part de zéro, pas de cinq — la
     # note doit se gagner.
+    _recalculer_note(reputation)
+
+
+def _recalculer_note(reputation) -> None:
+    """Note sur cinq : la part des campagnes menées à terme, moins les litiges.
+
+    Un groupeur sans historique part de zéro, pas de cinq — la note doit
+    se gagner. Et elle **peut descendre** : les campagnes annulées comptent
+    autant que les réussites, sans quoi le badge ne dirait rien.
+    """
     total = reputation.campagnes_terminees + reputation.campagnes_annulees
     if total:
         reussite = reputation.campagnes_terminees / total

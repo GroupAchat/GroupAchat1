@@ -62,6 +62,7 @@ refuse de partir qu'un site en ligne avec une clé publique.
 | `POSTGRES_DB` / `POSTGRES_USER` | `groupachat` | par défaut |
 | `SMS_FOURNISSEUR` | `demonstration` tant qu'aucune passerelle n'est branchée | |
 | `HOTES_ADMINISTRATION` | `admin` — le sous-domaine qui montre la console | par défaut |
+| `DELAI_DECISION_JOURS` | `7` — délai laissé au groupeur après une collecte manquée | par défaut |
 | `DJANGO_SUPERUSER_USERNAME` | un numéro à 8 chiffres | facultatif |
 | `DJANGO_SUPERUSER_PASSWORD` | un mot de passe solide | facultatif |
 
@@ -115,7 +116,34 @@ débit qui s'appuient sur le cache mémoire.
 <côté>/`, qui ne répond qu'au propriétaire du dossier et à l'équipe, et
 interdit toute mise en cache.
 
-## 4. Ce qui est figé à la construction
+## 4. La tâche horaire — **indispensable**
+
+Une seule chose fait avancer le produit sans qu'un humain clique :
+
+```bash
+python manage.py cloturer_les_campagnes_echues
+```
+
+**À planifier toutes les heures** (Coolify : *Scheduled Tasks* sur la
+ressource, commande ci-dessus, horaire `0 * * * *`).
+
+Sans elle :
+
+- une campagne dépassée **reste au catalogue** et accepte des participations ;
+- les acheteurs d'un groupage manqué **ne sont jamais prévenus** ;
+- un groupeur qui disparaît laisse l'argent consigné **pour toujours**.
+
+Le délai laissé au groupeur après une collecte manquée se règle par
+`DELAI_DECISION_JOURS` (7 par défaut ; `0` désactive le remboursement
+automatique, et seule une décision humaine débloque alors la situation).
+
+Pour voir ce que la tâche ferait sans rien changer :
+
+```bash
+python manage.py cloturer_les_campagnes_echues --a-blanc
+```
+
+## 5. Ce qui est figé à la construction
 
 ⚠️ **Vite inscrit les variables `VITE_*` dans le code compilé.** Les changer
 dans Coolify après coup n'a aucun effet : il faut **reconstruire** l'image.
@@ -124,7 +152,7 @@ C'est pourquoi `VITE_API_URL` est volontairement vide dans le Compose — le
 client retombe alors sur `/api`, relayé par nginx. Rien à régler, et rien à
 reconstruire si le domaine change.
 
-## 5. Les volumes
+## 6. Les volumes
 
 | Volume | Contenu | Conséquence d'une perte |
 |---|---|---|
@@ -137,7 +165,7 @@ reconstruits à chaque déploiement, il n'y a rien à conserver.
 Les deux sont déclarés dans le Compose, donc Coolify les crée et les
 conserve entre les déploiements. Pensez à les inclure dans vos sauvegardes.
 
-## 6. Le premier déploiement
+## 7. Le premier déploiement
 
 1. Renseignez les variables ci-dessus.
 2. Déployez. Le conteneur `api` attend PostgreSQL, applique les migrations,
@@ -159,7 +187,7 @@ conserve entre les déploiements. Pensez à les inclure dans vos sauvegardes.
 > **Mettez `CHARGER_DEMO=0` dès que le site est public.** Ces comptes ont des
 > mots de passe connus, et l'un d'eux est administrateur.
 
-## 7. Mettre à jour
+## 8. Mettre à jour
 
 Coolify reconstruit à chaque envoi sur la branche suivie, et les migrations
 s'appliquent au démarrage.
@@ -189,7 +217,7 @@ redéploiement ne le touche jamais :
 docker compose down -v        # ⚠️ détruit la base et les fichiers téléversés
 ```
 
-## 8. Essayer la pile en local
+## 9. Essayer la pile en local
 
 ```bash
 docker compose up --build
@@ -208,7 +236,7 @@ ses cookies de session qu'en HTTPS : en local, où il n'y a pas de TLS, la
 connexion échouerait sans message clair. Sur Coolify, qui sert en HTTPS,
 c'est bien `0` qu'il faut.
 
-## 9. Ce qui reste simulé
+## 10. Ce qui reste simulé
 
 Le site déployé est une **démonstration fonctionnelle**, pas une plateforme
 en exploitation :

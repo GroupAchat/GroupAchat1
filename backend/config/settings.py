@@ -290,6 +290,18 @@ REST_FRAMEWORK = {
 # Prélevés une seule fois, au décaissement, sur le total collecté.
 FRAIS_PLATEFORME_FCFA = int(os.environ.get("FRAIS_PLATEFORME_FCFA", "1500"))
 
+# ── Le délai laissé au groupeur après une collecte manquée ─────────────────
+#
+# Minimum non atteint à la date limite : la campagne se ferme, mais
+# **l'argent ne repart pas tout seul** — le groupeur peut vouloir
+# maintenir la commande malgré le nombre.
+#
+# Ce délai borne l'attente. Sans lui, un groupeur qui disparaît
+# laisserait l'argent des acheteurs consigné indéfiniment, sans
+# recours. À zéro, le remboursement automatique est désactivé et seule
+# une intervention humaine peut débloquer la situation.
+DELAI_DECISION_JOURS = int(os.environ.get("DELAI_DECISION_JOURS", "7"))
+
 # Durée de validité d'un code de vérification SMS, en minutes.
 VALIDITE_CODE_SMS_MINUTES = int(os.environ.get("VALIDITE_CODE_SMS_MINUTES", "10"))
 

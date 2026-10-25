@@ -172,15 +172,48 @@ class TestClotureReussie:
 
 
 class TestClotureEchouee:
-    def test_minimum_non_atteint_tout_le_monde_est_rembourse(
-        self, connecte, campagne, ama, yao
-    ):
+    """Minimum manqué : la collecte se ferme, **l'argent ne bouge pas**.
+
+    Ce test affirmait l'inverse — remboursement immédiat à la clôture.
+    C'était une erreur de conception : un groupeur peut vouloir maintenir
+    la commande malgré le nombre, et rembourser d'office la lui retirerait.
+    Le remboursement demande désormais une décision.
+    """
+
+    def test_la_cloture_laisse_l_argent_consigne(self, connecte, campagne, ama, yao):
         participer_et_payer(connecte, ama, campagne, quantite=3)
         participer_et_payer(connecte, yao, campagne, quantite=2)
 
         connecte(campagne.groupeur).post(
             f"/api/groupeur/campagnes/{campagne.id}/cloturer/", {}, format="json"
         )
+        campagne.refresh_from_db()
+        assert campagne.statut == Campagne.Statut.MINIMUM_NON_ATTEINT
+
+        for acheteur in (ama, yao):
+            part = Participation.objects.get(acheteur=acheteur)
+            assert part.statut == Participation.Statut.PAYEE
+            assert Notification.objects.filter(
+                destinataire=acheteur,
+                genre=Notification.Genre.GROUPAGE_NON_ABOUTI,
+            ).exists()
+
+        sequestre = Sequestre.objects.get(campagne=campagne)
+        assert sequestre.solde == 90000, "rien ne doit sortir du séquestre"
+        assert not Transaction.objects.filter(
+            sens=Transaction.Sens.REMBOURSEMENT
+        ).exists()
+
+    def test_le_remboursement_suit_la_decision_du_groupeur(
+        self, connecte, campagne, ama, yao
+    ):
+        participer_et_payer(connecte, ama, campagne, quantite=3)
+        participer_et_payer(connecte, yao, campagne, quantite=2)
+
+        api = connecte(campagne.groupeur)
+        api.post(f"/api/groupeur/campagnes/{campagne.id}/cloturer/", {}, format="json")
+        api.post(f"/api/groupeur/campagnes/{campagne.id}/annuler/", {}, format="json")
+
         campagne.refresh_from_db()
         assert campagne.statut == Campagne.Statut.ANNULEE
 

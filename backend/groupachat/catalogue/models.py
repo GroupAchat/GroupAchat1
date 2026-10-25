@@ -242,6 +242,12 @@ class Campagne(models.Model):
     class Statut(models.TextChoices):
         BROUILLON = "brouillon", "Brouillon"
         EN_COURS = "en_cours", "Collecte en cours"
+        # La date limite est passée sans que le minimum soit atteint.
+        # La campagne n'est pas morte pour autant : le groupeur peut
+        # décider de maintenir la commande. Tant qu'il n'a pas
+        # tranché, l'argent reste consigné — il ne repart pas tout
+        # seul, c'est une règle du produit.
+        MINIMUM_NON_ATTEINT = "minimum_non_atteint", "Minimum non atteint"
         FINANCEE = "financee", "Financée"
         DECAISSEE = "decaissee", "Fonds remis au groupeur"
         APPROVISIONNEMENT = "approvisionnement", "Approvisionnement"
@@ -251,6 +257,7 @@ class Campagne(models.Model):
 
     # Les états où la collecte est jouée : plus aucun paiement n'est accepté.
     STATUTS_COLLECTE_CLOSE = {
+        Statut.MINIMUM_NON_ATTEINT,
         Statut.FINANCEE,
         Statut.DECAISSEE,
         Statut.APPROVISIONNEMENT,
@@ -364,6 +371,11 @@ class Campagne(models.Model):
     @property
     def minimum_atteint(self) -> bool:
         return self.quantite_reservee >= self.quantite_minimale
+
+    @property
+    def decision_attendue(self) -> bool:
+        """Le groupeur doit dire s'il maintient ou s'il annule."""
+        return self.statut == self.Statut.MINIMUM_NON_ATTEINT
 
     @property
     def collecte_ouverte(self) -> bool:

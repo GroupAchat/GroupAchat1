@@ -132,7 +132,15 @@ function LigneAchat({
                 </strong>
               </p>
 
-              {participation.statut === "payee" && (
+              {participation.statut === "payee" &&
+                campagne.statut === "minimum_non_atteint" && (
+                  <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">
+                    Groupage non abouti — en attente de la décision du groupeur
+                  </p>
+                )}
+
+              {participation.statut === "payee" &&
+                campagne.statut !== "minimum_non_atteint" && (
                 <div className="space-y-1 pt-1">
                   <Jauge pourcentage={campagne.pourcentage} atteint={campagne.minimum_atteint} compact />
                   <p className="texte-doux tabulaire text-xs">

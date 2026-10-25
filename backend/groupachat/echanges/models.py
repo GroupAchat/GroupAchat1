@@ -229,6 +229,18 @@ class Notification(models.Model):
         MARCHANDISE_DISPONIBLE = "marchandise_disponible", "Marchandise à disposition"
         RETRAIT_CONFIRME = "retrait_confirme", "Retrait confirmé"
         CAMPAGNE_ANNULEE = "campagne_annulee", "Campagne annulée"
+        GROUPAGE_NON_ABOUTI = (
+            "groupage_non_abouti",
+            "Le groupage n'a pas abouti",
+        )
+        DECISION_ATTENDUE = (
+            "decision_attendue",
+            "Votre décision est attendue",
+        )
+        CAMPAGNE_MAINTENUE = (
+            "campagne_maintenue",
+            "Le groupeur maintient la commande",
+        )
         REMBOURSEMENT = "remboursement", "Remboursement effectué"
         KYC_DECIDE = "kyc_decide", "Décision sur votre dossier"
         RELANCE_RETRAIT = "relance_retrait", "Rappel : colis à retirer"

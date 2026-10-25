@@ -61,9 +61,22 @@ Au Togo, les achats groupés se font de manière informelle, principalement sur 
 
 - **Frais de plateforme** : 1 500 FCFA fixes, prélevés une seule fois au décaissement.
   Aucun frais pour l'acheteur, aucun abonnement pour le groupeur.
-- **Séquestre** : les fonds d'une campagne restent consignés jusqu'à sa clôture. Si le
-  minimum de pièces n'est pas atteint à la date limite, la campagne est annulée et
-  **chaque participant est intégralement remboursé**.
+- **Séquestre** : les fonds d'une campagne restent consignés jusqu'à sa clôture.
+- **Clôture** : à la date limite, la collecte se ferme **automatiquement** et la
+  campagne quitte le catalogue — on ne peut plus la rejoindre.
+- **Minimum non atteint** : la campagne n'est pas annulée pour autant, et
+  **l'argent ne repart pas tout seul**. Le groupeur peut décider de maintenir la
+  commande malgré le nombre — il a parfois déjà négocié avec son fournisseur, ou
+  complète de sa poche. Rembourser d'office ferait échouer des groupages qui
+  auraient abouti. Les participants sont prévenus que le groupage n'a pas abouti
+  et que leur part reste consignée en attendant la décision.
+- **Délai de décision** : sept jours. Passé ce délai sans réponse du groupeur,
+  chaque participant est **intégralement remboursé** sans avoir à réclamer. Ce
+  délai borne l'attente sans contredire la règle précédente : sans lui, un
+  groupeur qui disparaît laisserait l'argent bloqué indéfiniment.
+- **Historique** : une campagne qui a quitté le catalogue reste **consultable par
+  ceux qui y ont participé** — fiche produit complète, point de remise et fil de
+  discussion. Leur commande ne disparaît pas avec l'annonce.
 - **Inscription** : nom, prénom, numéro de téléphone, mot de passe ; e-mail facultatif.
   Le **numéro fait office d'identifiant** et doit être **vérifié par SMS**. Aucun compte
   n'est demandé pour consulter le catalogue.
@@ -145,9 +158,16 @@ de la décision KYC et de **chaque nouveau message sous ses campagnes**.
 ## 9. Cycle de vie d'une campagne
 
 ```
-brouillon → en_cours → (date limite / minimum atteint)
-   ├── minimum atteint ──→ financee → decaissee → approvisionnement → distribution → terminee
-   └── minimum non atteint ─────────────────────────────────────────→ annulee (remboursements)
+brouillon → en_cours → (date limite : clôture automatique)
+   │
+   ├── minimum atteint ──────────→ financee → decaissee → approvisionnement
+   │                                                    → distribution → terminee
+   │
+   └── minimum non atteint ──→ minimum_non_atteint   (l'argent reste consigné)
+                                    │
+                                    ├── le groupeur maintient ──→ financee → …
+                                    ├── le groupeur renonce ────→ annulee (remboursements)
+                                    └── silence pendant 7 jours → annulee (remboursements)
 ```
 
 ## 10. Pile technique

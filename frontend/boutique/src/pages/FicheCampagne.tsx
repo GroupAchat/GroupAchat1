@@ -5,6 +5,7 @@ import {
   Check,
   ChevronRight,
   Clock,
+  Hourglass,
   Minus,
   Play,
   Plus,
@@ -12,6 +13,7 @@ import {
   Star,
   TrendingDown,
   Truck,
+  Undo2,
   Users,
 } from "lucide-react";
 import { useState } from "react";
@@ -169,6 +171,32 @@ export default function FicheCampagne() {
 
           <div className="space-y-5">
             <header className="space-y-3">
+              {/* L'acheteur qui rouvre sa commande doit comprendre en une
+                  ligne pourquoi elle n'est plus au catalogue. */}
+              {campagne.statut === "minimum_non_atteint" && (
+                <div className="flex gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm dark:border-amber-900 dark:bg-amber-950/40">
+                  <Hourglass className="size-5 shrink-0 text-amber-600" />
+                  <p className="text-amber-900 dark:text-amber-200">
+                    <strong>Le groupage n'a pas abouti.</strong> La collecte
+                    s'est close à {campagne.quantite_reservee} pièces sur{" "}
+                    {campagne.quantite_minimale}. Votre part reste consignée :
+                    le groupeur peut encore maintenir la commande. Vous serez
+                    prévenu de sa décision.
+                  </p>
+                </div>
+              )}
+
+              {campagne.statut === "annulee" && (
+                <div className="flex gap-3 rounded-2xl border p-4 text-sm">
+                  <Undo2 className="size-5 shrink-0 text-[color:var(--color-accent)]" />
+                  <p>
+                    <strong>Groupage annulé.</strong>{" "}
+                    {campagne.motif_annulation ||
+                      "Les participants ont été intégralement remboursés."}
+                  </p>
+                </div>
+              )}
+
               <div className="hidden flex-wrap gap-1.5 lg:flex">
                 <Etiquette>{campagne.produit.categorie_nom}</Etiquette>
                 {ouverte ? (

@@ -17,10 +17,16 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from groupachat.catalogue.models import Campagne, MediaProduit, Produit
+from groupachat.catalogue.models import (
+    Campagne,
+    MediaCampagne,
+    MediaProduit,
+    Produit,
+)
 from groupachat.catalogue.serialiseurs import (
     CampagneDetailSerialiseur,
     CampagneEcritureSerialiseur,
+    MediaCampagneEcritureSerialiseur,
     MediaProduitEcritureSerialiseur,
     ProduitEcritureSerialiseur,
     ProduitSerialiseur,
@@ -282,6 +288,42 @@ class MediaProduitVueEnsemble(viewsets.ModelViewSet):
         media.delete()
         if public_id:
             hebergement.supprimer(public_id, genre)
+
+
+class MediaCampagneVueEnsemble(viewsets.ModelViewSet):
+    """/api/groupeur/medias-campagne/ — les photos du lot réellement en main.
+
+    Elles complètent celles du produit sans s'y substituer : le catalogue
+    montre la référence, celles-ci montrent les cartons posés par terre chez
+    ce groupeur-là. C'est souvent ce qui décide un acheteur hésitant.
+
+    Le groupeur ne touche qu'à ses propres campagnes — le filtre du
+    `queryset` le garantit pour la lecture et la suppression, la vérification
+    du `perform_create` pour le dépôt.
+    """
+
+    permission_classes = [GroupeurValide]
+    serializer_class = MediaCampagneEcritureSerialiseur
+
+    def get_queryset(self):
+        medias = MediaCampagne.objects.filter(
+            campagne__groupeur=self.request.user
+        ).select_related("campagne")
+        if (campagne := self.request.query_params.get("campagne")):
+            medias = medias.filter(campagne_id=campagne)
+        return medias
+
+    def perform_create(self, serialiseur):
+        campagne = serialiseur.validated_data["campagne"]
+        if campagne.groupeur_id != self.request.user.id:
+            raise PermissionDenied("Cette campagne n'est pas la vôtre.")
+        serialiseur.save()
+
+    def perform_destroy(self, media):
+        public_id = media.public_id
+        media.delete()
+        if public_id:
+            hebergement.supprimer(public_id)
 
 
 class SignatureEnvoiVue(APIView):

@@ -44,10 +44,18 @@ export function EnvoiMedias({
   valeur,
   surChangement,
   cible = "produit",
+  imagesSeules,
+  plafondImages = MAX_IMAGES,
+  intitule = "Photos et vidéos",
 }: {
   valeur: MediaEnAttente[];
   surChangement: (medias: MediaEnAttente[]) => void;
   cible?: Cible;
+  /** Les photos du lot ne se filment pas : il s'agit de prouver qu'on a la
+      marchandise, pas de la mettre en scène. */
+  imagesSeules?: boolean;
+  plafondImages?: number;
+  intitule?: string;
 }) {
   const champ = useRef<HTMLInputElement>(null);
   const [refus, setRefus] = useState<string | null>(null);
@@ -70,12 +78,16 @@ export function EnvoiMedias({
         continue;
       }
       const genre = genreDuFichier(fichier)!;
-      const plafond = genre === "video" ? MAX_VIDEOS : MAX_IMAGES;
+      if (imagesSeules && genre === "video") {
+        setRefus("Ici, seulement des photos.");
+        continue;
+      }
+      const plafond = genre === "video" ? MAX_VIDEOS : plafondImages;
       if (compte(genre) >= plafond) {
         setRefus(
           genre === "video"
-            ? `Deux vidéos au maximum.`
-            : `Trois photos au maximum.`,
+            ? `${MAX_VIDEOS} vidéos au maximum.`
+            : `${plafondImages} photos au maximum.`,
         );
         continue;
       }
@@ -112,14 +124,17 @@ export function EnvoiMedias({
     surChangement(valeur.filter((un) => un.cle !== cle));
   };
 
-  const complet = compte("image") >= MAX_IMAGES && compte("video") >= MAX_VIDEOS;
+  const complet = imagesSeules
+    ? compte("image") >= plafondImages
+    : compte("image") >= plafondImages && compte("video") >= MAX_VIDEOS;
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <p className="text-sm font-medium">Photos et vidéos</p>
+        <p className="text-sm font-medium">{intitule}</p>
         <p className="texte-doux tabulaire text-xs">
-          {compte("image")}/{MAX_IMAGES} photos · {compte("video")}/{MAX_VIDEOS} vidéos
+          {compte("image")}/{plafondImages} photos
+          {!imagesSeules && ` · ${compte("video")}/${MAX_VIDEOS} vidéos`}
         </p>
       </div>
 
@@ -194,7 +209,7 @@ export function EnvoiMedias({
       <input
         ref={champ}
         type="file"
-        accept="image/*,video/*"
+        accept={imagesSeules ? "image/*" : "image/*,video/*"}
         multiple
         className="hidden"
         onChange={(evenement) => {
@@ -205,9 +220,15 @@ export function EnvoiMedias({
       {refus && <p className="text-sm text-red-600">{refus}</p>}
 
       <p className="texte-doux text-xs">
-        Photos jusqu'à {Math.round(MAX_OCTETS_IMAGE / 1048576)} Mo, vidéos jusqu'à{" "}
-        {Math.round(MAX_OCTETS_VIDEO / 1048576)} Mo. L'image figée d'une vidéo est
-        extraite automatiquement.
+        {imagesSeules ? (
+          <>Photos jusqu'à {Math.round(MAX_OCTETS_IMAGE / 1048576)} Mo.</>
+        ) : (
+          <>
+            Photos jusqu'à {Math.round(MAX_OCTETS_IMAGE / 1048576)} Mo, vidéos
+            jusqu'à {Math.round(MAX_OCTETS_VIDEO / 1048576)} Mo. L'image figée
+            d'une vidéo est extraite automatiquement.
+          </>
+        )}
       </p>
     </div>
   );

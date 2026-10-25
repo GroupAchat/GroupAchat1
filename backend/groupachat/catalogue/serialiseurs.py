@@ -352,6 +352,41 @@ class MediaProduitEcritureSerialiseur(serializers.ModelSerializer):
         return donnees
 
 
+class MediaCampagneEcritureSerialiseur(serializers.ModelSerializer):
+    """Dépôt d'une photo du lot par le groupeur.
+
+    Comme pour les médias de produit, le navigateur a déjà téléversé chez
+    Cloudinary : il ne reste qu'à enregistrer l'identifiant rendu.
+    """
+
+    class Meta:
+        model = MediaCampagne
+        fields = ["id", "campagne", "public_id", "image", "legende", "ordre"]
+
+    def validate(self, donnees):
+        campagne = donnees.get("campagne") or getattr(self.instance, "campagne", None)
+
+        public_id = donnees.get("public_id") or getattr(self.instance, "public_id", "")
+        image = donnees.get("image") or getattr(self.instance, "image", None)
+        if not public_id and not image:
+            raise serializers.ValidationError(
+                {"public_id": "Téléversez la photo avant de l'enregistrer."}
+            )
+
+        if campagne is not None:
+            deja = MediaCampagne.objects.filter(campagne=campagne)
+            if self.instance is not None:
+                deja = deja.exclude(pk=self.instance.pk)
+            if deja.count() >= MediaCampagne.MAX_IMAGES:
+                raise serializers.ValidationError(
+                    {
+                        "campagne": f"Cette campagne a déjà "
+                        f"{MediaCampagne.MAX_IMAGES} photos, le maximum."
+                    }
+                )
+        return donnees
+
+
 class ProduitEcritureSerialiseur(serializers.ModelSerializer):
     """Saisie d'un produit par un groupeur."""
 

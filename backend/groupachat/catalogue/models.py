@@ -458,8 +458,16 @@ class MediaCampagne(models.Model):
     """Photo du lot réellement proposé par le groupeur.
 
     Distincte des images du produit : celles-ci montrent la référence, celle-là
-    montre la marchandise de cette campagne. C'est un gage de sérieux.
+    montre la marchandise de cette campagne. C'est un gage de sérieux — et
+    c'est souvent ce qui décide un acheteur hésitant, parce qu'une photo du
+    carton posé par terre ne s'emprunte pas à un catalogue.
+
+    Pas de vidéo ici, à dessein : il s'agit de prouver qu'on a la
+    marchandise, pas de la mettre en scène. La démonstration du produit a sa
+    place sur la fiche produit.
     """
+
+    MAX_IMAGES = 5
 
     campagne = models.ForeignKey(
         Campagne, on_delete=models.CASCADE, related_name="medias", verbose_name="campagne"
@@ -488,6 +496,28 @@ class MediaCampagne(models.Model):
         if self.public_id:
             return hebergement.vignette(self.public_id)
         return self.image.url if self.image else None
+
+    def clean(self) -> None:
+        """Fait respecter le plafond avant l'enregistrement.
+
+        Posé sur le modèle comme pour les médias de produit : un import ou
+        un script contournerait un contrôle qui ne vivrait que dans le
+        sérialiseur.
+        """
+        from django.core.exceptions import ValidationError
+
+        if not self.campagne_id:
+            return
+        deja = (
+            MediaCampagne.objects.filter(campagne_id=self.campagne_id)
+            .exclude(pk=self.pk)
+            .count()
+        )
+        if deja >= self.MAX_IMAGES:
+            raise ValidationError(
+                {"image": f"Cette campagne a déjà {self.MAX_IMAGES} photos, le maximum."}
+            )
+
 
 class EtatDemonstration(models.Model):
     """Quelle version du jeu de démonstration est en place.

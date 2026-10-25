@@ -18,6 +18,7 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import type { Campagne, Participant } from "@commun/api/types";
+import { PhotosDuLot } from "@/composants/PhotosDuLot";
 import { Feuille } from "@commun/composants/Feuille";
 import { Jauge } from "@/composants/Jauge";
 import {
@@ -314,9 +315,12 @@ export default function CampagneGroupeur() {
         )}
       </section>
 
-      {/* Les chiffres de l'offre, gardés sous les yeux pendant qu'on
-          parcourt la liste des participants. */}
-      <Carte className="space-y-2 text-sm lg:sticky lg:top-24">
+      {/* Les photos du lot et les chiffres de l'offre, gardés sous les yeux
+          pendant qu'on parcourt la liste des participants. */}
+      <div className="space-y-4 lg:sticky lg:top-24">
+      <PhotosDuLot campagneId={campagne.id} />
+
+      <Carte className="space-y-2 text-sm">
         <h2 className="font-bold">Détails</h2>
         <Ligne libelle="Prix affiché" valeur={francs(campagne.prix_unitaire)} />
         <Ligne libelle="Prix courant" valeur={francs(campagne.prix_courant)} />
@@ -324,6 +328,7 @@ export default function CampagneGroupeur() {
         <Ligne libelle="Date limite" valeur={dateLongue(campagne.date_limite)} />
         <Ligne libelle="Point de remise" valeur={campagne.point_remise} />
       </Carte>
+      </div>
 
       </div>
 

@@ -13,6 +13,7 @@ from groupachat.noyau import hebergement
 from groupachat.catalogue.models import (
     Campagne,
     Categorie,
+    MediaCampagne,
     MediaProduit,
     PalierPrix,
     Produit,
@@ -447,3 +448,90 @@ class TestHebergementDesMedias:
         )
         assert reponse.status_code == 400
         assert "public_id" in reponse.data
+
+class TestPhotosDuLot:
+    """La marchandise réellement en main, photographiée par le groupeur.
+
+    Elle complète les photos du produit sans s'y substituer : le catalogue
+    montre la référence, celles-ci montrent les cartons posés par terre. Un
+    acheteur hésitant s'y fie parce qu'elles ne s'empruntent pas à un
+    catalogue — encore faut-il que personne d'autre ne puisse en déposer.
+    """
+
+    CHEMIN = "/api/groupeur/medias-campagne/"
+
+    def test_le_groupeur_depose_une_photo_de_son_lot(self, client, campagne):
+        client.force_authenticate(user=campagne.groupeur)
+        reponse = client.post(
+            self.CHEMIN,
+            {"campagne": campagne.id, "public_id": "groupachat/campagnes/lot1"},
+            format="json",
+        )
+        assert reponse.status_code == 201, reponse.data
+        assert campagne.medias.count() == 1
+
+    def test_on_ne_depose_pas_sur_la_campagne_d_un_autre(self, client, campagne):
+        """Un dossier KYC validé n'ouvre pas les campagnes des autres."""
+        autre = Utilisateur.objects.create_user(
+            "90007777", "mdpSolide2026", nom="Groupeur", prenom="Autre",
+            telephone_verifie=True, role=Utilisateur.Role.GROUPEUR,
+        )
+        DossierKYC.objects.create(
+            utilisateur=autre, type_piece=DossierKYC.TypePiece.CNI,
+            numero_piece="CNI-9", numero_mobile_money="90007777",
+            nom_commerce="Autre Import", statut=DossierKYC.Statut.VALIDE,
+        )
+        client.force_authenticate(user=autre)
+        reponse = client.post(
+            self.CHEMIN,
+            {"campagne": campagne.id, "public_id": "groupachat/campagnes/vol"},
+            format="json",
+        )
+        assert reponse.status_code == 403
+        assert campagne.medias.count() == 0
+
+    def test_le_plafond_de_cinq_photos(self, client, campagne):
+        client.force_authenticate(user=campagne.groupeur)
+        for rang in range(MediaCampagne.MAX_IMAGES):
+            MediaCampagne.objects.create(
+                campagne=campagne, public_id=f"groupachat/campagnes/l{rang}"
+            )
+        reponse = client.post(
+            self.CHEMIN,
+            {"campagne": campagne.id, "public_id": "groupachat/campagnes/trop"},
+            format="json",
+        )
+        assert reponse.status_code == 400
+        assert "maximum" in str(reponse.data)
+
+    def test_une_photo_sans_fichier_ni_identifiant_est_refusee(
+        self, client, campagne
+    ):
+        client.force_authenticate(user=campagne.groupeur)
+        reponse = client.post(
+            self.CHEMIN, {"campagne": campagne.id}, format="json"
+        )
+        assert reponse.status_code == 400
+        assert "public_id" in reponse.data
+
+    def test_le_groupeur_ne_voit_que_ses_propres_photos(
+        self, client, campagne, ama
+    ):
+        MediaCampagne.objects.create(
+            campagne=campagne, public_id="groupachat/campagnes/lot1"
+        )
+        client.force_authenticate(user=ama)
+        assert client.get(self.CHEMIN).status_code == 403
+
+    def test_la_photo_du_lot_apparait_sur_la_fiche_publique(
+        self, client, campagne, settings
+    ):
+        settings.CLOUDINARY_CLOUD_NAME = "essai"
+        settings.CLOUDINARY_API_KEY = "123"
+        settings.CLOUDINARY_API_SECRET = "secret"
+        MediaCampagne.objects.create(
+            campagne=campagne, public_id="groupachat/campagnes/lot1"
+        )
+        fiche = client.get(f"/api/catalogue/campagnes/{campagne.id}/").data
+        assert len(fiche["medias"]) == 1
+        assert "res.cloudinary.com/essai" in fiche["medias"][0]["adresse"]

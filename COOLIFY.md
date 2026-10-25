@@ -63,6 +63,9 @@ refuse de partir qu'un site en ligne avec une clé publique.
 | `SMS_FOURNISSEUR` | `demonstration` tant qu'aucune passerelle n'est branchée | |
 | `HOTES_ADMINISTRATION` | `admin` — le sous-domaine qui montre la console | par défaut |
 | `DELAI_DECISION_JOURS` | `7` — délai laissé au groupeur après une collecte manquée | par défaut |
+| `CLOUDINARY_CLOUD_NAME` | le nom du compte, en haut de la console Cloudinary | |
+| `CLOUDINARY_API_KEY` | la clé publique, même écran | |
+| `CLOUDINARY_API_SECRET` | le secret, derrière « View API Keys » | |
 | `DJANGO_SUPERUSER_USERNAME` | un numéro à 8 chiffres | facultatif |
 | `DJANGO_SUPERUSER_PASSWORD` | un mot de passe solide | facultatif |
 
@@ -157,10 +160,26 @@ reconstruire si le domaine change.
 | Volume | Contenu | Conséquence d'une perte |
 |---|---|---|
 | `donnees-postgres` | toute la base | tout est perdu |
-| `medias` | pièces KYC, photos de produits | images manquantes |
+| `medias` | **pièces KYC** et médias déposés sans Cloudinary | documents d'identité perdus |
 
 Les fichiers compilés du front, eux, **vivent dans l'image** : ils sont
 reconstruits à chaque déploiement, il n'y a rien à conserver.
+
+### Les images vont chez Cloudinary, les pièces d'identité restent ici
+
+Les photos et vidéos de produits sont téléversées **directement du navigateur
+vers Cloudinary** : Django signe l'autorisation, le fichier ne traverse pas
+l'API. Sur une connexion togolaise, le faire transiter doublerait l'attente,
+et Cloudinary rend ensuite l'image recompressée au format que le navigateur
+sait lire, depuis un point proche.
+
+**Les pièces d'identité n'y vont jamais.** Elles restent dans le volume
+`medias`, servies par une vue qui vérifie qui demande. Une adresse de CDN est
+publique même quand elle est illisible, et un document d'identité qui fuite ne
+se rattrape pas.
+
+Sans les trois variables `CLOUDINARY_*`, tout retombe sur le volume : le site
+marche, mais chaque photo repart du serveur à pleine taille.
 
 Les deux sont déclarés dans le Compose, donc Coolify les crée et les
 conserve entre les déploiements. Pensez à les inclure dans vos sauvegardes.

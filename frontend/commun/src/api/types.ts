@@ -71,9 +71,13 @@ export interface Categorie {
 export interface MediaProduit {
   id: number;
   genre: "image" | "video";
-  fichier: string;
-  /** Image figée d'une vidéo ; vide pour une photo. */
-  apercu: string | null;
+  /**
+   * Où aller chercher le média lui-même. Des adresses, et non des chemins :
+   * selon que le fichier est hébergé chez Cloudinary ou posé sur le disque
+   * du serveur, ce n'est pas la même chose à construire — et l'interface
+   * n'a pas à le savoir.
+   */
+  adresse: string | null;
   /** Ce qu'il faut afficher dans la bande de vignettes, genre compris. */
   vignette: string | null;
   legende: string;
@@ -81,9 +85,11 @@ export interface MediaProduit {
 }
 
 /** Photo du lot réellement proposé par le groupeur, sur une campagne. */
-export interface ImageProduit {
+/** Photo du lot réellement proposé par le groupeur, sur sa campagne. */
+export interface MediaCampagne {
   id: number;
-  image: string;
+  adresse: string | null;
+  vignette: string | null;
   legende: string;
   ordre: number;
 }
@@ -139,7 +145,7 @@ export interface Campagne extends Omit<CampagneResume, "produit"> {
   quantite_maximale: number | null;
   objectif_participants: number | null;
   paliers: PalierPrix[];
-  medias: ImageProduit[];
+  medias: MediaCampagne[];
   montant_collecte: number;
   collecte_ouverte: boolean;
   mise_a_disposition_le: string | null;

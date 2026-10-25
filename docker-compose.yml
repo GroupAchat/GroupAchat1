@@ -116,6 +116,12 @@ services:
       # Le jeu du §3, au premier demarrage. A passer a `0` ensuite : la
       # commande reecrit les donnees de demonstration a chaque lancement.
       CHARGER_DEMO: ${CHARGER_DEMO:-1}
+      # L'hebergement des images. Absent, tout retombe sur le disque du
+      # conteneur : l'application marche, mais chaque photo repart du serveur
+      # a pleine taille. Les pieces d'identite n'y vont jamais.
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
       # Laisses vides par defaut : le point d'entree ne cree alors aucun
       # compte. Voir `.env.exemple` pour la mise en garde sur les mots de
       # passe passes par l'environnement.

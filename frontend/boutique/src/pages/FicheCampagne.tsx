@@ -94,22 +94,25 @@ export default function FicheCampagne() {
 
   // Les médias du produit — jusqu'à trois photos et deux vidéos — puis les
   // photos du lot réellement proposé par ce groupeur.
+  // Un média sans adresse — fichier perdu, envoi interrompu — ne va pas dans
+  // la galerie : il y ferait une vignette cassée et une flèche qui ne mène
+  // nulle part. Mieux vaut qu'il n'existe pas à l'écran.
   const visuels: ElementGalerie[] = [
     ...campagne.produit.medias.map((media) => ({
       cle: `p${media.id}`,
       genre: media.genre,
-      url: media.fichier,
+      url: media.adresse,
       vignette: media.vignette,
       legende: media.legende,
     })),
     ...campagne.medias.map((media) => ({
       cle: `m${media.id}`,
       genre: "image" as const,
-      url: media.image,
-      vignette: media.image,
+      url: media.adresse,
+      vignette: media.vignette,
       legende: media.legende,
     })),
-  ];
+  ].filter((visuel): visuel is ElementGalerie => Boolean(visuel.url));
 
   return (
     <div className="pb-28 lg:pb-14">

@@ -140,6 +140,19 @@ STORAGES = {
 MEDIA_URL = "medias/"
 MEDIA_ROOT = BASE_DIR / "medias"
 
+# ── L'hébergement des images et des vidéos ──────────────────────────────────
+#
+# Cloudinary ne reçoit que les médias de catalogue : photos de produits,
+# photos de lots, vidéos. **Les pièces d'identité n'y vont jamais** — elles
+# restent dans `MEDIA_ROOT/kyc/`, servies par une vue qui vérifie qui
+# demande. Une adresse de CDN reste publique même quand elle est illisible.
+#
+# Les trois valeurs absentes, tout retombe sur le disque local : les tests et
+# le jeu de démonstration tournent sans compte Cloudinary.
+CLOUDINARY_CLOUD_NAME = os.environ.get("CLOUDINARY_CLOUD_NAME", "")
+CLOUDINARY_API_KEY = os.environ.get("CLOUDINARY_API_KEY", "")
+CLOUDINARY_API_SECRET = os.environ.get("CLOUDINARY_API_SECRET", "")
+
 # ── Plafonds d'envoi ────────────────────────────────────────────────────────
 #
 # Une photo de pièce d'identité prise au téléphone pèse quelques mégaoctets ;

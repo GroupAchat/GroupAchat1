@@ -5,6 +5,12 @@ import { Link, useNavigate } from "react-router-dom";
 
 import type { Campagne, Categorie, Produit } from "@commun/api/types";
 import {
+  EnvoiMedias,
+  envoiEnCours,
+  mediasPrets,
+  type MediaEnAttente,
+} from "@/composants/EnvoiMedias";
+import {
   Alerte,
   Bouton,
   Carte,
@@ -49,6 +55,7 @@ export default function NouvelleCampagne() {
     point_remise: "",
   });
   const [paliers, setPaliers] = useState<Palier[]>([]);
+  const [medias, setMedias] = useState<MediaEnAttente[]>([]);
 
   const creation = useAction(async () => {
     const fiche = await api.post<Produit>("/groupeur/produits/", {
@@ -57,6 +64,14 @@ export default function NouvelleCampagne() {
       categorie: Number(produit.categorie),
       description: produit.description,
     });
+
+    // Les fichiers sont déjà chez l'hébergeur : il ne reste qu'à les
+    // rattacher. En série et non en parallèle, parce que le plafond de trois
+    // photos se vérifie en comptant les lignes déjà posées — deux dépôts
+    // simultanés compteraient le même état et passeraient tous les deux.
+    for (const media of mediasPrets(medias)) {
+      await api.post("/groupeur/medias/", { ...media, produit: fiche.id });
+    }
     const campagne = await api.post<Campagne>("/groupeur/campagnes/", {
       produit: fiche.id,
       titre: offre.titre || fiche.nom,
@@ -146,6 +161,7 @@ export default function NouvelleCampagne() {
             value={produit.description}
             onChange={(e) => setProduit({ ...produit, description: e.target.value })}
           />
+          <EnvoiMedias valeur={medias} surChangement={setMedias} />
         </Carte>
 
         <Carte className="space-y-4">
@@ -326,8 +342,14 @@ export default function NouvelleCampagne() {
 
         <Alerte>{creation.erreur?.message}</Alerte>
 
-        <Bouton type="submit" pleineLargeur taille="lg" chargement={creation.envoi}>
-          Créer la campagne
+        <Bouton
+          type="submit"
+          pleineLargeur
+          taille="lg"
+          chargement={creation.envoi}
+          disabled={envoiEnCours(medias)}
+        >
+          {envoiEnCours(medias) ? "Envoi des photos…" : "Créer la campagne"}
         </Bouton>
       </form>
     </div>

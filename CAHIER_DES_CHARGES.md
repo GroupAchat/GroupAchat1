@@ -101,7 +101,8 @@ vendeur. La transparence publique en dit davantage, et plus vite.
   code, pour qu'un code valide d'une autre campagne soit refusé au scan. Le colis n'est
   remis que contre ce code ; sa validation vaut **preuve de livraison**, et personne ne
   peut soutenir après coup n'avoir rien reçu.
-- **Médias d'un produit** : jusqu'à **trois photos et deux vidéos**. Les groupeurs
+- **Médias d'un produit** : jusqu'à **trois photos et deux vidéos**, hébergés
+  chez Cloudinary et recompressés à la livraison selon le navigateur. Les groupeurs
   photographient au téléphone, sur une connexion mesurée ; au-delà, la fiche devient
   lente à charger pour l'acheteur sans rien lui apprendre de plus. Une vidéo exige une
   image d'aperçu, faute de quoi elle apparaîtrait comme un rectangle noir dans la

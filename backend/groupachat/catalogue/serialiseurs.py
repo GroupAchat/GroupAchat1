@@ -36,22 +36,33 @@ class CategorieSerialiseur(serializers.ModelSerializer):
 class MediaProduitSerialiseur(serializers.ModelSerializer):
     """Une photo ou une vidéo, avec de quoi l'afficher sans deviner.
 
-    `vignette` évite à l'interface de choisir entre le fichier et l'aperçu
+    Deux adresses et non un chemin de fichier : selon que le média est
+    hébergé chez Cloudinary ou posé sur le disque, ce n'est pas la même
+    chose à construire, et l'interface n'a pas à le savoir.
+
+    `vignette` évite en plus de choisir entre le média et son image figée
     selon le genre : la règle est décidée ici, une fois.
     """
 
+    adresse = serializers.SerializerMethodField()
     vignette = serializers.SerializerMethodField()
 
     class Meta:
         model = MediaProduit
-        fields = ["id", "genre", "fichier", "apercu", "vignette", "legende", "ordre"]
+        fields = ["id", "genre", "adresse", "vignette", "legende", "ordre"]
+
+    def get_adresse(self, media) -> str | None:
+        return self._absolue(media.adresse)
 
     def get_vignette(self, media) -> str | None:
-        fichier = media.vignette
-        if not fichier:
-            return None
+        return self._absolue(media.adresse_vignette)
+
+    def _absolue(self, url: str | None) -> str | None:
+        """Les adresses Cloudinary sont déjà complètes ; les locales, non."""
+        if not url or url.startswith("http"):
+            return url
         requete = self.context.get("request")
-        return requete.build_absolute_uri(fichier.url) if requete else fichier.url
+        return requete.build_absolute_uri(url) if requete else url
 
 
 class ProduitResumeSerialiseur(serializers.ModelSerializer):
@@ -67,11 +78,18 @@ class ProduitResumeSerialiseur(serializers.ModelSerializer):
                   "categorie", "categorie_nom", "categorie_slug"]
 
     def get_image(self, produit) -> str | None:
+        """La vignette carrée du produit dans les listes.
+
+        `image_principale` rend le média, pas son fichier : avec Cloudinary
+        l'adresse se construit, elle ne se lit pas sur le disque.
+        """
         premiere = produit.image_principale
-        if not premiere:
+        if premiere is None:
             return None
+        url = premiere.adresse_vignette
+        if not url or url.startswith("http"):
+            return url
         requete = self.context.get("request")
-        url = premiere.image.url
         return requete.build_absolute_uri(url) if requete else url
 
 
@@ -96,9 +114,26 @@ class PalierPrixSerialiseur(serializers.ModelSerializer):
 
 
 class MediaCampagneSerialiseur(serializers.ModelSerializer):
+    """La photo du lot réellement proposé par le groupeur."""
+
+    adresse = serializers.SerializerMethodField()
+    vignette = serializers.SerializerMethodField()
+
     class Meta:
         model = MediaCampagne
-        fields = ["id", "image", "legende", "ordre"]
+        fields = ["id", "adresse", "vignette", "legende", "ordre"]
+
+    def get_adresse(self, media) -> str | None:
+        return self._absolue(media.adresse)
+
+    def get_vignette(self, media) -> str | None:
+        return self._absolue(media.adresse_vignette)
+
+    def _absolue(self, url: str | None) -> str | None:
+        if not url or url.startswith("http"):
+            return url
+        requete = self.context.get("request")
+        return requete.build_absolute_uri(url) if requete else url
 
 
 class _AvancementMixin:
@@ -258,6 +293,11 @@ class CampagneEcritureSerialiseur(serializers.ModelSerializer):
 class MediaProduitEcritureSerialiseur(serializers.ModelSerializer):
     """Dépôt d'une photo ou d'une vidéo sur un produit.
 
+    Le navigateur a déjà téléversé le fichier chez Cloudinary : il ne reste
+    ici qu'à enregistrer l'identifiant rendu. Le champ `fichier` subsiste
+    pour le cas sans compte Cloudinary — tests, démonstration, poste de
+    développement — mais les deux ne se remplissent jamais ensemble.
+
     Le plafond est vérifié ici **en plus** du modèle : la validation du
     modèle rend une erreur correcte mais brutale, celle-ci la rattache au
     bon champ et donne un message que l'interface peut afficher.
@@ -265,7 +305,8 @@ class MediaProduitEcritureSerialiseur(serializers.ModelSerializer):
 
     class Meta:
         model = MediaProduit
-        fields = ["id", "produit", "genre", "fichier", "apercu", "legende", "ordre"]
+        fields = ["id", "produit", "genre", "public_id", "fichier", "apercu",
+                  "legende", "ordre"]
 
     def validate(self, donnees):
         produit = donnees.get("produit") or getattr(self.instance, "produit", None)
@@ -288,10 +329,22 @@ class MediaProduitEcritureSerialiseur(serializers.ModelSerializer):
                 {"genre": f"Ce produit a déjà {plafond} {libelle}, le maximum."}
             )
 
-        # Une vidéo sans aperçu apparaît comme un rectangle noir dans la
-        # galerie : on le dit au dépôt plutôt que de le découvrir à l'écran.
-        if genre == MediaProduit.Genre.VIDEO and not (
-            donnees.get("apercu") or getattr(self.instance, "apercu", None)
+        public_id = donnees.get("public_id") or getattr(
+            self.instance, "public_id", ""
+        )
+        fichier = donnees.get("fichier") or getattr(self.instance, "fichier", None)
+        if not public_id and not fichier:
+            raise serializers.ValidationError(
+                {"public_id": "Téléversez le fichier avant de l'enregistrer."}
+            )
+
+        # Une vidéo sans image figée apparaît comme un rectangle noir dans la
+        # galerie. Chez Cloudinary elle est extraite à la volée ; en local il
+        # faut la déposer, et mieux vaut le dire au dépôt qu'à l'écran.
+        if (
+            genre == MediaProduit.Genre.VIDEO
+            and not public_id
+            and not (donnees.get("apercu") or getattr(self.instance, "apercu", None))
         ):
             raise serializers.ValidationError(
                 {"apercu": "Ajoutez une image d'aperçu pour la vidéo."}

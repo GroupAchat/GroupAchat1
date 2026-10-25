@@ -26,6 +26,8 @@ from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
 
+from groupachat.noyau import hebergement
+
 
 class Categorie(models.Model):
     """Rayon du catalogue, éventuellement subdivisé en sous-rayons.
@@ -143,10 +145,10 @@ class Produit(models.Model):
         medias = list(self.medias.all())
         for media in medias:
             if media.genre == MediaProduit.Genre.IMAGE:
-                return media.fichier
+                return media
         for media in medias:
-            if media.apercu:
-                return media.apercu
+            if media.adresse_vignette:
+                return media
         return None
 
 
@@ -180,10 +182,22 @@ class MediaProduit(models.Model):
 
     # `FileField` et non `ImageField` : une vidéo n'est pas une image, et
     # Pillow refuserait de l'ouvrir pour la valider.
-    fichier = models.FileField("fichier", upload_to="produits/")
+    #
+    # Facultatif depuis que les médias partent chez Cloudinary : le navigateur
+    # téléverse là-bas sans passer par l'API, et seul `public_id` revient. Le
+    # champ reste pour le jeu de démonstration et pour tourner sans compte
+    # Cloudinary — les deux sources ne coexistent jamais sur une même ligne.
+    fichier = models.FileField("fichier", upload_to="produits/", blank=True)
+
+    # L'identifiant du fichier chez l'hébergeur. On ne stocke pas l'adresse
+    # complète : elle dépend des transformations demandées à l'affichage
+    # (vignette carrée, recompression automatique), qui se décident au moment
+    # de servir et changeraient sous une adresse figée.
+    public_id = models.CharField("identifiant Cloudinary", max_length=255, blank=True)
 
     # L'image figée qu'on montre avant la lecture. Sans elle, une vidéo
-    # apparaît comme un rectangle noir dans la galerie.
+    # apparaît comme un rectangle noir dans la galerie. Chez Cloudinary elle
+    # est extraite de la vidéo : une case de moins à remplir au téléphone.
     apercu = models.ImageField(
         "aperçu de la vidéo", upload_to="produits/apercus/", blank=True
     )
@@ -204,15 +218,30 @@ class MediaProduit(models.Model):
         return self.genre == self.Genre.VIDEO
 
     @property
-    def vignette(self):
+    def adresse(self) -> str | None:
+        """Où aller chercher le média lui-même."""
+        if self.public_id:
+            return hebergement.adresse(self.public_id, self.genre)
+        return self.fichier.url if self.fichier else None
+
+    @property
+    def adresse_vignette(self) -> str | None:
         """Ce qu'on affiche dans la bande de vignettes.
 
-        Pour une vidéo, son aperçu ; faute d'aperçu, rien — l'interface
-        dessine alors un fond de remplacement plutôt qu'une image cassée.
+        Pour une vidéo, une image figée : chez Cloudinary elle est extraite
+        à la volée, en local il faut l'aperçu déposé à la main. Sans rien,
+        l'interface dessine un fond de remplacement plutôt qu'une image
+        cassée.
         """
+        if self.public_id:
+            return (
+                hebergement.apercu_video(self.public_id)
+                if self.est_video
+                else hebergement.vignette(self.public_id)
+            )
         if self.est_video:
-            return self.apercu or None
-        return self.fichier
+            return self.apercu.url if self.apercu else None
+        return self.fichier.url if self.fichier else None
 
     def clean(self) -> None:
         """Fait respecter les plafonds avant l'enregistrement.
@@ -435,7 +464,8 @@ class MediaCampagne(models.Model):
     campagne = models.ForeignKey(
         Campagne, on_delete=models.CASCADE, related_name="medias", verbose_name="campagne"
     )
-    image = models.ImageField("image", upload_to="campagnes/")
+    image = models.ImageField("image", upload_to="campagnes/", blank=True)
+    public_id = models.CharField("identifiant Cloudinary", max_length=255, blank=True)
     legende = models.CharField("légende", max_length=160, blank=True)
     ordre = models.PositiveSmallIntegerField("ordre d'affichage", default=0)
 
@@ -446,6 +476,18 @@ class MediaCampagne(models.Model):
 
     def __str__(self) -> str:
         return self.legende or f"Image {self.ordre} de {self.campagne}"
+
+    @property
+    def adresse(self) -> str | None:
+        if self.public_id:
+            return hebergement.adresse(self.public_id)
+        return self.image.url if self.image else None
+
+    @property
+    def adresse_vignette(self) -> str | None:
+        if self.public_id:
+            return hebergement.vignette(self.public_id)
+        return self.image.url if self.image else None
 
 class EtatDemonstration(models.Model):
     """Quelle version du jeu de démonstration est en place.

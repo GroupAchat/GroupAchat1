@@ -62,7 +62,15 @@ pas ce qui a déjà été payé.
 interdisent de libérer ou rembourser plus que le consigné.
 
 **Les pièces d'identité ne sont jamais servies publiquement** : `/medias/`
-refuse le dossier `kyc/`, et une vue séparée vérifie qui demande.
+refuse le dossier `kyc/`, et une vue séparée vérifie qui demande. Elles ne
+partent pas non plus chez Cloudinary — **seuls les médias de catalogue y
+vont**. Une adresse de CDN reste publique même quand elle est illisible.
+
+**Les images sont téléversées du navigateur vers Cloudinary**, Django se
+contentant de signer l'autorisation (`groupachat/noyau/hebergement.py`).
+Faire transiter trois mégaoctets par l'API doublerait l'attente sur une
+connexion mesurée. Sans les variables `CLOUDINARY_*`, tout retombe sur le
+disque local : les tests et la démonstration n'ont pas besoin d'un compte.
 
 ## Lancer et vérifier
 

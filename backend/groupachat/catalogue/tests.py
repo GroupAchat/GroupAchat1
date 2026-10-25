@@ -9,6 +9,7 @@ import pytest
 from django.utils import timezone
 from rest_framework.test import APIClient
 
+from groupachat.noyau import hebergement
 from groupachat.catalogue.models import (
     Campagne,
     Categorie,
@@ -346,4 +347,103 @@ class TestMediasProduit:
             produit=produit_du_groupeur, fichier="produits/photo.png", ordre=1,
         )
         produit_du_groupeur.refresh_from_db()
-        assert produit_du_groupeur.image_principale.name == photo.fichier.name
+        # `image_principale` rend le média et non son fichier : l'adresse se
+        # construit différemment selon qu'il est hébergé chez Cloudinary ou
+        # posé sur le disque, et c'est au média de trancher.
+        assert produit_du_groupeur.image_principale == photo
+
+class TestHebergementDesMedias:
+    """L'envoi passe par Cloudinary, mais l'application tient sans lui.
+
+    Deux exigences qui ne se voient qu'ici : une signature ne s'obtient pas
+    sans être groupeur validé, et **les pièces d'identité ne partent jamais**
+    chez l'hébergeur.
+    """
+
+    CONFIG = {
+        "CLOUDINARY_CLOUD_NAME": "essai",
+        "CLOUDINARY_API_KEY": "123",
+        "CLOUDINARY_API_SECRET": "secret",
+    }
+
+    def test_sans_configuration_l_application_reste_en_local(self, settings):
+        settings.CLOUDINARY_CLOUD_NAME = ""
+        settings.CLOUDINARY_API_KEY = ""
+        settings.CLOUDINARY_API_SECRET = ""
+        assert hebergement.actif() is False
+
+    def test_une_configuration_incomplete_ne_compte_pas(self, settings):
+        """Deux valeurs sur trois enverraient des fichiers qui échouent à la
+        signature — un repli franc se diagnostique bien plus vite."""
+        settings.CLOUDINARY_CLOUD_NAME = "essai"
+        settings.CLOUDINARY_API_KEY = "123"
+        settings.CLOUDINARY_API_SECRET = ""
+        assert hebergement.actif() is False
+
+    def test_la_signature_demande_un_groupeur_valide(self, client, ama):
+        client.force_authenticate(user=ama)
+        reponse = client.post("/api/groupeur/medias/signature/", {}, format="json")
+        assert reponse.status_code == 403
+
+    def test_la_signature_porte_le_dossier_et_le_type(
+        self, client, groupeur, settings
+    ):
+        for cle, valeur in self.CONFIG.items():
+            setattr(settings, cle, valeur)
+        client.force_authenticate(user=groupeur)
+
+        reponse = client.post(
+            "/api/groupeur/medias/signature/", {"genre": "video"}, format="json"
+        )
+        assert reponse.status_code == 200, reponse.data
+        assert reponse.data["type_ressource"] == "video"
+        assert reponse.data["dossier"] == hebergement.DOSSIER_PRODUITS
+        assert reponse.data["adresse"].endswith("/video/upload")
+        # Le secret ne sort jamais : seule la signature qui en dérive.
+        assert "api_secret" not in reponse.data
+        assert reponse.data["signature"]
+
+    def test_un_dossier_inconnu_est_refuse(self):
+        """Le dossier est signé : un client ne peut pas déposer ailleurs."""
+        with pytest.raises(ValueError):
+            hebergement.signer_envoi("ailleurs", "image")
+
+    def test_sans_configuration_la_signature_repond_503(
+        self, client, groupeur, settings
+    ):
+        settings.CLOUDINARY_CLOUD_NAME = ""
+        client.force_authenticate(user=groupeur)
+        reponse = client.post("/api/groupeur/medias/signature/", {}, format="json")
+        assert reponse.status_code == 503
+
+    def test_un_media_heberge_rend_une_adresse_cloudinary(
+        self, rayons, groupeur, settings
+    ):
+        for cle, valeur in self.CONFIG.items():
+            setattr(settings, cle, valeur)
+        produit = Produit.objects.create(
+            categorie=rayons["alimentation"], nom="Sac de riz", propose_par=groupeur
+        )
+        media = MediaProduit.objects.create(
+            produit=produit, public_id="groupachat/produits/riz"
+        )
+        assert "res.cloudinary.com/essai" in media.adresse
+        # La recompression automatique est ce qui change le plus pour un
+        # acheteur sur forfait de données : elle doit être dans l'adresse.
+        assert "f_auto" in media.adresse and "q_auto" in media.adresse
+        assert "c_fill" in media.adresse_vignette
+
+    def test_le_depot_exige_un_fichier_ou_un_identifiant(
+        self, client, rayons, groupeur
+    ):
+        produit = Produit.objects.create(
+            categorie=rayons["alimentation"], nom="Sac de riz", propose_par=groupeur
+        )
+        client.force_authenticate(user=groupeur)
+        reponse = client.post(
+            "/api/groupeur/medias/",
+            {"produit": produit.id, "genre": "image"},
+            format="json",
+        )
+        assert reponse.status_code == 400
+        assert "public_id" in reponse.data

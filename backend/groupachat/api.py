@@ -91,6 +91,11 @@ urlpatterns = [
     path("comptes/dossier/", vues_comptes.DossierKYCVue.as_view(), name="dossier-kyc"),
 
     # ── Groupeur, hors ressources ───────────────────────────────────────────
+    # Doit rester **avant** l'inclusion du routeur, en fin de liste : la route
+    # de détail « groupeur/medias/<pk>/ » accepte n'importe quel segment et
+    # prendrait « signature » pour un identifiant de média.
+    path("groupeur/medias/signature/", vues_groupeur.SignatureEnvoiVue.as_view(),
+         name="signature-envoi"),
     path("groupeur/etat/", vues_groupeur.EtatGroupeurVue.as_view(), name="etat-groupeur"),
     path("groupeur/tableau-de-bord/", vues_groupeur.TableauDeBordGroupeurVue.as_view(),
          name="tableau-groupeur"),

@@ -45,6 +45,7 @@ from groupachat.paiements.services import (
     sequestre_de,
     valider_retrait,
 )
+from groupachat.noyau import hebergement
 from groupachat.noyau.permissions import GroupeurValide
 
 _PAYEES = Q(participations__statut__in=Participation.STATUTS_PAYES)
@@ -270,6 +271,53 @@ class MediaProduitVueEnsemble(viewsets.ModelViewSet):
         if produit.propose_par_id != self.request.user.id:
             raise PermissionDenied("Ce produit n'est pas le vôtre.")
         serialiseur.save()
+
+    def perform_destroy(self, media):
+        """Retirer la ligne retire aussi le fichier chez l'hébergeur.
+
+        Sans cela, chaque photo remplacée resterait à occuper le quota du
+        compte Cloudinary sans que rien ne la désigne plus.
+        """
+        public_id, genre = media.public_id, media.genre
+        media.delete()
+        if public_id:
+            hebergement.supprimer(public_id, genre)
+
+
+class SignatureEnvoiVue(APIView):
+    """POST /api/groupeur/medias/signature/ — l'autorisation de téléverser.
+
+    Le navigateur envoie le fichier **directement** chez Cloudinary ; Django
+    ne fait que signer. Faire transiter trois mégaoctets par l'API doublerait
+    l'attente sur une connexion mesurée et immobiliserait un travailleur
+    Gunicorn pendant toute la montée.
+
+    La signature est réservée aux groupeurs validés et ne vaut que pour un
+    dossier donné, inclus dans ce qu'elle signe : on ne peut pas s'en servir
+    pour déposer ailleurs dans le compte.
+    """
+
+    permission_classes = [GroupeurValide]
+
+    def post(self, requete):
+        if not hebergement.actif():
+            return Response(
+                {"detail": "L'hébergement d'images n'est pas configuré."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        genre = requete.data.get("genre", "image")
+        if genre not in ("image", "video"):
+            return Response(
+                {"genre": "Attendu : « image » ou « video »."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        cible = requete.data.get("cible", "produit")
+        dossier = (
+            hebergement.DOSSIER_CAMPAGNES
+            if cible == "campagne"
+            else hebergement.DOSSIER_PRODUITS
+        )
+        return Response(hebergement.signer_envoi(dossier, genre))
 
 
 class TableauDeBordGroupeurVue(APIView):

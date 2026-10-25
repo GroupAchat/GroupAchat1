@@ -16,7 +16,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from groupachat.catalogue.models import Campagne
-from groupachat.commandes.models import Litige, Participation
+from groupachat.commandes.models import Participation
 from groupachat.comptes.models import DossierKYC, Reputation, Utilisateur
 from groupachat.comptes.serialiseurs import (
     DecisionKYCSerialiseur,
@@ -227,9 +227,6 @@ class TableauDeBordAdminVue(APIView):
                     ).count(),
                     "decaissements": Decaissement.objects.filter(
                         statut=Decaissement.Statut.DEMANDE
-                    ).count(),
-                    "litiges": Litige.objects.filter(
-                        statut__in=[Litige.Statut.OUVERT, Litige.Statut.EN_EXAMEN]
                     ).count(),
                 },
                 "campagnes": Campagne.objects.aggregate(

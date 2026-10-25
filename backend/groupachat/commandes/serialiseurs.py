@@ -7,7 +7,7 @@ from rest_framework import serializers
 
 from groupachat.catalogue.models import Campagne
 from groupachat.catalogue.serialiseurs import CampagneResumeSerialiseur
-from groupachat.commandes.models import Litige, Participation
+from groupachat.commandes.models import Avis, Participation
 from groupachat.paiements.models import Operateur
 
 
@@ -22,12 +22,22 @@ class ParticipationSerialiseur(serializers.ModelSerializer):
     charge_qr = serializers.SerializerMethodField()
     statut_libelle = serializers.CharField(source="get_statut_display", read_only=True)
 
+    # L'avis se laisse depuis cette page : il faut donc savoir ici si le
+    # bouton a lieu d'être, et si quelque chose a déjà été écrit.
+    peut_etre_notee = serializers.BooleanField(read_only=True)
+    avis = serializers.SerializerMethodField()
+
     class Meta:
         model = Participation
         fields = ["id", "campagne", "quantite", "prix_unitaire_applique",
                   "montant_total", "statut", "statut_libelle", "code_retrait",
-                  "charge_qr", "cree_le", "payee_le", "retiree_le"]
+                  "charge_qr", "cree_le", "payee_le", "retiree_le",
+                  "peut_etre_notee", "avis"]
         read_only_fields = fields
+
+    def get_avis(self, participation) -> dict | None:
+        avis = getattr(participation, "avis", None)
+        return AvisSerialiseur(avis, context=self.context).data if avis else None
 
     def get_charge_qr(self, participation) -> str | None:
         return participation.charge_qr if participation.code_retrait else None
@@ -121,20 +131,45 @@ class RetraitSerialiseur(serializers.Serializer):
     code = serializers.CharField(max_length=40)
 
 
-class LitigeSerialiseur(serializers.ModelSerializer):
+class AvisSerialiseur(serializers.ModelSerializer):
+    """La note qu'un acheteur laisse, et la réponse du groupeur."""
+
+    auteur = serializers.SerializerMethodField()
+    campagne = serializers.IntegerField(
+        source="participation.campagne_id", read_only=True
+    )
+    campagne_titre = serializers.CharField(
+        source="participation.campagne.titre", read_only=True
+    )
+
     class Meta:
-        model = Litige
-        fields = ["id", "participation", "motif", "description", "statut",
-                  "ouvert_le", "resolu_le", "decision"]
-        read_only_fields = ["statut", "ouvert_le", "resolu_le", "decision"]
+        model = Avis
+        fields = ["id", "participation", "campagne", "campagne_titre", "auteur",
+                  "note", "commentaire", "reponse", "repondu_le", "cree_le",
+                  "modifie_le"]
+        read_only_fields = ["reponse", "repondu_le", "cree_le", "modifie_le"]
+
+    def get_auteur(self, avis) -> dict:
+        """Prénom et initiale : assez pour reconnaître, pas pour identifier."""
+        acheteur = avis.participation.acheteur
+        initiale = f"{acheteur.nom[:1]}." if acheteur.nom else ""
+        return {"nom_affiche": f"{acheteur.prenom} {initiale}".strip()}
 
     def validate_participation(self, participation):
         if participation.acheteur_id != self.context["request"].user.id:
-            raise serializers.ValidationError("Ce n'est pas votre participation.")
-        if participation.statut == Participation.Statut.RETIREE:
-            # Le code validé vaut preuve de livraison : c'est la protection
-            # promise au groupeur contre les fausses réclamations.
+            raise serializers.ValidationError("Ce n'est pas votre commande.")
+        if not participation.peut_etre_notee:
             raise serializers.ValidationError(
-                "Ce colis a été retiré avec votre code : le litige est clos."
+                "Vous pourrez noter ce groupeur une fois la collecte close."
             )
+        # `OneToOne` l'interdirait de toute façon, mais avec un message
+        # illisible. Mieux vaut le dire ici.
+        if Avis.objects.filter(participation=participation).exists():
+            raise serializers.ValidationError("Vous avez déjà noté cette commande.")
         return participation
+
+
+class ReponseAvisSerialiseur(serializers.Serializer):
+    """Le droit de réponse du groupeur, une fois par avis."""
+
+    reponse = serializers.CharField(max_length=1000)

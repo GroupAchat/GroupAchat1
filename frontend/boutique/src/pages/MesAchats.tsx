@@ -14,6 +14,7 @@ import { Link, useParams } from "react-router-dom";
 import QRCode from "qrcode";
 
 import type { Page, Participation, StatutParticipation } from "@commun/api/types";
+import { FormulaireAvis } from "@/composants/Avis";
 import { Jauge } from "@/composants/Jauge";
 import { Bouton, Carte, Etiquette, EtatVide, Squelette } from "@commun/composants/ui";
 import { Visuel } from "@/composants/Visuel";
@@ -167,7 +168,7 @@ function LigneAchat({
 
 export function DetailAchat() {
   const { id } = useParams();
-  const { donnees: participation, chargement } = useRequete<Participation>(
+  const { donnees: participation, chargement, recharger } = useRequete<Participation>(
     `/participations/${id}/`,
   );
   const [qr, setQr] = useState<string | null>(null);
@@ -320,6 +321,10 @@ export function DetailAchat() {
           <p>Colis retiré. Merci d'avoir participé à ce groupage !</p>
         </div>
       )}
+
+      {/* La note du groupeur. Elle tient lieu de recours : la plateforme met
+          en relation, elle n'arbitre pas les désaccords sur la marchandise. */}
+      <FormulaireAvis participation={participation} surChangement={recharger} />
 
       <Link to={`/campagnes/${campagne.id}`} className="block">
         <Bouton ton="contour" pleineLargeur>

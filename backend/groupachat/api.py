@@ -32,7 +32,7 @@ routeur.register("catalogue/campagnes", vues_catalogue.CampagneVueEnsemble,
 # ── Acheteur ────────────────────────────────────────────────────────────────
 routeur.register("participations", vues_commandes.ParticipationVueEnsemble,
                  basename="participation")
-routeur.register("litiges", vues_commandes.LitigeVueEnsemble, basename="litige")
+routeur.register("avis", vues_commandes.AvisVueEnsemble, basename="avis")
 
 # ── Espace communautaire et cloche ──────────────────────────────────────────
 routeur.register("demandes", vues_echanges.DemandeProduitVueEnsemble,

@@ -601,7 +601,7 @@ function FeuilleScan({
                 <p className="font-bold">Colis remis à {valide.acheteur}</p>
                 <p>
                   {valide.quantite} pièce{valide.quantite > 1 ? "s" : ""} —
-                  livraison prouvée, litige impossible.
+                  livraison prouvée, réclamation sans fondement impossible.
                 </p>
               </div>
             </motion.div>

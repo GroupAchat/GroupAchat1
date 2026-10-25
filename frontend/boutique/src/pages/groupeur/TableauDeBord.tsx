@@ -12,6 +12,7 @@ import {
 import { Link } from "react-router-dom";
 
 import type { Campagne, Page, TableauDeBordGroupeur } from "@commun/api/types";
+import { AvisRecus } from "@/composants/Avis";
 import { Anneau } from "@/composants/Jauge";
 import { Jauge } from "@/composants/Jauge";
 import { Bouton, Carte, Etiquette, EtatVide, Squelette } from "@commun/composants/ui";
@@ -116,6 +117,10 @@ export default function TableauDeBord() {
           </Carte>
         </motion.div>
       )}
+
+      {/* Les avis : le seul recours qu'ont les acheteurs, et le seul levier
+          qu'a le groupeur pour y répondre. */}
+      {utilisateur && <AvisRecus groupeurId={utilisateur.id} />}
 
       <section className="space-y-3">
         <div className="flex items-end justify-between">

@@ -383,7 +383,7 @@ class TestDistributionEtRetrait:
         assert rejeu.status_code == 400
         assert "déjà retiré" in rejeu.data["detail"]
 
-    def test_le_dernier_colis_termine_la_campagne_et_note_le_groupeur(
+    def test_le_dernier_colis_termine_la_campagne_et_compte_le_volume(
         self, connecte, campagne_a_distribuer, ama, yao
     ):
         api = connecte(campagne_a_distribuer.groupeur)
@@ -404,26 +404,192 @@ class TestDistributionEtRetrait:
         reputation = Reputation.objects.get(groupeur=campagne_a_distribuer.groupeur)
         assert reputation.campagnes_terminees == 1
         assert reputation.participants_servis == 2
-        assert reputation.note == 5
 
-    def test_un_litige_est_clos_par_le_code_valide(
-        self, connecte, campagne_a_distribuer, ama
+        # Livrer ne donne **pas** d'étoiles : la note est la moyenne des avis
+        # laissés par les acheteurs, et personne n'a encore noté. La plateforme
+        # ne s'auto-décerne pas la satisfaction de ses utilisateurs.
+        assert reputation.note == 0
+        assert reputation.avis_recus == 0
+
+
+class TestAvis:
+    """La plateforme ne tranche pas : c'est la note qui sanctionne.
+
+    Group Achat met en relation. Un souci sur un produit se règle entre
+    l'acheteur et le groupeur — par la discussion publique et par l'avis.
+    """
+
+    def test_on_ne_note_pas_une_collecte_encore_ouverte(
+        self, connecte, campagne, ama
     ):
-        api = connecte(campagne_a_distribuer.groupeur)
-        api.post(f"/api/groupeur/campagnes/{campagne_a_distribuer.id}/mise-a-disposition/",
-                 {}, format="json")
-        part = Participation.objects.get(acheteur=ama)
-        api.post(f"/api/groupeur/campagnes/{campagne_a_distribuer.id}/retrait/",
-                 {"code": part.code_retrait}, format="json")
-
+        """Avant la clôture, il n'y a rien à juger."""
+        part = participer_et_payer(connecte, ama, campagne, quantite=2)[
+            "participation"
+        ]
         reponse = connecte(ama).post(
-            "/api/litiges/",
-            {"participation": part.id, "motif": "non_livre",
-             "description": "Je n'ai rien reçu."},
-            format="json",
+            "/api/avis/", {"participation": part["id"], "note": 5}, format="json"
         )
         assert reponse.status_code == 400
-        assert "preuve" in str(reponse.data) or "clos" in str(reponse.data)
+        assert "collecte close" in str(reponse.data)
+
+    def test_la_commande_dit_si_elle_est_notable_et_porte_son_avis(
+        self, connecte, campagne, ama
+    ):
+        """C'est depuis sa commande que l'acheteur note : l'écran a besoin
+        de savoir si le bouton a lieu d'être, et ce qui a déjà été écrit."""
+        part = participer_et_payer(connecte, ama, campagne, quantite=10)[
+            "participation"
+        ]
+        avant = connecte(ama).get(f"/api/participations/{part['id']}/").data
+        assert avant["peut_etre_notee"] is False
+        assert avant["avis"] is None
+
+        connecte(campagne.groupeur).post(
+            f"/api/groupeur/campagnes/{campagne.id}/cloturer/", {}, format="json"
+        )
+        connecte(ama).post(
+            "/api/avis/",
+            {"participation": part["id"], "note": 3, "commentaire": "Correct."},
+            format="json",
+        )
+
+        apres = connecte(ama).get(f"/api/participations/{part['id']}/").data
+        assert apres["peut_etre_notee"] is True
+        assert apres["avis"]["note"] == 3
+        assert apres["avis"]["commentaire"] == "Correct."
+
+    def test_l_acheteur_note_son_groupeur(self, connecte, campagne, ama):
+        part = participer_et_payer(connecte, ama, campagne, quantite=10)[
+            "participation"
+        ]
+        connecte(campagne.groupeur).post(
+            f"/api/groupeur/campagnes/{campagne.id}/cloturer/", {}, format="json"
+        )
+
+        reponse = connecte(ama).post(
+            "/api/avis/",
+            {"participation": part["id"], "note": 4, "commentaire": "Bien reçu."},
+            format="json",
+        )
+        assert reponse.status_code == 201, reponse.data
+
+        from groupachat.comptes.models import Reputation
+
+        reputation = Reputation.objects.get(groupeur=campagne.groupeur)
+        assert float(reputation.note) == 4.0
+        assert reputation.avis_recus == 1
+
+    def test_une_mauvaise_note_fait_baisser_la_reputation(
+        self, connecte, campagne, ama, yao
+    ):
+        premiere = participer_et_payer(connecte, ama, campagne, quantite=6)[
+            "participation"
+        ]
+        seconde = participer_et_payer(connecte, yao, campagne, quantite=4)[
+            "participation"
+        ]
+        connecte(campagne.groupeur).post(
+            f"/api/groupeur/campagnes/{campagne.id}/cloturer/", {}, format="json"
+        )
+
+        connecte(ama).post(
+            "/api/avis/", {"participation": premiere["id"], "note": 5}, format="json"
+        )
+        connecte(yao).post(
+            "/api/avis/",
+            {"participation": seconde["id"], "note": 1,
+             "commentaire": "Jamais livré."},
+            format="json",
+        )
+
+        from groupachat.comptes.models import Reputation
+
+        reputation = Reputation.objects.get(groupeur=campagne.groupeur)
+        assert float(reputation.note) == 3.0, "la moyenne doit tomber"
+
+    def test_on_ne_note_qu_une_fois(self, connecte, campagne, ama):
+        part = participer_et_payer(connecte, ama, campagne, quantite=10)[
+            "participation"
+        ]
+        connecte(campagne.groupeur).post(
+            f"/api/groupeur/campagnes/{campagne.id}/cloturer/", {}, format="json"
+        )
+        charge = {"participation": part["id"], "note": 5}
+        assert connecte(ama).post("/api/avis/", charge, format="json").status_code == 201
+        assert connecte(ama).post("/api/avis/", charge, format="json").status_code == 400
+
+    def test_on_ne_note_pas_la_commande_d_un_autre(
+        self, connecte, campagne, ama, yao
+    ):
+        part = participer_et_payer(connecte, ama, campagne, quantite=10)[
+            "participation"
+        ]
+        connecte(campagne.groupeur).post(
+            f"/api/groupeur/campagnes/{campagne.id}/cloturer/", {}, format="json"
+        )
+        reponse = connecte(yao).post(
+            "/api/avis/", {"participation": part["id"], "note": 1}, format="json"
+        )
+        assert reponse.status_code == 400
+
+    def test_les_avis_se_lisent_sans_compte(self, client, connecte, campagne, ama):
+        """Un avis qu'on ne peut pas lire avant d'acheter ne sert à rien."""
+        part = participer_et_payer(connecte, ama, campagne, quantite=10)[
+            "participation"
+        ]
+        connecte(campagne.groupeur).post(
+            f"/api/groupeur/campagnes/{campagne.id}/cloturer/", {}, format="json"
+        )
+        connecte(ama).post(
+            "/api/avis/",
+            {"participation": part["id"], "note": 3, "commentaire": "Correct."},
+            format="json",
+        )
+
+        client.force_authenticate(user=None)
+        reponse = client.get(f"/api/avis/?campagne={campagne.id}")
+        assert reponse.status_code == 200
+        assert reponse.data["count"] == 1
+        # Le numéro de l'acheteur n'a rien à faire dans un avis public.
+        assert "telephone" not in str(reponse.data["results"][0])
+
+    def test_le_groupeur_a_un_droit_de_reponse(self, connecte, campagne, ama):
+        part = participer_et_payer(connecte, ama, campagne, quantite=10)[
+            "participation"
+        ]
+        connecte(campagne.groupeur).post(
+            f"/api/groupeur/campagnes/{campagne.id}/cloturer/", {}, format="json"
+        )
+        avis = connecte(ama).post(
+            "/api/avis/",
+            {"participation": part["id"], "note": 2, "commentaire": "Déçu."},
+            format="json",
+        ).data
+
+        reponse = connecte(campagne.groupeur).post(
+            f"/api/avis/{avis['id']}/repondre/",
+            {"reponse": "Désolé, je vous échange l'article."},
+            format="json",
+        )
+        assert reponse.status_code == 200
+        assert "échange" in reponse.data["reponse"]
+
+    def test_un_autre_groupeur_ne_repond_pas_a_sa_place(
+        self, connecte, campagne, ama, yao
+    ):
+        part = participer_et_payer(connecte, ama, campagne, quantite=10)[
+            "participation"
+        ]
+        connecte(campagne.groupeur).post(
+            f"/api/groupeur/campagnes/{campagne.id}/cloturer/", {}, format="json"
+        )
+        avis = connecte(ama).post(
+            "/api/avis/", {"participation": part["id"], "note": 2}, format="json"
+        ).data
+
+        assert connecte(yao).post(
+            f"/api/avis/{avis['id']}/repondre/", {"reponse": "Pas moi"}, format="json"
+        ).status_code == 403
 
 
 class TestAccesEspaceGroupeur:

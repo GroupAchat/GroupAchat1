@@ -42,39 +42,46 @@ export function EnTete() {
           actions à droite, là où l'œil et le pouce les attendent. Un
           plafond très large évite seulement qu'ils s'éloignent à l'absurde
           sur un écran panoramique. */}
-      <div className="mx-auto flex h-16 w-full max-w-[110rem] items-center gap-3 px-3 sm:px-6">
+      <div className="mx-auto flex h-[4.5rem] w-full max-w-[110rem] items-center gap-3 px-3 sm:px-6">
         <Link to="/" className="flex shrink-0 items-center" aria-label="Accueil">
           <Marque />
         </Link>
 
-        <nav className="ml-4 hidden items-center gap-1 md:flex">
-          {ONGLETS.slice(0, 3).map((onglet) => (
-            <NavLink
-              key={onglet.vers}
-              to={onglet.vers}
-              end={onglet.exact}
-              className={({ isActive }) =>
-                fusionner(
-                  "rounded-full px-3.5 py-2 text-sm font-semibold transition-colors",
-                  isActive
-                    ? "bg-accent-doux text-[color:var(--color-accent-fort)]"
-                    : "texte-doux hover:surface-douce",
-                )
-              }
-            >
-              {onglet.libelle}
-            </NavLink>
-          ))}
-        </nav>
+        {/* Onglets et recherche forment un bloc centré entre le logo et les
+            actions : collés au logo ils laissaient un vide au milieu de la
+            barre sur les grands écrans. */}
+        <div className="flex min-w-0 flex-1 items-center justify-center gap-4">
+          <nav className="hidden shrink-0 items-center gap-1.5 md:flex">
+            {ONGLETS.slice(0, 3).map((onglet) => (
+              <NavLink
+                key={onglet.vers}
+                to={onglet.vers}
+                end={onglet.exact}
+                className={({ isActive }) =>
+                  fusionner(
+                    "rounded-full px-5 py-2.5 text-[0.95rem] font-semibold transition-colors",
+                    isActive
+                      ? "bg-accent-doux text-[color:var(--color-accent-fort)]"
+                      : "texte-doux hover:surface-douce",
+                  )
+                }
+              >
+                {onglet.libelle}
+              </NavLink>
+            ))}
+          </nav>
 
-        <button
-          onClick={() => naviguer("/catalogue?focus=1")}
-          className="surface-douce ml-auto flex h-10 shrink-0 items-center gap-2 rounded-full px-4 text-sm transition-colors hover:brightness-97"
-          aria-label="Rechercher"
-        >
-          <Search className="size-4" />
-          <span className="texte-doux hidden sm:inline">Rechercher un produit…</span>
-        </button>
+          <button
+            onClick={() => naviguer("/catalogue?focus=1")}
+            className="surface-douce flex h-12 w-full max-w-md items-center gap-2.5 rounded-full px-5 text-[0.95rem] transition-colors hover:brightness-97"
+            aria-label="Rechercher"
+          >
+            <Search className="size-[1.15rem] shrink-0" />
+            <span className="texte-doux hidden truncate sm:inline">
+              Rechercher un produit…
+            </span>
+          </button>
+        </div>
 
         <Cloche />
 

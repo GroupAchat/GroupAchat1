@@ -245,6 +245,7 @@ class Notification(models.Model):
         KYC_DECIDE = "kyc_decide", "Décision sur votre dossier"
         RELANCE_RETRAIT = "relance_retrait", "Rappel : colis à retirer"
         NOUVEAU_COMMENTAIRE = "nouveau_commentaire", "Nouveau message sur votre campagne"
+        NOUVEL_AVIS = "nouvel_avis", "Un acheteur vous a noté"
         REPONSE_COMMENTAIRE = "reponse_commentaire", "Réponse à votre message"
 
     destinataire = models.ForeignKey(

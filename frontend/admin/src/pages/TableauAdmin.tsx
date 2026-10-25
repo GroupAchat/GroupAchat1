@@ -4,7 +4,6 @@ import {
   Banknote,
   FileCheck2,
   Landmark,
-  MessageSquareWarning,
   TrendingUp,
   Users,
   Vault,
@@ -33,9 +32,7 @@ export default function TableauAdmin() {
   }
 
   const aTraiter =
-    donnees.a_traiter.dossiers_kyc +
-    donnees.a_traiter.decaissements +
-    donnees.a_traiter.litiges;
+    donnees.a_traiter.dossiers_kyc + donnees.a_traiter.decaissements;
 
   return (
     <div className="space-y-6">
@@ -134,13 +131,6 @@ export default function TableauAdmin() {
           valeur={String(donnees.a_traiter.decaissements)}
           detail="à libérer du séquestre"
           index={1}
-        />
-        <Tuile
-          icone={MessageSquareWarning}
-          libelle="Litiges ouverts"
-          valeur={String(donnees.a_traiter.litiges)}
-          detail="contestations à arbitrer"
-          index={2}
         />
         <Tuile
           icone={Users}

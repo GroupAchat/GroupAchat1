@@ -15,7 +15,23 @@ Au Togo, les achats groupés se font de manière informelle, principalement sur 
 | | Garantie apportée |
 |---|---|
 | **Acheteur** | « Livré ou remboursé » : paiement sous **séquestre** (escrow) et validation de livraison par **code unique / QR code**. |
-| **Groupeur** | Outil **gratuit** de gestion automatisée : suivi nominatif des paiements en temps réel, protection contre les litiges, visibilité au-delà de ses cercles habituels. |
+| **Groupeur** | Outil **gratuit** de gestion automatisée : suivi nominatif des paiements en temps réel, preuve de livraison opposable, visibilité au-delà de ses cercles habituels. |
+
+### Ce que la plateforme garantit — et ce qu'elle ne garantit pas
+
+Group Achat **met en relation, elle n'arbitre pas**. Elle garantit l'argent de la
+collecte : les fonds restent sous séquestre, et une campagne annulée rembourse.
+Elle ne se prononce pas sur la marchandise — ni sur sa qualité, ni sur sa
+conformité, ni sur ce qui s'est dit au point de retrait.
+
+Une plainte sur un produit **va donc directement au groupeur** : l'acheteur en
+discute avec lui sous la campagne, publiquement, et le **note**. Il n'y a pas de
+dossier de litige à instruire, pas d'arbitre à saisir. La sanction d'un mauvais
+groupeur, c'est sa réputation qui baisse et les acheteurs suivants qui la voient.
+
+C'est un choix de produit, pas une facilité : arbitrer supposerait de juger sur
+pièces des marchandises qu'on n'a jamais vues, à Lomé, sans levier réel sur le
+vendeur. La transparence publique en dit davantage, et plus vite.
 
 ## 3. Les trois acteurs
 
@@ -83,13 +99,17 @@ Au Togo, les achats groupés se font de manière informelle, principalement sur 
 - **Retrait** : un **code unique et son QR code par participation**, c'est-à-dire propre
   au couple **produit + participant**. Le QR porte l'identifiant de la campagne en plus du
   code, pour qu'un code valide d'une autre campagne soit refusé au scan. Le colis n'est
-  remis que contre ce code ; sa validation vaut preuve de livraison et ferme tout litige.
+  remis que contre ce code ; sa validation vaut **preuve de livraison**, et personne ne
+  peut soutenir après coup n'avoir rien reçu.
 - **Médias d'un produit** : jusqu'à **trois photos et deux vidéos**. Les groupeurs
   photographient au téléphone, sur une connexion mesurée ; au-delà, la fiche devient
   lente à charger pour l'acheteur sans rien lui apprendre de plus. Une vidéo exige une
   image d'aperçu, faute de quoi elle apparaîtrait comme un rectangle noir dans la
   galerie. La vignette du catalogue reste **toujours une photo**.
-- **Réputation** : alimentée par les campagnes menées à terme et les litiges constatés.
+- **Réputation** : la note est la **moyenne des avis laissés par les acheteurs**, et rien
+  d'autre. À côté s'affichent les compteurs de volume — campagnes menées à terme,
+  participants servis — pour qu'on distingue « 5/5 sur un avis » de « 4,2/5 sur quarante ».
+  Un groupeur qui débute part de zéro : la note se gagne, elle n'est pas offerte.
 - **Distribution** : pas de flotte de livreurs. Le groupeur, ou la personne qu'il désigne,
   remet les colis au point de retrait et valide le code de chaque participant. Le modèle
   enregistre qui a effectué la remise, pour pouvoir ouvrir ce rôle plus tard.

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Participations à une campagne, codes de retrait et litiges.
+"""Participations à une campagne, codes de retrait et avis.
 
 La **participation** est la pièce maîtresse du produit : c'est elle qui porte
 l'argent consigné et le code qui vaut preuve de livraison.
@@ -10,6 +10,7 @@ from __future__ import annotations
 import secrets
 
 from django.conf import settings
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 
@@ -131,6 +132,19 @@ class Participation(models.Model):
         return f"GA|{self.campagne_id}|{self.code_retrait}"
 
     @property
+    def peut_etre_notee(self) -> bool:
+        """Un avis ne se laisse qu'une fois le groupage joué.
+
+        Avant la clôture il n'y a rien à juger : la campagne n'a pas encore
+        montré si elle allait aboutir. Après, il y a toujours quelque chose
+        à dire — y compris quand rien n'a été livré, et c'est précisément
+        là que la note compte le plus.
+        """
+        if self.statut == self.Statut.EN_ATTENTE_PAIEMENT:
+            return False
+        return self.campagne.statut in Campagne.STATUTS_COLLECTE_CLOSE
+
+    @property
     def delai_retrait_depasse(self) -> bool:
         """Quatorze jours après la mise à disposition, la livraison est acquise."""
         depuis = self.campagne.mise_a_disposition_le
@@ -139,53 +153,53 @@ class Participation(models.Model):
         return (timezone.now() - depuis).days >= 14
 
 
-class Litige(models.Model):
-    """Contestation ouverte par un acheteur sur sa participation.
+class Avis(models.Model):
+    """La note qu'un acheteur laisse à son groupeur.
 
-    Un code de retrait validé ferme le litige : c'est la protection promise au
-    groupeur contre les fausses réclamations.
+    **Group Achat met en relation, elle n'arbitre pas.** Un souci sur un
+    produit se règle entre l'acheteur et le groupeur — par la discussion
+    publique sous la campagne, et par cette note. La plateforme garantit
+    l'argent de la collecte, pas la qualité de la marchandise.
+
+    C'est pour cette raison qu'il n'y a pas de dossier de litige à
+    instruire : la sanction d'un mauvais groupeur n'est pas une décision
+    d'arbitre, c'est sa réputation qui baisse et les acheteurs qui le
+    voient.
+
+    Un avis est rattaché à **une participation**, et non à une campagne :
+    seul quelqu'un qui a payé peut noter, une seule fois, et on sait
+    toujours de quelle commande il parle.
     """
 
-    class Motif(models.TextChoices):
-        NON_LIVRE = "non_livre", "Produit jamais remis"
-        NON_CONFORME = "non_conforme", "Produit non conforme"
-        ENDOMMAGE = "endommage", "Produit endommagé"
-        AUTRE = "autre", "Autre"
-
-    class Statut(models.TextChoices):
-        OUVERT = "ouvert", "Ouvert"
-        EN_EXAMEN = "en_examen", "En cours d'examen"
-        RESOLU_ACHETEUR = "resolu_acheteur", "Tranché en faveur de l'acheteur"
-        RESOLU_GROUPEUR = "resolu_groupeur", "Tranché en faveur du groupeur"
-        CLOS = "clos", "Clos"
-
-    participation = models.ForeignKey(
+    participation = models.OneToOneField(
         Participation,
         on_delete=models.CASCADE,
-        related_name="litiges",
+        related_name="avis",
         verbose_name="participation",
     )
-    motif = models.CharField("motif", max_length=20, choices=Motif.choices)
-    description = models.TextField("description")
-    statut = models.CharField(
-        "statut", max_length=20, choices=Statut.choices, default=Statut.OUVERT
+    note = models.PositiveSmallIntegerField(
+        "note sur 5",
+        validators=[MinValueValidator(1), MaxValueValidator(5)],
     )
-    ouvert_le = models.DateTimeField("ouvert le", default=timezone.now)
-    resolu_le = models.DateTimeField("résolu le", null=True, blank=True)
-    decision = models.TextField("décision", blank=True)
-    arbitre_par = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="litiges_arbitres",
-        verbose_name="arbitré par",
-    )
+    commentaire = models.TextField("commentaire", max_length=1000, blank=True)
+    cree_le = models.DateTimeField("laissé le", default=timezone.now)
+    modifie_le = models.DateTimeField("modifié le", null=True, blank=True)
+
+    # Le groupeur répond une fois, sous l'avis. Pas un fil : une réponse.
+    # Au-delà, la discussion a sa place sous la campagne.
+    reponse = models.TextField("réponse du groupeur", blank=True)
+    repondu_le = models.DateTimeField("répondu le", null=True, blank=True)
 
     class Meta:
-        verbose_name = "litige"
-        verbose_name_plural = "litiges"
-        ordering = ["-ouvert_le"]
+        verbose_name = "avis"
+        verbose_name_plural = "avis"
+        ordering = ["-cree_le"]
+        indexes = [models.Index(fields=["-cree_le"])]
 
     def __str__(self) -> str:
-        return f"Litige {self.get_motif_display()} — {self.participation}"
+        return f"{self.note}/5 — {self.participation}"
+
+    @property
+    def groupeur(self):
+        return self.participation.campagne.groupeur
+

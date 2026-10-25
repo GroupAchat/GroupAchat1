@@ -284,7 +284,13 @@ class DossierKYC(models.Model):
 
 
 class Reputation(models.Model):
-    """Note de confiance d'un groupeur, alimentée par son activité réelle.
+    """Note de confiance d'un groupeur.
+
+    **La note vient des acheteurs, pas de la plateforme.** Group Achat met
+    en relation ; elle ne juge pas la qualité d'un produit. Ce qu'elle
+    tient, c'est la moyenne des avis et le volume d'activité — à l'acheteur
+    de faire la part des choses entre « 5/5 sur un avis » et « 4,2 sur
+    quarante ».
 
     Les compteurs sont stockés plutôt que recalculés à l'affichage : ils
     apparaissent sur chaque vignette du catalogue, et refaire les agrégats à
@@ -299,7 +305,7 @@ class Reputation(models.Model):
     )
     campagnes_terminees = models.PositiveIntegerField("campagnes menées à terme", default=0)
     campagnes_annulees = models.PositiveIntegerField("campagnes annulées", default=0)
-    litiges = models.PositiveIntegerField("litiges constatés", default=0)
+    avis_recus = models.PositiveIntegerField("avis reçus", default=0)
     participants_servis = models.PositiveIntegerField("participants servis", default=0)
     note = models.DecimalField("note sur 5", max_digits=3, decimal_places=2, default=0)
     mise_a_jour_le = models.DateTimeField("mise à jour le", auto_now=True)

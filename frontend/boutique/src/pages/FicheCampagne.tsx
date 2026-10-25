@@ -20,6 +20,7 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import type { Campagne, Participation } from "@commun/api/types";
+import { ListeAvis } from "@/composants/Avis";
 import { Discussion } from "@/composants/Discussion";
 import { Feuille } from "@commun/composants/Feuille";
 import { Jauge } from "@/composants/Jauge";
@@ -460,6 +461,16 @@ export default function FicheCampagne() {
                 </div>
               </section>
             )}
+
+            {/* Les avis d'abord, la discussion ensuite : l'un dit ce que ce
+                groupeur a déjà fait, l'autre sert à lui demander le reste. */}
+            <section id="avis" className="scroll-mt-20 space-y-4">
+              <h2 className="flex items-center gap-2 text-lg font-bold">
+                <Star className="size-5" />
+                Avis sur ce groupeur
+              </h2>
+              <ListeAvis groupeurId={campagne.groupeur.id} />
+            </section>
 
             <Discussion campagneId={campagne.id} />
           </div>

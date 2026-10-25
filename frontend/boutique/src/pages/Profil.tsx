@@ -385,7 +385,8 @@ export function DevenirGroupeur() {
             <li>• Création de campagnes libre, sourcing libre.</li>
             <li>• Suivi nominatif des paiements en temps réel.</li>
             <li>• Retrait de 100 % de la collecte, moins 1 500 FCFA fixes.</li>
-            <li>• Protection contre les faux litiges grâce aux codes de retrait.</li>
+            <li>• Preuve de livraison par code de retrait, contre les fausses réclamations.</li>
+            <li>• Votre réputation se construit sur les avis de vos acheteurs.</li>
           </ul>
         </div>
 

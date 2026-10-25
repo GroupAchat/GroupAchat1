@@ -30,7 +30,7 @@ from groupachat.catalogue.models import (
     PalierPrix,
     Produit,
 )
-from groupachat.commandes.models import Litige, Participation
+from groupachat.commandes.models import Avis, Participation
 from groupachat.comptes.models import (
     CodeVerification,
     DossierKYC,
@@ -58,7 +58,7 @@ from groupachat.paiements.services import (
 # et lui seul, qui décide si un redéploiement remet la démonstration à plat.
 # Laissé inchangé, les nouveautés n'apparaîtraient jamais sur un serveur déjà
 # démarré une fois.
-VERSION_DEMO = "4"
+VERSION_DEMO = "5"
 
 MOT_DE_PASSE = "demo2026Groupe"
 
@@ -140,7 +140,7 @@ class Command(BaseCommand):
         self._offre_concurrente(concurrent, acheteurs)
         self._demandes(acheteurs, rayons)
         self._discussions(valide, concurrent, acheteurs, admin)
-        self._litige(acheteurs)
+        self._avis(acheteurs)
         self._notifications_lues(acheteurs)
 
         EtatDemonstration.objects.create(version=VERSION_DEMO)
@@ -158,7 +158,7 @@ class Command(BaseCommand):
         de panne qui ne se voit qu'au déploiement suivant.
         """
         enchainement = (
-            Litige, Transaction, Decaissement, Sequestre,
+            Avis, Transaction, Decaissement, Sequestre,
             Notification, JaimeCommentaire, Commentaire,
             InteretDemande, DemandeProduit,
             Participation, PalierPrix, MediaCampagne, Campagne,
@@ -244,7 +244,7 @@ class Command(BaseCommand):
         )
         Reputation.objects.create(
             groupeur=groupeur, campagnes_terminees=7, campagnes_annulees=1,
-            litiges=1, participants_servis=43, note=4.17,
+            avis_recus=0, participants_servis=43, note=0,
         )
         return groupeur
 
@@ -358,21 +358,57 @@ class Command(BaseCommand):
             "+ 1 message masque"
         )
 
-    def _litige(self, acheteurs) -> None:
-        """Une contestation ouverte, pour l'arbitrage côté administration."""
-        part = (
-            Participation.objects.filter(statut=Participation.Statut.PRETE)
-            .exclude(acheteur=acheteurs[0])
-            .first()
+    def _avis(self, acheteurs) -> None:
+        """Des notes laissées par les acheteurs, bonnes et moins bonnes.
+
+        La plateforme n'arbitre pas les litiges : c'est la note qui
+        sanctionne. La démonstration doit donc montrer les deux — un
+        groupeur bien noté, et un avis mécontent avec la réponse du
+        groupeur en dessous.
+        """
+        from groupachat.paiements.services import recalculer_reputation
+
+        notees = list(
+            Participation.objects.filter(
+                statut__in=(
+                    Participation.Statut.RETIREE,
+                    Participation.Statut.PRETE,
+                    Participation.Statut.REMBOURSEE,
+                )
+            ).select_related("campagne__groupeur")[:6]
         )
-        if part is None:
+        if not notees:
             return
-        Litige.objects.create(
-            participation=part, motif=Litige.Motif.NON_CONFORME,
-            description="Le coloris recu ne correspond pas a celui annonce sur la fiche.",
-            ouvert_le=timezone.now() - timedelta(hours=20),
-        )
-        self.stdout.write("  - 1 litige ouvert a arbitrer")
+
+        contenus = [
+            (5, "Riz conforme, sacs scellés, remise rapide. Rien à redire."),
+            (5, "Deuxieme groupage avec Abalo, toujours impeccable."),
+            (4, "Bon produit, mais j'ai attendu deux jours de plus que prevu."),
+            (2, "Le coloris ne correspondait pas a la photo. Decevant."),
+            (5, "Prix imbattable a plusieurs, je recommande."),
+            (3, "Correct sans plus, le point de remise est loin de chez moi."),
+        ]
+
+        groupeurs = set()
+        for participation, (note, commentaire) in zip(notees, contenus):
+            avis = Avis.objects.create(
+                participation=participation, note=note, commentaire=commentaire
+            )
+            groupeurs.add(participation.campagne.groupeur)
+
+            # Le droit de réponse, sur l'avis le plus sévère.
+            if note <= 2:
+                avis.reponse = (
+                    "Desole pour ce coloris. Contactez-moi, je vous "
+                    "l'echange sur le prochain arrivage."
+                )
+                avis.repondu_le = timezone.now()
+                avis.save(update_fields=["reponse", "repondu_le"])
+
+        for groupeur in groupeurs:
+            recalculer_reputation(groupeur)
+
+        self.stdout.write(f"  - {len(notees)} avis laisses par les acheteurs")
 
     def _notifications_lues(self, acheteurs) -> None:
         """Toutes les notifications ne sont pas neuves.

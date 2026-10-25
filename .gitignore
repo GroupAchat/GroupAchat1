@@ -22,7 +22,7 @@ backend/.venv/
 **/__pycache__/
 *.py[cod]
 **/.pytest_cache/
-backend/base-de-secours.sqlite3
+backend/base-de-secours.sqlite3*
 backend/medias/
 backend/statiques/
 

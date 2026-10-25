@@ -17,7 +17,7 @@ class ReputationSerialiseur(serializers.ModelSerializer):
             "note",
             "campagnes_terminees",
             "campagnes_annulees",
-            "litiges",
+            "avis_recus",
             "participants_servis",
         ]
 

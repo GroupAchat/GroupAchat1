@@ -43,7 +43,7 @@ export interface Reputation {
   note: string;
   campagnes_terminees: number;
   campagnes_annulees: number;
-  litiges: number;
+  avis_recus: number;
   participants_servis: number;
 }
 
@@ -161,6 +161,28 @@ export interface Participation {
   cree_le: string;
   payee_le: string | null;
   retiree_le: string | null;
+  peut_etre_notee: boolean;
+  avis: Avis | null;
+}
+
+/**
+ * La note qu'un acheteur laisse à son groupeur.
+ *
+ * Group Achat met en relation, elle n'arbitre pas : c'est cette note — et la
+ * discussion publique sous la campagne — qui sanctionne un mauvais groupeur.
+ */
+export interface Avis {
+  id: number;
+  participation: number;
+  campagne: number;
+  campagne_titre: string;
+  auteur: { nom_affiche: string };
+  note: number;
+  commentaire: string;
+  reponse: string;
+  repondu_le: string | null;
+  cree_le: string;
+  modifie_le: string | null;
 }
 
 export interface Participant {
@@ -271,7 +293,7 @@ export interface TableauDeBordGroupeur {
 
 export interface TableauDeBordAdmin {
   comptes: { acheteurs: number; groupeurs: number; groupeurs_valides: number };
-  a_traiter: { dossiers_kyc: number; decaissements: number; litiges: number };
+  a_traiter: { dossiers_kyc: number; decaissements: number };
   campagnes: { en_cours: number; financees: number; terminees: number; annulees: number };
   sequestre: {
     montant_detenu: number;

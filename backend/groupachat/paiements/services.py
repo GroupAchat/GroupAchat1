@@ -337,7 +337,7 @@ def annuler(campagne: Campagne, motif: str = "") -> Campagne:
 
     reputation, _ = Reputation.objects.get_or_create(groupeur=campagne.groupeur)
     reputation.campagnes_annulees += 1
-    _recalculer_note(reputation)
+    reputation.save(update_fields=["campagnes_annulees"])
     return campagne
 
 
@@ -574,6 +574,14 @@ def valider_retrait(campagne: Campagne, code: str, agent) -> Participation:
 
 
 def _crediter_reputation(campagne: Campagne) -> None:
+    """Enregistre le volume d'activité d'un groupeur à la fin d'une campagne.
+
+    ⚠️ **Cette fonction ne touche pas à la note.** Celle-ci vient des avis
+    laissés par les acheteurs — la plateforme met en relation, elle ne juge
+    pas. Ce qu'on compte ici, c'est le volume : combien de campagnes menées
+    à terme, combien de personnes servies. Les deux s'affichent côte à
+    côte, et l'acheteur fait la part des choses.
+    """
     from groupachat.comptes.models import Reputation
 
     reputation, _ = Reputation.objects.get_or_create(groupeur=campagne.groupeur)
@@ -581,25 +589,34 @@ def _crediter_reputation(campagne: Campagne) -> None:
     reputation.participants_servis += campagne.participations.filter(
         statut=Participation.Statut.RETIREE
     ).count()
-
-    # Note sur cinq : la part des campagnes menées à terme, amputée des
-    # litiges. Un groupeur sans historique part de zéro, pas de cinq — la
-    # note doit se gagner.
-    _recalculer_note(reputation)
+    reputation.save(update_fields=["campagnes_terminees", "participants_servis"])
 
 
-def _recalculer_note(reputation) -> None:
-    """Note sur cinq : la part des campagnes menées à terme, moins les litiges.
+def recalculer_reputation(groupeur) -> None:
+    """Recalcule la note d'un groupeur à partir des avis reçus.
 
-    Un groupeur sans historique part de zéro, pas de cinq — la note doit
-    se gagner. Et elle **peut descendre** : les campagnes annulées comptent
-    autant que les réussites, sans quoi le badge ne dirait rien.
+    **Ce sont les acheteurs qui notent, pas la plateforme.** Group
+    Achat met en relation ; elle ne juge pas la qualité d'un produit.
+    La note moyenne est donc celle des avis, point.
+
+    Sans aucun avis, la note reste à zéro : un groupeur qui débute n'a
+    pas cinq étoiles par défaut, il n'a pas encore de réputation. Les
+    compteurs de campagnes, eux, disent le volume — ils s'affichent à
+    côté de la note et laissent l'acheteur faire la part des choses
+    entre « 5/5 sur un avis » et « 4,2/5 sur quarante ».
     """
-    total = reputation.campagnes_terminees + reputation.campagnes_annulees
-    if total:
-        reussite = reputation.campagnes_terminees / total
-        penalite = min(reputation.litiges * 0.2, 2)
-        reputation.note = max(0, round(reussite * 5 - penalite, 2))
+    from django.db.models import Avg, Count
+
+    from groupachat.commandes.models import Avis
+    from groupachat.comptes.models import Reputation
+
+    reputation, _ = Reputation.objects.get_or_create(groupeur=groupeur)
+    mesure = Avis.objects.filter(
+        participation__campagne__groupeur=groupeur
+    ).aggregate(moyenne=Avg("note"), nombre=Count("id"))
+
+    reputation.note = round(mesure["moyenne"] or 0, 2)
+    reputation.avis_recus = mesure["nombre"]
     reputation.save()
 
 

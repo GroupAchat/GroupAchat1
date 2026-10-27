@@ -41,4 +41,4 @@ brouillon → en_cours → (date limite : clôture automatique, cloturer_les_cam
 | `admin/src/` | console, port 5174 | TableauAdmin, Dossiers, Décaissements (modération incluse) |
 
 ## Vérification
-`bash .claude/skills/verify/scripts/check.sh complet` : migrations, pytest (165 tests, ~7 min), `npm run verifier`.
+`bash .claude/skills/verify/scripts/check.sh complet` : migrations, pytest (244 tests au 2026-10-27 ; la durée d'environ 7 min était celle de 165 tests), `npm run verifier`.

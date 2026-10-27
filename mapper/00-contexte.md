@@ -34,7 +34,7 @@ Utilisateur (rôle acheteur / groupeur), DossierKYC, Réputation ; Catégorie, P
 
 ## Risques
 - La suite de tests dure environ sept minutes : chaque boucle de vérification est lente.
-- La branche `staging` a **15 commits de retard sur `master`** et **1 commit propre** (`92bc906 save before merge with master`), vérifié par `git rev-list` le 2026-10-26 : à remettre d'accord, par l'utilisateur, avant d'y fusionner du travail (C-001).
+- Le retard de `staging` sur `master` est levé (C-001, 2026-10-27) : `master`, `origin/staging` et `origin/master` sont à `ccd9187`. Depuis, `staging` porte `fb4963c` (F-030) et `474656a` (outillage), non poussés. L'ancien `staging` est sauvegardé dans `sauvegarde/staging-92bc906` (`92bc906`).
 - Les contradictions du cahier des charges sont tranchées le 2026-10-26 (livraison, qui décaisse, abonnements, « livré ou remboursé », KYC, annulation, rôle, J+14…) : [[2026-10-26-decisions-carte]]. Le cahier des charges n'est pas encore réécrit (C-003) : le code et le texte divergent d'ici là.
 - « Livré ou remboursé » est tenu ainsi : les fonds sont libérés avant la distribution. Un groupeur qui ne livre pas ne rembourse donc pas l'acheteur tout seul. Les textes d'écran qui disent le contraire doivent être corrigés (C-009).
 - F-031 n'est pas faite : un colis non retiré bloque la campagne en `distribution` tant qu'elle ne l'est pas.

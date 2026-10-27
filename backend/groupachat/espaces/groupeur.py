@@ -162,7 +162,7 @@ class CampagneGroupeurVueEnsemble(viewsets.ModelViewSet):
         """
         campagne = self.get_object()
         try:
-            maintenir_la_campagne(campagne)
+            campagne = maintenir_la_campagne(campagne)
         except ErreurPaiement as erreur:
             return Response({"detail": str(erreur)},
                             status=status.HTTP_400_BAD_REQUEST)
@@ -173,7 +173,9 @@ class CampagneGroupeurVueEnsemble(viewsets.ModelViewSet):
         """Renonce au groupage et rend sa mise à chaque participant."""
         campagne = self.get_object()
         try:
-            annuler_la_campagne(campagne, motif=requete.data.get("motif", ""))
+            campagne = annuler_la_campagne(
+                campagne, motif=requete.data.get("motif", "")
+            )
         except ErreurPaiement as erreur:
             return Response({"detail": str(erreur)},
                             status=status.HTTP_400_BAD_REQUEST)

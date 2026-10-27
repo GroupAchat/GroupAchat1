@@ -269,6 +269,30 @@ def cloturer(campagne: Campagne) -> str:
     return campagne.statut
 
 
+def _verrouiller(campagne: Campagne) -> Campagne:
+    """Relit la campagne en la verrouillant, à appeler dans une transaction.
+
+    Sans ça, un double clic ou la tâche horaire qui croise le groupeur
+    décideraient chacun sur un état périmé : maintenir pendant qu'on annule
+    rendrait une campagne « financée » dont les parts sont remboursées.
+    """
+    return Campagne.objects.select_for_update().get(pk=campagne.pk)
+
+
+def _delai_de_decision_expire(campagne: Campagne) -> bool:
+    """Le groupeur a-t-il laissé passer son délai de décision ?
+
+    Même échéance que la tâche :func:`rembourser_les_indecis` (une seule
+    valeur, ``DELAI_DECISION_JOURS``) : entre le 7e jour et le passage
+    horaire de la tâche, le groupeur ne peut pas maintenir ce que la tâche
+    s'apprête à rembourser. Un délai nul désactive l'échéance.
+    """
+    if settings.DELAI_DECISION_JOURS <= 0 or campagne.cloturee_le is None:
+        return False
+    limite = timezone.now() - timedelta(days=settings.DELAI_DECISION_JOURS)
+    return campagne.cloturee_le <= limite
+
+
 @transaction.atomic
 def maintenir(campagne: Campagne) -> Campagne:
     """Le groupeur maintient la commande malgré le minimum manqué.
@@ -276,8 +300,14 @@ def maintenir(campagne: Campagne) -> Campagne:
     La campagne rejoint le cours normal : elle est financée, et la suite —
     décaissement, approvisionnement, distribution — ne change pas.
     """
+    campagne = _verrouiller(campagne)
     if campagne.statut != Campagne.Statut.MINIMUM_NON_ATTEINT:
         raise ErreurPaiement("Cette campagne n'attend pas de décision.")
+    if _delai_de_decision_expire(campagne):
+        raise ErreurPaiement(
+            f"Le délai de {settings.DELAI_DECISION_JOURS} jours pour maintenir "
+            "cette campagne est écoulé : les participants vont être remboursés."
+        )
 
     campagne.statut = Campagne.Statut.FINANCEE
     campagne.save(update_fields=["statut"])
@@ -299,7 +329,11 @@ def annuler(campagne: Campagne, motif: str = "") -> Campagne:
     Seule porte de sortie vers le remboursement : ni la clôture ni le temps
     qui passe ne remboursent d'eux-mêmes — il faut une décision, celle du
     groupeur, celle de l'équipe, ou celle de la tâche d'échéance.
+
+    Reste permise après le délai de décision : c'est l'issue même que la
+    tâche appliquerait, la devancer ne lèse personne.
     """
+    campagne = _verrouiller(campagne)
     if campagne.statut not in (
         Campagne.Statut.MINIMUM_NON_ATTEINT,
         Campagne.Statut.EN_COURS,
@@ -396,13 +430,19 @@ def rembourser_les_indecis() -> list[int]:
     )
     rendues = []
     for campagne in oubliees:
-        annuler(
-            campagne,
-            motif=(
-                f"Sans décision du groupeur {settings.DELAI_DECISION_JOURS} "
-                "jours après la clôture."
-            ),
-        )
+        # `annuler` accepte aussi « financée » : sans cette relecture sous
+        # verrou, un groupeur qui maintient entre la sélection et ici verrait
+        # sa campagne maintenue annulée par la tâche.
+        with transaction.atomic():
+            if _verrouiller(campagne).statut != Campagne.Statut.MINIMUM_NON_ATTEINT:
+                continue
+            annuler(
+                campagne,
+                motif=(
+                    f"Sans décision du groupeur {settings.DELAI_DECISION_JOURS} "
+                    "jours après la clôture."
+                ),
+            )
         rendues.append(campagne.id)
     return rendues
 

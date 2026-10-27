@@ -67,11 +67,11 @@ export default function CampagneGroupeur() {
     await tout();
   });
   const maintenir = useAction(async () => {
-    await api.post(`/api/groupeur/campagnes/${id}/maintenir/`);
+    await api.post(`/groupeur/campagnes/${id}/maintenir/`);
     await tout();
   });
   const annuler = useAction(async (motif: string) => {
-    await api.post(`/api/groupeur/campagnes/${id}/annuler/`, { motif });
+    await api.post(`/groupeur/campagnes/${id}/annuler/`, { motif });
     await tout();
   });
   const miseADisposition = useAction(async (point: string) => {

@@ -1,7 +1,7 @@
 ---
 type: architecture
 statut: à jour
-date: 2026-10-26
+date: 2026-10-27
 tags: [architecture]
 ---
 
@@ -15,11 +15,11 @@ La structure de référence est décrite dans `.claude/conventions/architecture.
 | `catalogue/` | catégories, produits, campagnes, paliers, médias ; tâche de clôture | `models.py` (`Campagne.Statut`), `vues.py` (`STATUTS_LISTES`, `STATUTS_CONSULTABLES`), `management/commands/cloturer_les_campagnes_echues.py`, `charger_demo.py` (`VERSION_DEMO`) |
 | `commandes/` | participations, code de retrait, avis | `models.py` (`Participation`, `engendrer_code_retrait`), `vues.py` |
 | `comptes/` | utilisateur, code SMS, dossier KYC, réputation | `models.py`, `services.py` (`envoyer_code`), `vues.py` |
-| `echanges/` | fil de discussion, j'aime, demandes communautaires, notifications | `models.py` (`Notification.Genre`), `vues.py` |
+| `echanges/` | fil de discussion, j'aime, demandes communautaires, notifications | `models.py` (`Notification.Genre`), `vues.py`, `migrations/0004_corriger_liens_des_notifications.py` (migration de données : `/participations/<n>` → `/mes-achats/<n>`) |
 | `paiements/` | séquestre, transactions, décaissements ; **le cycle de vie qui écrit** | `services.py` : `encaisser`, `rembourser`, `cloturer`, `maintenir`, `annuler`, `cloturer_les_echus`, `rembourser_les_indecis`, `demander_decaissement`, `executer_decaissement`, `mettre_a_disposition`, `valider_retrait`, `recalculer_reputation` |
 | `espaces/` | vues de rôle (aucun modèle) | `groupeur.py` (publier, participants, clôturer, maintenir, annuler, demander-retrait, mise-a-disposition, retrait, signature Cloudinary, tableau de bord, état KYC), `administration.py` (dossiers, décaissements, modération, clôture forcée, tableau de bord) |
 | `noyau/` | transversal | `permissions.py`, `limitation.py`, `hebergement.py` |
-| `tests/` | tests transversaux | `test_administration.py`, `test_cloture.py`, `test_securite.py` |
+| `tests/` | tests transversaux | `test_administration.py`, `test_cloture.py`, `test_securite.py`, `test_notifications_liens.py` (copie des routes de `App.tsx`, [[2026-10-27-decisions-f008]]) |
 | `api.py` | toutes les routes | routeur DRF + chemins `comptes/…`, `groupeur/…`, `admin/…` |
 
 ## Cycle de vie d'une campagne (cahier des charges §9)
@@ -41,4 +41,4 @@ brouillon → en_cours → (date limite : clôture automatique, cloturer_les_cam
 | `admin/src/` | console, port 5174 | TableauAdmin, Dossiers, Décaissements (modération incluse) |
 
 ## Vérification
-`bash .claude/skills/verify/scripts/check.sh complet` : migrations, pytest (244 tests au 2026-10-27 ; la durée d'environ 7 min était celle de 165 tests), `npm run verifier`.
+`bash .claude/skills/verify/scripts/check.sh complet` : migrations, pytest (255 tests au 2026-10-27 ; la suite complète dure 10 à 20 minutes, et non 7 : 7 minutes était la durée de 165 tests), `npm run verifier`.

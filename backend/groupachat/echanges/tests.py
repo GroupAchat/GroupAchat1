@@ -3,7 +3,11 @@
 
 from __future__ import annotations
 
+import importlib
+
 import pytest
+from django.apps import apps as django_apps
+from django.db import migrations
 
 from groupachat.echanges.models import Commentaire, DemandeProduit, Notification
 
@@ -201,3 +205,50 @@ class TestCloche:
 
         api.post("/api/notifications/tout-marquer-lu/", {}, format="json")
         assert api.get("/api/notifications/non-lues/").data["non_lues"] == 0
+
+
+class TestCorrectionDesAnciensLiens:
+    """F-008 : la migration 0004 répare les liens écrits avant le correctif."""
+
+    def _migration(self):
+        return importlib.import_module(
+            "groupachat.echanges.migrations.0004_corriger_liens_des_notifications"
+        )
+
+    def _creer(self, ama, lien):
+        return Notification.objects.create(
+            destinataire=ama, genre="paiement_enregistre", titre="t",
+            message="m", lien=lien,
+        )
+
+    def test_l_ancien_lien_de_la_commande_est_reecrit(self, ama):
+        ancienne = self._creer(ama, "/participations/7")
+        self._migration().corriger(django_apps, None)
+        ancienne.refresh_from_db()
+        assert ancienne.lien == "/mes-achats/7"
+
+    def test_les_autres_liens_ne_sont_pas_touches(self, ama):
+        intacts = ["", "/campagnes/7", "/groupeur/campagnes/7", "/groupeur",
+                   "/participations/7/x", "/api/participations/7",
+                   "/participations/abc", "/mes-achats/7"]
+        lignes = [self._creer(ama, lien) for lien in intacts]
+        self._migration().corriger(django_apps, None)
+        for ligne, lien in zip(lignes, intacts):
+            ligne.refresh_from_db()
+            assert ligne.lien == lien
+
+    def test_la_correction_se_rejoue_sans_effet(self, ama):
+        ligne = self._creer(ama, "/participations/12")
+        self._migration().corriger(django_apps, None)
+        self._migration().corriger(django_apps, None)
+        ligne.refresh_from_db()
+        assert ligne.lien == "/mes-achats/12"
+
+    def test_le_retour_de_la_migration_ne_touche_a_rien(self, ama):
+        """Le retour est neutre : il ne doit pas casser un lien correct."""
+        ligne = self._creer(ama, "/mes-achats/9")
+        operation = self._migration().Migration.operations[0]
+        assert operation.reverse_code is migrations.RunPython.noop
+        operation.reverse_code(django_apps, None)
+        ligne.refresh_from_db()
+        assert ligne.lien == "/mes-achats/9"

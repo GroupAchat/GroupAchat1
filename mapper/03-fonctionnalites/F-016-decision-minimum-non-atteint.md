@@ -1,6 +1,6 @@
 # F-016 — Le groupeur clôture, maintient ou renonce (minimum non atteint)
 
-Statut : **terminée** (2026-10-27). T2 de [[M-001-terminer-le-mvp]]. Correctif non commité au 2026-10-27 (branche `fix/F-016-decision-minimum-non-atteint`). Décisions : [[2026-10-27-decisions-f016]]. Rôle : Groupeur. Source : `CAHIER_DES_CHARGES.md` §4 (minimum non atteint, délai de décision) et §9 (cycle de vie) ; [[carte]] ; décisions Q6 et Q7 de [[2026-10-26-decisions-carte]].
+Statut : **terminée** (2026-10-27). T2 de [[M-001-terminer-le-mvp]]. Commitée `f8b78f9` (« Rend au groupeur les boutons maintenir et renoncer »), fusionnée dans `staging` (branche `fix/F-016-decision-minimum-non-atteint`). Décisions : [[2026-10-27-decisions-f016]]. Rôle : Groupeur. Source : `CAHIER_DES_CHARGES.md` §4 (minimum non atteint, délai de décision) et §9 (cycle de vie) ; [[carte]] ; décisions Q6 et Q7 de [[2026-10-26-decisions-carte]].
 Hors périmètre : C-009 (textes de la promesse, T6), F-034 (clôture forcée par l'administrateur), F-024/C-006 (décaissement et plafond du séquestre, T10).
 
 ## Le défaut

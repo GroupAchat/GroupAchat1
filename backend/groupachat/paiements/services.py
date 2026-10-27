@@ -112,7 +112,7 @@ def _notifier_paiement(campagne: Campagne, participation: Participation) -> None
             f"Votre code de retrait : {participation.code_retrait}."
         ),
         campagne=campagne,
-        lien=f"/participations/{participation.id}",
+        lien=f"/mes-achats/{participation.id}",
     )
     # Le suivi nominatif en temps réel : c'est ce qui remplace la liste
     # WhatsApp et les captures d'écran.
@@ -517,6 +517,7 @@ def executer_decaissement(decaissement: Decaissement, administrateur) -> Decaiss
             f"({decaissement.frais} FCFA de frais de plateforme)."
         ),
         campagne=campagne,
+        lien=f"/groupeur/campagnes/{campagne.id}",
     )
     return decaissement
 
@@ -557,7 +558,7 @@ def mettre_a_disposition(campagne: Campagne, point_remise: str = "") -> int:
                     f"Présentez votre code : {participation.code_retrait}."
                 ),
                 campagne=campagne,
-                lien=f"/participations/{participation.id}",
+                lien=f"/mes-achats/{participation.id}",
             )
         )
     Notification.objects.bulk_create(notifications)
@@ -601,6 +602,7 @@ def valider_retrait(campagne: Campagne, code: str, agent) -> Participation:
         titre="Retrait confirmé",
         message=f"Vous avez retiré votre part de « {campagne.titre} ». Merci !",
         campagne=campagne,
+        lien=f"/mes-achats/{participation.id}",
     )
 
     # Dernier colis remis : la campagne est terminée et la réputation du

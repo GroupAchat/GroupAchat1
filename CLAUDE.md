@@ -118,3 +118,39 @@ exécutés parce que le troisième motif manquait.
 
 Un test qui ne porte que sur un sujet reste dans son dossier ; ceux qui en
 traversent plusieurs vont dans `groupachat/tests/`.
+
+## Agents — `.claude/`
+
+Le dossier `.claude/` vient de `~/Boulot/claude-template/django`, **adapté à
+ce dépôt** : les conventions du modèle (identifiants anglais, couches
+`api/services/repositories`, 200 lignes par fichier, commits `type(scope):`
+en anglais, `.env.example`) ont été remplacées par celles d'ici. Ce sont
+`.claude/conventions/` qui décrivent la structure réelle ; un agent qui
+proposerait de la réorganiser se trompe de projet.
+
+- Vérifier : `bash .claude/skills/verify/scripts/check.sh complet`
+- Vérifier rapide (hook de fin) : `bash .claude/skills/verify/scripts/check.sh rapide`
+
+« Vérifier » lance les migrations (`makemigrations --check`), **la suite
+pytest entière — environ sept minutes** — et le typage des deux interfaces
+(`npm run verifier`). Le hook de fin ne lance que le mode rapide : les tests
+des sujets modifiés.
+
+Pilotage : `claude --agent chef-projet`. Il lit `mapper/` (contexte,
+architecture, backlog), propose une **mission** (objectif, tâches comptées,
+critère de fin), attend l'accord, puis enchaîne `archi-backend` /
+`archi-frontend` → `fonctionnalite` → `reviewer-tester` → `obsidian-mapper`.
+`regles-auditor` avant une fusion importante. Branches de travail depuis
+`staging`, fusion dans `staging` sur accord ; **`master` n'avance que par
+l'utilisateur** (le hook `branch_policy.py` l'impose).
+
+Vérifier ce qui existe sans rien construire : `claude --agent verificateur`
+(kit de vérification ; son profil `.claude/verification.md` est à remplir au
+premier lancement).
+
+@.claude/conventions/code-style.md
+@.claude/conventions/architecture.md
+@.claude/conventions/code-style-stack.md
+@.claude/conventions/testing.md
+@.claude/conventions/testing-stack.md
+@.claude/conventions/workflow.md

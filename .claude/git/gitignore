@@ -1,0 +1,89 @@
+# .gitignore de base du template — fusionné dans le .gitignore du projet par init.sh.
+# Règle complète : « Ce qui entre dans git » dans .claude/conventions/workflow.md.
+
+# Secrets et environnement (seul .env.example est versionné)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+credentials*.json
+service-account*.json
+
+# Claude, personnel
+CLAUDE.local.md
+CLAUDE.template.md
+.claude/settings.local.json
+
+# Dépendances installées
+node_modules/
+.pnpm-store/
+.venv/
+venv/
+
+# Caches
+__pycache__/
+*.py[co]
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+.turbo/
+.cache/
+*.tsbuildinfo
+
+# Fichier de test créé par le chef de projet après fusion dans staging (collection Postman)
+/test_*.json
+
+# Générés par un build
+dist/
+build/
+.next/
+out/
+.nuxt/
+.svelte-kit/
+staticfiles/
+generated/
+
+# Rapports de tests
+coverage/
+htmlcov/
+.coverage
+.nyc_output/
+playwright-report/
+test-results/
+
+# Bases locales, journaux, temporaires
+*.sqlite3
+*.db
+*.dump
+*.sql.gz
+*.log
+*.bak
+*.tmp
+*.swp
+
+# Fichiers envoyés par les utilisateurs
+media/
+uploads/
+
+# Système et éditeur
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# Flutter / Dart, Android, iOS
+.dart_tool/
+.pub-cache/
+.flutter-plugins
+.flutter-plugins-dependencies
+key.properties
+local.properties
+.gradle/
+**/ios/Pods/
+**/ios/.symlinks/

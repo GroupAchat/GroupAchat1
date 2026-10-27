@@ -31,3 +31,15 @@ backend/statiques/
 sauvegardes/
 
 *.log
+
+# ── Claude Code ─────────────────────────────────────────────────────────────
+# Réglages et notes personnels ; le reste de .claude/ est partagé.
+CLAUDE.local.md
+CLAUDE.template.md
+.claude/settings.local.json
+# Collection Postman créée par le chef de projet après fusion dans staging.
+/test_*.json
+
+# Bases locales de développement (données de démonstration ou réelles).
+*.sqlite3
+.ruff_cache/

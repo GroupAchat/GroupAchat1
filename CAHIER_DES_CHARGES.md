@@ -7,109 +7,133 @@ Plateforme web **mobile-first** d'intermédiation et de gestion d'achats groupé
 Au Togo, les achats groupés se font de manière informelle, principalement sur WhatsApp :
 
 - **Côté acheteur** : forte méfiance — peur de perdre son argent, sans garantie ni recours.
-- **Côté Organisateur d'Achat (OA)** : gestion chaotique — suivi manuel des listes, vérification fastidieuse des captures d'écran Mobile Money, risques d'impayés et de litiges à la livraison.
+- **Côté Organisateur d'Achat (OA)** : gestion chaotique — suivi manuel des listes, vérification fastidieuse des paiements Mobile Money, risques d'impayés et de litiges à la livraison.
 
 ## 2. Solution
 
-| | Garantie apportée |
+| Acteur | Garantie apportée |
 |---|---|
-| **Acheteur** | « Livré ou remboursé » : paiement sous **séquestre** et validation de livraison par **QR code unique**, généré après le paiement de la participation. |
-| **Organisateur d'Achat (OA)** | Outil de gestion automatisée : suivi des participations, gestion d'un article par groupage, preuve de livraison opposable et visibilité au-delà de ses cercles habituels. |
+| **Acheteur** | Promesse « livré ou remboursé » : paiement sous **séquestre** et validation de livraison par un **QR code unique**, généré après le paiement de sa participation. |
+| **OA** | Outil de gestion des groupages : suivi des participations, gestion d'un article par groupage, accès à un système de points et preuve de livraison. |
 
 ### Ce que la plateforme garantit — et ce qu'elle ne garantit pas
 
-Group Achat **met en relation, elle n'arbitre pas**. Elle garantit l'argent de la collecte : les fonds restent sous séquestre, et un groupage annulé rembourse.
-Elle ne se prononce pas sur la marchandise — ni sur sa qualité, ni sur sa conformité, ni sur ce qui s'est dit au point de retrait.
+Group Achat **met en relation, elle n'arbitre pas**. Elle garantit l'argent de la collecte : les fonds restent sous séquestre et un groupage annulé est remboursé selon les règles prévues.
 
-L'acheteur et l'OA ne se connaissent pas directement. Les échanges passent exclusivement par la plateforme au moyen du **chat privé payant**. Il n'existe plus de fil de discussion public sur la plateforme.
+Elle ne se prononce pas sur la qualité, la conformité ou la valeur de la marchandise. Les échanges entre l'acheteur et l'OA se font exclusivement dans le **chat privé payant**. Aucun chat public n'est disponible.
 
-Une plainte ou une question sur un produit passe donc par le chat privé avec l'OA. La plateforme n'arbitre pas le différend ; elle conserve les échanges et peut les modérer selon ses règles.
+L'acheteur et l'OA ne connaissent pas les coordonnées directes l'un de l'autre. L'exception concerne l'OA de grade **Or**, qui peut connaître l'acheteur uniquement au moment de la remise en main propre afin de confirmer la livraison.
 
-## 3. Les trois acteurs
+## 3. Les acteurs
 
 ### 🛒 L'acheteur
 
-1. **Accès** — explore le catalogue **librement, sans inscription**. Il crée son compte au moment de commander : **nom, prénom, numéro de téléphone, mot de passe** et **adresse e-mail facultative**. Un **code reçu par SMS** vérifie ensuite le numéro.
-2. **Découverte** — parcourt les groupages disponibles ou soumet une demande de produit dans l'espace communautaire. L'identité et les coordonnées de l'OA ne sont pas visibles.
-3. **Participation** — rejoint un groupage portant sur **un seul article** et règle sa part en ligne. L'argent part en séquestre et n'est jamais versé directement à l'OA.
-4. **Communication** — peut acheter l'abonnement **Contact Privé** pour communiquer avec l'OA dans un chat interne. L'acheteur doit avoir au moins **50 points** et payer **2 000 FCFA par mois**. Le nombre de messages n'est pas limité pendant la période active.
-5. **Choix de réception** — choisit la livraison à domicile ou le retrait dans une agence partenaire, selon les options proposées pour le groupage. La remise en main propre par l'OA est réservée aux groupages organisés par un OA de grade **Or**.
-6. **Réception** — après le paiement de sa part, reçoit un **QR code unique** lié à sa participation. Il le présente lors de la remise du colis ; le scan prouve la livraison et clôture sa commande.
+1. Explore le catalogue librement, sans inscription.
+2. Crée un compte au moment de commander : nom, prénom, numéro de téléphone, mot de passe et e-mail facultatif.
+3. Vérifie son numéro par code SMS.
+4. Rejoint un groupage portant sur **un seul article** et paie sa participation par Mobile Money.
+5. Reçoit un **QR code unique après confirmation du paiement**.
+6. Choisit une livraison à domicile, un retrait en agence partenaire ou, uniquement pour un OA Or, une remise en main propre.
+7. Peut souscrire à l'abonnement **Contact Privé** pour connaître l'OA et discuter avec lui.
+8. Présente son QR code lors de la remise. Le scan confirme la livraison et clôture sa commande.
 
 ### 🛍️ L'Organisateur d'Achat (OA)
 
-L'OA porte un ou plusieurs groupages. Chaque groupage concerne **un seul article**. Cet article peut comporter jusqu'à **trois images et une vidéo**.
-
-À l'inscription, l'OA choisit l'un des profils suivants :
+L'OA peut être :
 
 - **Commerçant** : boutique ou vendeur professionnel ;
 - **Organisateur individuel** : particulier ou initiateur de groupages.
 
-Par principe de confidentialité, **l'OA ne connaît pas l'identité ni les coordonnées personnelles de l'acheteur**, et l'acheteur ne connaît pas non plus l'identité ni les coordonnées directes de l'OA. Les échanges se font uniquement dans le chat privé de la plateforme.
+L'OA ne voit pas l'identité ni les coordonnées personnelles des acheteurs. Il utilise les références générées par la plateforme et communique avec les acheteurs via le chat privé lorsque ceux-ci disposent d'un abonnement actif.
 
-1. **Inscription et confiance** — s'inscrit, choisit son profil et soumet son dossier KYC : pièce d'identité, justificatifs liés à son profil, numéro Mobile Money et informations concernant ses livreurs ou responsables de remise lorsque cela est nécessaire.
-2. **Validation** — tant que l'administrateur n'a pas validé son dossier, l'OA n'accède pas à l'espace de création et de gestion des groupages.
-3. **Publication** — après validation, il achète un ticket de publication à **100 FCFA**, permettant de publier jusqu'à **10 groupages**. Chaque groupage présente un seul article, avec ses images, sa vidéo éventuelle, son prix, son minimum de pièces, sa date limite et ses options de réception.
-4. **Collecte** — suit la jauge et les participations au moyen d'identifiants internes. Il ne voit pas les coordonnées personnelles des acheteurs.
-5. **Communication** — répond aux acheteurs dans le chat privé, uniquement lorsque ceux-ci ont activé leur abonnement Contact Privé. Les messages sont illimités pendant la durée de l'abonnement.
-6. **Approvisionnement et livraison** — après la clôture du groupage, prépare l'article et le remet aux agences partenaires. Un OA de grade **Or** peut, en plus, remettre lui-même les colis et connaître l'acheteur au moment de la remise.
-7. **Réception des fonds** — les fonds sont libérés conformément aux règles du séquestre, après validation des conditions de livraison et déduction de la commission correspondant au grade de l'OA.
+1. S'inscrit, choisit son profil et dépose son dossier KYC.
+2. Attend la validation de l'administrateur avant d'accéder à l'espace OA.
+3. Paie un ticket de publication de **100 FCFA**, donnant droit à la création de **10 groupages**.
+4. Reçoit **2 points** au moment du paiement de ce ticket.
+5. Crée des groupages portant chacun sur un seul article, avec au maximum trois images et une vidéo.
+6. Suit les participations et la jauge sans accéder aux coordonnées personnelles des acheteurs.
+7. Prépare les colis et les remet à une agence partenaire, sauf s'il est OA Or.
+8. L'OA Or peut organiser lui-même la livraison avec ses propres livreurs enregistrés et connaître l'acheteur au moment de la remise.
 
 ### 🛡️ L'administrateur
 
-1. Vérifie le dossier KYC de l'OA, son profil et les justificatifs associés.
-2. Vérifie les informations déclarées sur les livreurs ou responsables de remise des OA individuels.
-3. Valide ou refuse l'accès de l'OA à son espace de gestion.
-4. Supervise et modère la plateforme ainsi que les chats privés.
-5. Consigne les fonds sur le compte séquestre, contrôle les remboursements et libère les montants selon les règles prévues.
-6. Contrôle les commissions, les tickets de publication, les points et les grades.
-7. Supervise les agences partenaires et les opérations de livraison.
-8. Clôture les participations lorsque le QR code est scanné ou lorsque les règles de livraison réputée acquise s'appliquent.
+L'administrateur :
+
+- vérifie les dossiers KYC des OA ;
+- valide, refuse ou suspend un compte OA ;
+- contrôle les tickets, points, grades et commissions ;
+- supervise le séquestre, les remboursements et les décaissements ;
+- enregistre les fournisseurs déclarés par les OA individuels débutants lorsque le dispositif de sponsoring s'applique ;
+- vérifie les livreurs déclarés par les OA Or ;
+- supervise les agences partenaires ;
+- modère les chats privés ;
+- vérifie que chaque livraison est confirmée par le scan du QR code.
 
 ## 4. Article et groupage
 
 - **Un groupage correspond à un seul article.**
-- Un article peut avoir au maximum **trois images et une vidéo**.
-- La vidéo est facultative et doit disposer d'une image d'aperçu si le format technique l'exige.
-- La vignette du catalogue utilise une image de l'article.
-- Le prix, le minimum de pièces, la date limite et les modalités de réception sont définis au niveau du groupage.
-- Un acheteur peut participer à plusieurs groupages, mais une participation concerne un article et un groupage déterminés.
-- **Une participation payée ne peut pas être annulée par l'acheteur.** Elle ne peut prendre fin que par la livraison, le remboursement d'un groupage annulé ou l'application d'une règle de clôture prévue par le présent cahier des charges.
+- Un article peut contenir au maximum **trois images et une vidéo**.
+- La vidéo est facultative.
+- La fiche du groupage indique le prix, le minimum de pièces, la date limite et les modalités de livraison.
+- Le QR code de livraison est généré uniquement après confirmation du paiement de la participation.
+- Une participation payée ne peut pas être annulée par l'acheteur.
 
-## 5. Profils des Organisateurs d'Achat
+## 5. Modèle économique
 
-| Profil | Description | Justificatifs indicatifs |
-|---|---|---|
-| **Commerçant** | Boutique ou vendeur professionnel proposant des articles dans le cadre de son activité. | Pièce d'identité, justificatif de l'activité ou de la boutique, numéro Mobile Money vérifié. |
-| **Organisateur individuel** | Particulier ou initiateur de groupages organisant des achats ponctuels ou communautaires. | Pièce d'identité, numéro Mobile Money vérifié et informations sur le ou les livreurs/responsables de remise. |
+### Ticket de publication OA
 
-## 6. Modèle économique et monétisation
+- Le ticket coûte **100 FCFA**.
+- Un ticket permet de créer **10 groupages**.
+- Le paiement du ticket rapporte **2 points à l'OA**.
+- Le ticket et le quota de créations sont enregistrés dans le compte de l'OA.
 
-- **Ticket de publication** : **100 FCFA** pour publier jusqu'à **10 groupages**. Le paiement d'un ticket rapporte **2 points** à son acheteur.
-- **Commission sur les ventes** : la plateforme prélève une commission sur chaque groupage abouti selon le grade de l'OA :
-  - **Bronze : 4 %** ;
-  - **Argent : 3 %** ;
-  - **Or : 2 %**.
-- **Chat privé — Contact Privé** : l'acheteur doit avoir au moins **50 points** et payer **2 000 FCFA par mois** pour débloquer le chat privé avec un OA.
-- **Durée de l'accès** : l'abonnement est mensuel. Pendant sa période de validité, l'acheteur peut échanger avec l'OA dans le cadre prévu par la plateforme, sans limite de messages.
-- **Portée du chat** : l'abonnement donne accès au chat privé avec l'OA concerné et à ses groupages accessibles dans la plateforme, sans révéler les coordonnées directes de l'une ou l'autre partie.
-- **Aucun chat public** : la plateforme ne comporte plus de fil de discussion public sous les groupages. Toute communication avec l'OA passe par le chat privé payant.
-- **Acheteur** : aucun frais obligatoire ne lui est facturé pour participer à un groupage, hors abonnement Contact Privé et frais de livraison éventuellement affichés.
-- **Transparence** : le prix de l'abonnement, le taux de commission, les frais de livraison et le montant net revenant à l'OA sont présentés avant validation.
+### Commission sur les groupages aboutis
 
-## 7. Parrainage, sponsoring, points et grades
+| Grade de l'OA | Commission plateforme |
+|---|---:|
+| **Bronze** | **4 %** |
+| **Argent** | **3 %** |
+| **Or** | **2 %** |
 
-### Système de points
+### Abonnement Contact Privé de l'acheteur
 
-Les règles de points sont configurables par l'administrateur. La règle déjà définie est la suivante :
+- L'abonnement est payé par **l'acheteur**, et non par l'OA.
+- L'acheteur doit avoir au moins **50 points** pour souscrire.
+- Le prix est de **2 000 FCFA par mois**.
+- L'abonnement permet de connaître l'OA concerné et de discuter avec lui dans le chat privé de la plateforme.
+- Le nombre de messages est **illimité** pendant la période d'abonnement.
+- Les coordonnées directes, notamment le numéro de téléphone et l'adresse e-mail, ne sont pas automatiquement révélées.
+- L'accès au chat est lié aux OA et aux groupages autorisés par la plateforme.
 
-- **Paiement d'un ticket de publication** : **2 points**.
+### Réduction de livraison
 
-Les points peuvent également être attribués pour d'autres actions — achats, parrainages, création de groupages ou utilisation du chat — mais les montants correspondants restent à définir avant leur implémentation.
+- Lorsqu'un acheteur atteint **100 points**, il bénéficie d'une **réduction de 50 % sur ses frais de livraison**.
+- La réduction est appliquée selon les conditions affichées au moment du choix de la livraison.
+- Elle ne s'applique pas au prix de l'article et ne transforme pas la livraison en service gratuit si des frais minimums sont prévus.
 
-### Grades et commissions
+## 6. Système de points, parrainage et grades
 
-| Grade | Seuil de points | Commission sur les groupages aboutis |
+### Attribution des points
+
+| Action | Bénéficiaire | Points |
+|---|---|---:|
+| Paiement d'un ticket de publication de 100 FCFA | OA | **2 points** |
+| Achat et paiement d'un article | Acheteur | **5 points** |
+| Parrainage réussi | Acheteur parrain | **2 points** |
+| Souscription à un abonnement Contact Privé | Acheteur | **Points attribués selon la règle configurée par l'administrateur** |
+| Création d'un groupage au moyen d'un ticket payé | OA | **2 points**, inclus dans la règle du ticket |
+
+Le système doit empêcher qu'une même action soit comptée plusieurs fois pour la même opération.
+
+### Parrainage acheteur
+
+Un acheteur peut publier ou partager le lien d'un article ou d'un groupage. Lorsque de nouveaux acheteurs rejoignent le groupage grâce à ce lien et paient leur participation, le parrain reçoit **2 points par parrainage validé**, selon les règles anti-fraude de la plateforme.
+
+Un parrainage n'est validé qu'après une participation réellement payée. Les clics, inscriptions seules ou paiements annulés ne donnent pas droit aux points.
+
+### Grades OA
+
+| Grade | Seuil de points | Commission |
 |---|---:|---:|
 | **Bronze** | **250 points** | **4 %** |
 | **Argent** | **400 points** | **3 %** |
@@ -117,94 +141,117 @@ Les points peuvent également être attribués pour d'autres actions — achats,
 
 Les conditions de perte ou de rétrogradation d'un grade ne sont pas encore définies. Tant qu'elles ne sont pas validées, un grade obtenu est conservé.
 
-### Sponsoring des OA individuels
+Les principaux avantages de l'OA Or sont :
 
-Le sponsoring concerne les **OA individuels qui n'ont pas encore atteint le grade Bronze**. Il vise à éviter qu'un OA débutant parte directement avec l'argent des acheteurs sans dispositif de confiance suffisant.
+- commission réduite à 2 % ;
+- possibilité de gérer directement la livraison avec ses livreurs enregistrés ;
+- possibilité de remettre lui-même les colis ;
+- possibilité de connaître l'acheteur uniquement lors de la remise ;
+- suivi de la livraison par QR code obligatoire.
 
-Avant qu'un OA individuel atteigne Bronze :
+## 7. Dispositif de sponsoring des OA individuels débutants
 
-- l'administrateur demande les informations sur le ou les livreurs ou responsables de remise de l'OA ;
-- ces personnes sont vérifiées et enregistrées dans le dossier de l'OA ;
-- la commande et la remise peuvent être suivies par la plateforme et les agences partenaires ;
-- les conditions de paiement ou de libération des fonds sont contrôlées par l'administrateur jusqu'à l'obtention du grade Bronze.
+Le **sponsoring** est un dispositif de sécurité distinct du fonctionnement de l'OA Or.
 
-Le fonctionnement détaillé du sponsoring, les personnes éligibles et les éventuels bonus associés devront être précisés dans les règles administratives avant la mise en production.
+Il concerne les **OA individuels qui n'ont pas encore atteint le grade Bronze**, afin d'éviter qu'un nouvel OA puisse recevoir et utiliser librement l'argent des acheteurs sans contrôle suffisant.
+
+Dans ce dispositif :
+
+1. l'OA individuel débutant déclare le fournisseur auprès duquel il compte acheter la marchandise ;
+2. l'administrateur vérifie le fournisseur et les informations nécessaires à la commande ;
+3. la plateforme peut contrôler ou effectuer le paiement de la marchandise auprès du fournisseur déclaré ;
+4. les fonds des acheteurs restent sous le contrôle de la plateforme jusqu'à la confirmation des étapes prévues ;
+5. la livraison est effectuée par une agence partenaire ou par un livreur enregistré, selon la décision de la plateforme ;
+6. le paiement ou le décaissement est libéré selon la confirmation de la commande et de la livraison par QR code.
+
+Le sponsoring est applicable aux OA individuels débutants tant qu'ils n'ont pas atteint le grade Bronze. Les modalités précises de paiement du fournisseur, les justificatifs exigés et les contrôles administratifs sont définis par la plateforme avant la mise en production.
+
+Un OA Or n'est pas soumis au passage par l'agence partenaire : il peut gérer la livraison avec ses propres livreurs, à condition que ces livreurs soient déclarés et vérifiés par l'administrateur. La plateforme doit seulement enregistrer le scan du QR code afin de confirmer que le colis a été remis.
 
 ## 8. Règles métier
 
-- **Confidentialité par défaut** : l'OA et l'acheteur ne voient pas les coordonnées directes l'un de l'autre.
-- **Intermédiation obligatoire** : les échanges passent par le chat privé de la plateforme. Aucun chat public n'est disponible.
+- **Séquestre** : les fonds d'une participation restent consignés selon le cycle du groupage et les règles de sponsoring applicables.
 - **Participation irrévocable** : une participation payée ne peut pas être annulée par l'acheteur.
-- **QR code de livraison** : le QR code est généré **après confirmation du paiement de la participation**. Il est unique pour le couple groupage/article et acheteur. Le scan lors de la remise valide la réception et constitue la preuve de livraison.
-- **Séquestre** : les fonds restent consignés jusqu'à la clôture prévue et ne sont libérés ou remboursés que selon les règles du groupage.
+- **QR code** : le QR code est généré après le paiement confirmé de la participation. Il est lié à l'acheteur, au groupage et à l'article.
+- **Validation de livraison** : le QR code est scanné lors de la remise. Un QR déjà utilisé, invalide ou appartenant à un autre groupage doit être refusé.
+- **Preuve de livraison** : le scan enregistre la date, l'heure, le lieu ou le responsable de remise, puis marque la participation comme livrée.
+- **Anonymat** : l'OA et l'acheteur ne voient pas les coordonnées directes l'un de l'autre. L'OA Or ne peut connaître l'acheteur qu'au moment de la remise.
 - **Clôture** : à la date limite, la collecte se ferme automatiquement et le groupage quitte le catalogue.
-- **Minimum non atteint** : le groupage n'est pas annulé automatiquement. L'argent reste consigné pendant le délai de décision de sept jours. Sans réponse de l'OA, les participants sont intégralement remboursés.
-- **Historique** : un groupage sorti du catalogue reste consultable par les participants concernés.
-- **Inscription** : le numéro de téléphone est l'identifiant et doit être vérifié par SMS. Aucun compte n'est nécessaire pour consulter le catalogue.
-- **Distribution** : les OA de grade Bronze et Argent remettent les colis aux agences partenaires. Seul un OA de grade **Or** peut remettre lui-même les colis et connaître l'acheteur au moment de la livraison.
-- **Colis non récupéré** : relances à J+3 et J+7 ; au bout de 14 jours après la mise à disposition, la livraison est réputée acquise et le dossier se clôt.
-- **Frais de remboursement** : en cas de groupage annulé, les frais d'opérateur du remboursement sont à la charge de la plateforme.
-- **Demandes communautaires** : un acheteur peut publier une demande de produit et les autres peuvent marquer leur intérêt. Les OA voient les demandes classées par intérêt, sans obtenir les coordonnées personnelles des intéressés.
+- **Minimum non atteint** : le groupage n'est pas annulé automatiquement. L'argent reste consigné pendant sept jours, le temps que l'OA décide de maintenir ou d'abandonner la commande.
+- **Absence de décision** : après sept jours sans réponse de l'OA, le groupage est annulé et les acheteurs sont intégralement remboursés.
+- **Historique** : les participants conservent l'accès à l'historique du groupage, de leur participation, du chat et de la livraison.
+- **Colis non récupéré** : relances à J+3 et J+7 ; après 14 jours suivant la mise à disposition, la livraison est réputée acquise selon les règles applicables.
+- **Frais de remboursement** : les frais opérateur d'un remboursement sont pris en charge par la plateforme.
+- **Aucun chat public** : toutes les communications avec l'OA passent par le chat privé payant.
 
-## 9. Options de livraison et de réception
+## 9. Options de livraison
 
-Les acheteurs disposent des options suivantes selon le groupage :
+1. **Livraison à domicile** par un partenaire logistique autorisé, notamment Gozem ou La Poste ;
+2. **Retrait dans une agence ou un point relais partenaire** ;
+3. **Remise directe par un OA Or** ou par un livreur enregistré par cet OA.
 
-1. **Livraison à domicile** via les partenaires logistiques autorisés, notamment Gozem ou La Poste ;
-2. **Retrait en agence ou point relais partenaire** ;
-3. **Remise en main propre par l'OA**, uniquement lorsque l'OA est de grade **Or**.
+Pour un OA Bronze, Argent ou un OA individuel sous le dispositif de sponsoring, les colis sont remis à une agence partenaire ou à un livreur autorisé par la plateforme.
 
-Pour les OA Bronze et Argent, les agences partenaires reçoivent les colis et assurent la remise aux acheteurs. L'OA ne connaît pas l'identité de l'acheteur.
+Pour un OA Or :
 
-Pour un OA Or, la remise en main propre est autorisée. L'OA Or peut connaître l'acheteur uniquement au moment de la livraison, afin de vérifier la remise du colis avec le QR code. Cette exception ne donne pas accès aux coordonnées permanentes de l'acheteur dans le tableau de bord.
+- l'OA peut organiser lui-même la livraison ;
+- ses livreurs doivent être déclarés et vérifiés ;
+- la plateforme enregistre l'identité du livreur responsable de la remise ;
+- le QR code doit obligatoirement être scanné ;
+- l'OA peut connaître l'acheteur au moment de la remise uniquement ;
+- l'OA ne reçoit pas les coordonnées permanentes de l'acheteur dans son tableau de bord.
 
-Le scan du QR code est obligatoire pour valider la livraison. Les frais, délais et zones couvertes sont affichés avant le paiement.
+Pour la livraison à domicile, l'adresse et le numéro nécessaires sont transmis uniquement au partenaire logistique autorisé.
 
 ## 10. Sécurité et garanties
 
-- **Paiements sécurisés** : les transactions sont protégées et les fonds restent sous séquestre.
-- **Preuve de livraison par QR code** : le QR code est généré après le paiement. Il est scanné à la remise du colis pour prouver que l'acheteur a bien été livré.
-- **Garantie acheteur** : l'acheteur bénéficie de la promesse « livré ou remboursé », dans les limites des règles de séquestre et d'annulation.
-- **Logistique partenaire** : les agences partenaires sont sélectionnées et encadrées par contrat afin de réduire les risques de retard, de perte ou de mauvaise remise.
-- **Confidentialité** : les coordonnées des acheteurs et des OA ne sont pas affichées aux autres parties. Les données de livraison sont limitées aux acteurs autorisés.
-- **Modération du chat** : le chat privé peut être signalé, modéré et conservé pour des raisons de sécurité et de conformité.
+- Paiements protégés et fonds sous séquestre.
+- QR code unique généré après paiement.
+- QR code à usage unique et refus des scans invalides ou déjà utilisés.
+- Promesse « livré ou remboursé » dans les limites des règles du groupage.
+- Vérification des OA, fournisseurs, agences partenaires et livreurs déclarés.
+- Conservation de la preuve de scan avec date, heure et responsable de remise.
+- Protection des données KYC, des coordonnées et des conversations privées.
+- Modération et conservation des chats privés en cas de signalement ou de contrôle.
 
 ## 11. Encadrement juridique et administratif
 
-- Rédaction des CGU, CGV, politique de confidentialité et contrats avec les OA, les agences partenaires et les livreurs.
-- Définition des critères d'approbation, de validation, de suspension et de retrait applicables aux OA et aux groupages.
-- Conservation sécurisée des pièces KYC et traçabilité des décisions administratives.
-- Encadrement du sponsoring des OA individuels n'ayant pas atteint Bronze.
-- Formalisation des obligations de livraison, de preuve de remise, de traitement des incidents et de protection des données.
-- Présentation claire des prix, commissions, abonnement Contact Privé, frais, délais, garanties et limites de responsabilité.
+- Rédaction des CGU, CGV et politique de confidentialité.
+- Contrats avec les OA, fournisseurs, agences partenaires et livreurs.
+- Définition des règles de validation, suspension et retrait des OA.
+- Encadrement du sponsoring des OA individuels sous Bronze.
+- Définition des conditions de paiement des fournisseurs déclarés.
+- Traçabilité des paiements, remboursements, scans QR et décisions administratives.
+- Information claire sur les prix, commissions, abonnement, points, réductions et frais de livraison.
 
 ## 12. Comptes et rôles
 
 | Rôle | Accès |
 |---|---|
-| **Acheteur** | Dès le numéro vérifié : commander, choisir une option de livraison, suivre ses participations, gagner des points et souscrire au chat privé s'il possède au moins 50 points. |
-| **Organisateur d'Achat (OA)** | Après validation KYC : créer des groupages, suivre les participations, gérer l'approvisionnement et la remise selon son grade, consulter ses points et sa commission. |
-| **Administrateur** | Console séparée : validation KYC, gestion du sponsoring, supervision des fonds, commissions, points, grades, chats et agences partenaires. |
+| **Acheteur** | Consulter le catalogue, participer à un groupage, recevoir un QR code, gagner des points, parrainer et souscrire au chat privé à partir de 50 points. |
+| **Organisateur d'Achat (OA)** | Après validation KYC : créer des groupages, suivre les participations, déclarer un fournisseur, gérer la préparation et organiser la livraison selon son grade. |
+| **Administrateur** | Valider les OA, fournisseurs et livreurs, gérer le sponsoring, les fonds, les remboursements, les points, les grades, les chats et les partenaires. |
 
-Un acheteur peut demander à devenir OA à tout moment. Il choisit son profil, dépose son dossier KYC et attend la validation sans perdre son historique d'acheteur.
+Un acheteur peut demander à devenir OA sans perdre son historique d'acheteur.
 
 ## 13. Mode prototype
 
-Cette première version est une **maquette fonctionnelle**. Aucun flux d'argent, d'envoi SMS ou de livraison réelle n'est branché. Les services tiers sont simulés derrière des interfaces remplaçables :
+Cette première version est une maquette fonctionnelle. Les services tiers sont simulés :
 
 | Service | Simulation |
 |---|---|
-| **SMS** | Le code de vérification s'affiche à l'écran au lieu d'être envoyé. |
-| **Paiement Mobile Money** | Un bouton TMoney ou Flooz marque instantanément le paiement comme réussi. |
-| **Séquestre** | La consignation, la libération et le remboursement sont pilotés par la console d'administration. |
-| **Ticket de publication** | Un paiement simulé de 100 FCFA crédite un quota de 10 groupages et 2 points. |
-| **Commission** | Le taux de 4 %, 3 % ou 2 % est calculé selon le grade de l'OA, sans prélèvement réel. |
-| **Chat privé** | Un paiement simulé de 2 000 FCFA active l'abonnement mensuel, sous réserve d'un solde minimum de 50 points. Les messages sont illimités. |
-| **QR de livraison** | Le QR code est généré après le paiement simulé et son scan valide la livraison. |
-| **Livraison** | Les agences partenaires sont simulées ; la remise directe est autorisée uniquement pour un OA Or. |
-| **Décaissement OA** | Action administrateur enregistrée sans ordre de virement réel. |
+| **SMS** | Le code de vérification s'affiche à l'écran. |
+| **Paiement Mobile Money** | Un bouton marque le paiement comme réussi. |
+| **Séquestre** | La consignation, le contrôle, la libération et le remboursement sont pilotés par la console d'administration. |
+| **Ticket OA** | Un paiement simulé de 100 FCFA donne 10 créations de groupages et 2 points. |
+| **Chat privé** | Un paiement simulé de 2 000 FCFA active l'abonnement mensuel de l'acheteur si celui-ci possède au moins 50 points. |
+| **Points** | Les points d'achat, de parrainage, d'abonnement et de ticket sont calculés dans la base. |
+| **QR livraison** | Le QR est généré après paiement et son scan confirme la remise. |
+| **Agence partenaire** | L'agence et la remise sont simulées. |
+| **Sponsoring** | Le fournisseur déclaré, le contrôle de la commande et la libération sont simulés par l'administrateur. |
+| **Livraison OA Or** | Le livreur enregistré et le scan QR sont simulés sans service logistique réel. |
 
-Le code métier — séquestre, remboursements, commissions, points, grades, sponsoring, QR de livraison, confidentialité, chat payant et règles de livraison — est écrit pour de vrai ; seule l'exécution des services tiers est factice.
+Le code métier — séquestre, remboursements, commissions, points, grades, sponsoring, QR de livraison, confidentialité, chat payant et réduction de livraison — est écrit pour de vrai ; seule l'exécution des services tiers est factice.
 
 ## 14. Chat privé payant
 
@@ -212,12 +259,11 @@ La plateforme ne comporte **aucun chat public**.
 
 - L'acheteur doit avoir au moins **50 points**.
 - Il paie **2 000 FCFA** pour activer un abonnement mensuel.
-- L'abonnement permet de discuter avec l'OA concerné pendant un mois.
-- Le nombre de messages est **illimité** pendant la période active.
-- Les échanges se font dans la plateforme, sans partage automatique des numéros, adresses e-mail ou coordonnées directes.
-- L'accès au chat est lié à l'OA et à ses groupages accessibles, selon les règles de la plateforme.
-- Les messages peuvent être signalés, modérés et conservés par l'administrateur.
-- À l'expiration de l'abonnement, le chat passe à l'état expiré et l'acheteur doit renouveler son abonnement pour poursuivre les échanges.
+- L'abonnement est payé par l'acheteur pour discuter avec l'OA et obtenir les informations autorisées sur celui-ci.
+- Les messages sont illimités pendant le mois actif.
+- Le chat est hébergé et modéré par la plateforme.
+- Les coordonnées personnelles ne sont pas automatiquement communiquées.
+- À l'expiration, le chat passe à l'état `chat_expire` et l'acheteur doit renouveler son abonnement.
 
 Cycle du chat :
 
@@ -227,28 +273,30 @@ non_achete → paiement_confirme → chat_actif → chat_expire ou chat_ferme
 
 ## 15. Notifications
 
-Les participants sont notifiés lors du paiement enregistré, de la génération du QR code, du financement du groupage, de la mise à disposition de l'article, de la confirmation de l'option de livraison, du suivi logistique, du scan du QR code, de la livraison confirmée, de l'annulation et du remboursement, ainsi que des nouveaux messages privés.
+Les acheteurs sont notifiés lors du paiement, de la génération du QR code, du financement du groupage, de la disponibilité de l'article, du choix de livraison, du suivi logistique, du scan QR, de la livraison confirmée, du remboursement et des nouveaux messages privés.
 
-L'OA est notifié de chaque participation, de l'atteinte du minimum, de la décision KYC, de son ticket de publication, de ses points, de son grade, de sa commission, de la livraison et des nouveaux messages du chat privé.
+Les OA sont notifiés des paiements reçus, de l'atteinte du minimum, de la validation KYC, du ticket, des points, du grade, de la commission, de la commande fournisseur, de la livraison et des nouveaux messages privés.
 
-## 16. Cycle de vie d'un groupage et d'une participation
+## 16. Cycles de vie
+
+### Groupage
 
 ```
-brouillon → en_cours → date_limite : clôture_automatique
+brouillon → en_cours → date_limite : cloture_automatique
    │
-   ├── minimum atteint ───────→ financee → approvisionnement → livraison → terminee
+   ├── minimum atteint ───────→ finance → approvisionnement → livraison → termine
    │
    └── minimum non atteint ──→ minimum_non_atteint
                                   │
-                                  ├── l'OA maintient → financee → …
-                                  ├── l'OA renonce → annulee → remboursements
-                                  └── silence 7 jours → annulee → remboursements
+                                  ├── OA maintient → finance → …
+                                  ├── OA renonce → annule → remboursements
+                                  └── silence 7 jours → annule → remboursements
 ```
 
-Une participation suit le cycle suivant :
+### Participation et QR code
 
 ```
-en_attente → payee → qr_genere → preparee →
+en_attente → paiement_confirme → qr_genere → preparee
    ├── agence_partenaire
    ├── livraison_domicile
    └── remise_oa_or
@@ -263,10 +311,10 @@ Une participation payée ne possède aucun état d'annulation à la demande de l
 |---|---|
 | API | Django 5.2 + Django REST Framework |
 | Base | PostgreSQL 17 (SQLite en secours hors déploiement) |
-| Front | React 19 + Vite + Tailwind CSS — deux applications : boutique et console d'administration |
+| Front | React 19 + Vite + Tailwind CSS — boutique et console d'administration |
 | Exécution | Docker Compose (`base`, `api`, `boutique`, `admin`) |
-| Configuration | un seul `.env` à la racine, lu par Django, Vite et Compose |
+| Configuration | Un seul `.env` à la racine, lu par Django, Vite et Compose |
 | Médias | Cloudinary : maximum 3 images et 1 vidéo par article |
-| Authentification | Numéro de téléphone vérifié par SMS ; les services SMS et Mobile Money sont simulés en prototype |
+| Authentification | Numéro de téléphone vérifié par SMS ; SMS et Mobile Money simulés dans le prototype |
 
-Le français est la langue du code : noms de modèles, de champs, de routes et de variables. Le terme métier à utiliser est **Organisateur d'Achat (OA)** ; l'ancien terme « groupeur » ne doit plus être utilisé, sauf dans un contexte historique ou de migration.
+Le français est la langue du code : noms de modèles, champs, routes et variables. Le terme métier à utiliser est **Organisateur d'Achat (OA)** ; l'ancien terme « groupeur » ne doit plus être utilisé, sauf dans un contexte historique ou de migration.

@@ -254,7 +254,10 @@ export interface DossierKYC {
   type_piece: "cni" | "passeport" | "carte_consulaire";
   numero_piece: string;
   /** Adresses protégées, servies par une vue qui vérifie qui demande.
-   *  Les champs `piece_recto`/`piece_verso` sont en écriture seule côté API. */
+   *  Les champs `piece_recto`/`piece_verso` sont en écriture seule côté API :
+   *  le dépôt (`POST /comptes/dossier/`) est en multipart et exige les deux
+   *  (JPEG, PNG ou WebP, 8 Mo au plus). Dossier antérieur au dépôt de
+   *  pièces : liens à `null`. */
   lien_recto: string | null;
   lien_verso: string | null;
   numero_mobile_money: string;

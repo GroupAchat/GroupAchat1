@@ -86,7 +86,9 @@ class DossierKYCAdminVueEnsemble(
                 if valide
                 else f"Votre dossier a été refusé — {dossier.motif_rejet}"
             ),
-            lien="/groupeur",
+            # Un refus mène à l'écran où l'on renvoie ses pièces ; « /groupeur »
+            # est fermé tant que le dossier n'est pas validé (C-038).
+            lien="/groupeur" if valide else "/profil/devenir-groupeur",
         )
         return Response(DossierKYCSerialiseur(dossier).data)
 

@@ -16,10 +16,13 @@ un en attente, pour montrer la porte fermée du KYC.
 from __future__ import annotations
 
 from datetime import timedelta
+from io import BytesIO
 
+from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
+from PIL import Image, ImageDraw
 
 from groupachat.catalogue.models import (
     Campagne,
@@ -37,6 +40,7 @@ from groupachat.comptes.models import (
     Reputation,
     Utilisateur,
 )
+from groupachat.comptes.pieces_kyc import supprimer_fichiers
 from groupachat.echanges.models import (
     Commentaire,
     DemandeProduit,
@@ -58,7 +62,7 @@ from groupachat.paiements.services import (
 # et lui seul, qui décide si un redéploiement remet la démonstration à plat.
 # Laissé inchangé, les nouveautés n'apparaîtraient jamais sur un serveur déjà
 # démarré une fois.
-VERSION_DEMO = "5"
+VERSION_DEMO = "6"
 
 MOT_DE_PASSE = "demo2026Groupe"
 
@@ -165,6 +169,16 @@ class Command(BaseCommand):
             MediaProduit, Produit,
             DossierKYC, Reputation, CodeVerification,
         )
+        # Les pièces vivent sur le disque : supprimer les lignes ne les efface
+        # pas, et des pièces d'identité resteraient orphelines, sans dossier
+        # pour les référencer. ⚠️ Cette commande vide TOUTE la base : elle ne
+        # doit jamais tourner sur des données réelles (CHARGER_DEMO=0 en
+        # production).
+        for dossier in DossierKYC.objects.all():
+            supprimer_fichiers(
+                dossier.piece_recto.storage,
+                [dossier.piece_recto.name, dossier.piece_verso.name],
+            )
         for modele in enchainement:
             modele.objects.all().delete()
 
@@ -218,12 +232,34 @@ class Command(BaseCommand):
             "90009988", MOT_DE_PASSE, nom="Doe", prenom="Afi",
             role=Utilisateur.Role.GROUPEUR, telephone_verifie=True,
         )
-        DossierKYC.objects.create(
+        dossier = DossierKYC.objects.create(
             utilisateur=en_attente, type_piece=DossierKYC.TypePiece.PASSEPORT,
             numero_piece="TG-P-220199", numero_mobile_money="90009988",
             nom_commerce="Afi Distribution",
         )
+        # Sans pièce, la console d'administration n'aurait rien à montrer
+        # d'un dossier à examiner.
+        self._pieces_fictives(dossier)
         return valide, en_attente
+
+    @staticmethod
+    def _pieces_fictives(dossier: DossierKYC) -> None:
+        """Deux images factices, passées par le stockage local normal.
+
+        Ni photo ni donnée réelle : un aplat gris portant la mention « PIECE FICTIVE ».
+        Elles vont sous `MEDIA_ROOT/kyc/`, jamais chez Cloudinary.
+        """
+        for champ, mention in (("piece_recto", "RECTO"), ("piece_verso", "VERSO")):
+            image = Image.new("RGB", (320, 200), (200, 205, 210))
+            ImageDraw.Draw(image).text(
+                (20, 90), f"PIECE FICTIVE - {mention}", fill=(60, 60, 60)
+            )
+            tampon = BytesIO()
+            image.save(tampon, format="PNG")
+            getattr(dossier, champ).save(
+                "piece.png", ContentFile(tampon.getvalue()), save=False
+            )
+        dossier.save(update_fields=["piece_recto", "piece_verso"])
 
     def _second_groupeur(self, admin) -> Utilisateur:
         """Un deuxième groupeur validé, avec un passé.

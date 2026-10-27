@@ -22,7 +22,7 @@ from django.utils import timezone
 
 from groupachat.catalogue.models import Campagne
 from groupachat.commandes.models import Participation
-from groupachat.comptes.models import DossierKYC
+from groupachat.comptes.models import DossierKYC, Utilisateur
 from groupachat.echanges.models import Notification
 from groupachat.paiements.services import cloturer_les_echus
 
@@ -191,6 +191,20 @@ class TestParcoursComplet:
             {"decision": "valider"}, format="json",
         )
 
+        # ... et un refus, dont le lien n'est pas celui de la validation (C-038).
+        refuse = Utilisateur.objects.create_user(
+            "93004455", "mdpSolide2026", nom="Refus", prenom="Kodjo",
+            telephone_verifie=True, role=Utilisateur.Role.GROUPEUR,
+        )
+        dossier_refuse = DossierKYC.objects.create(
+            utilisateur=refuse, type_piece=DossierKYC.TypePiece.CNI,
+            numero_piece="CNI-3", numero_mobile_money="93004455",
+        )
+        connecte(administrateur).post(
+            f"/api/admin/dossiers/{dossier_refuse.id}/decision/",
+            {"decision": "rejeter", "motif": "Photo floue"}, format="json",
+        )
+
         genres = set(Notification.objects.values_list("genre", flat=True))
         # Le parcours doit réellement produire les genres qu'on prétend contrôler.
         assert genres >= {
@@ -205,6 +219,34 @@ class TestParcoursComplet:
                 f"« {notification.titre} » ({notification.genre}) mène à "
                 f"{notification.lien}, que la boutique ne sert pas"
             )
+
+
+class TestLiensDuDossierKyc:
+    """C-038 : un refus ne renvoie pas vers un espace qui reste fermé."""
+
+    def test_le_refus_pointe_vers_le_depot_des_pieces(
+        self, connecte, administrateur, groupeur_en_attente
+    ):
+        dossier = DossierKYC.objects.get(utilisateur=groupeur_en_attente)
+        connecte(administrateur).post(
+            f"/api/admin/dossiers/{dossier.id}/decision/",
+            {"decision": "rejeter", "motif": "Pièce illisible"}, format="json",
+        )
+
+        lien = _lien(groupeur_en_attente, "kyc_decide")
+        assert lien == "/profil/devenir-groupeur"
+        assert _route_existe(lien)
+
+    def test_la_validation_pointe_toujours_vers_l_espace_groupeur(
+        self, connecte, administrateur, groupeur_en_attente
+    ):
+        dossier = DossierKYC.objects.get(utilisateur=groupeur_en_attente)
+        connecte(administrateur).post(
+            f"/api/admin/dossiers/{dossier.id}/decision/",
+            {"decision": "valider"}, format="json",
+        )
+
+        assert _lien(groupeur_en_attente, "kyc_decide") == "/groupeur"
 
 
 def _financer_et_livrer(connecte, administrateur, campagne, ama) -> dict:

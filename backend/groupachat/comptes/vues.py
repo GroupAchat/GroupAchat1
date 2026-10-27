@@ -7,6 +7,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import permissions, status
+from rest_framework.exceptions import Throttled
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -24,9 +25,12 @@ from groupachat.comptes.serialiseurs import (
     UtilisateurSerialiseur,
     VerificationSerialiseur,
 )
+from groupachat.comptes.pieces_kyc import supprimer_fichiers
 from groupachat.comptes.services import envoyer_code
 from groupachat.noyau.limitation import (
     LimiteConnexion,
+    LimiteDepotKyc,
+    LimiteEssaisKyc,
     LimiteInscription,
     LimiteRenvoi,
     LimiteVerification,
@@ -243,17 +247,68 @@ class DossierKYCVue(APIView):
             )
         return Response(DossierKYCSerialiseur(dossier).data)
 
+    def get_throttles(self):
+        # Portée large : toute tentative de dépôt compte, valide ou non, car
+        # même un fichier refusé a consommé de la bande passante. Relire son
+        # dossier ne coûte rien et l'écran le fait à chaque ouverture.
+        if self.request.method == "POST":
+            return [LimiteEssaisKyc()]
+        return []
+
+    def throttled(self, requete, wait):
+        # Sans `wait` au constructeur, DRF n'ajoute pas « dans 86400
+        # secondes », illisible pour un délai d'une journée ; on le garde
+        # tout de même pour l'en-tête Retry-After.
+        erreur = Throttled(
+            detail="Trop de tentatives aujourd'hui. Réessayez demain ou contactez le support."
+        )
+        erreur.wait = wait
+        raise erreur
+
+    def _compter_le_depot(self, requete) -> None:
+        """Compte un dépôt qui va écrire sur le disque ; 429 au-delà de la limite.
+
+        Appelé après `is_valid()` et après le contrôle du 409 : un candidat
+        qui se trompe de numéro n'use pas ses cinq dépôts, seuls ceux qui
+        posent des pièces sur le disque comptent.
+        """
+        limite = LimiteDepotKyc()
+        if limite.allow_request(requete, self):
+            return
+        erreur = Throttled(
+            detail="Trop de dépôts aujourd'hui. Réessayez demain ou contactez le support."
+        )
+        erreur.wait = limite.wait()
+        raise erreur
+
     @transaction.atomic
     def post(self, requete):
-        dossier = getattr(requete.user, "dossier_kyc", None)
+        # Verrou sur la ligne du compte avant de lire le dossier : sans lui,
+        # deux POST simultanés lisaient le même état, l'un échouait sur le
+        # OneToOne et laissait ses pièces sur le disque, ou deux redépôts
+        # écrasaient l'un l'autre leurs fichiers.
+        Utilisateur.objects.select_for_update().get(pk=requete.user.pk)
+        dossier = DossierKYC.objects.filter(utilisateur=requete.user).first()
+        if dossier is not None and dossier.statut == DossierKYC.Statut.VALIDE:
+            return Response(
+                {"detail": "Votre dossier est déjà validé."},
+                status=status.HTTP_409_CONFLICT,
+            )
         if dossier is not None and dossier.statut != DossierKYC.Statut.REJETE:
             return Response(
                 {"detail": "Un dossier est déjà en cours d'examen."},
                 status=status.HTTP_409_CONFLICT,
             )
 
+        # Les noms d'avant réécriture : ce sont eux qu'on efface une fois le
+        # nouveau dépôt acquis, jamais avant (un échec ne doit rien perdre).
+        anciennes = (
+            [dossier.piece_recto.name, dossier.piece_verso.name] if dossier else []
+        )
         serialiseur = DossierKYCSerialiseur(dossier, data=requete.data)
         serialiseur.is_valid(raise_exception=True)
+        self._compter_le_depot(requete)
+        stockage = DossierKYC._meta.get_field("piece_recto").storage
         # Un dossier rejeté est réécrit plutôt que doublonné, et repart à
         # zéro : sans remise à blanc, l'ancien motif de rejet resterait
         # affiché sous un dossier pourtant corrigé.
@@ -265,13 +320,25 @@ class DossierKYCVue(APIView):
             decide_par=None,
             depose_le=timezone.now(),
         )
+        nouvelles = [dossier.piece_recto.name, dossier.piece_verso.name]
 
-        # Le rôle bascule dès le dépôt ; c'est la validation du dossier, pas
-        # le rôle, qui ouvre l'espace groupeur.
-        if requete.user.role != Utilisateur.Role.GROUPEUR:
-            requete.user.role = Utilisateur.Role.GROUPEUR
-            requete.user.save(update_fields=["role"])
+        try:
+            # Le rôle bascule dès le dépôt ; c'est la validation du dossier,
+            # pas le rôle, qui ouvre l'espace groupeur.
+            if requete.user.role != Utilisateur.Role.GROUPEUR:
+                requete.user.role = Utilisateur.Role.GROUPEUR
+                requete.user.save(update_fields=["role"])
+        except Exception:
+            # La base est annulée mais pas le disque : sans ce nettoyage, les
+            # pièces d'identité resteraient sans dossier pour les référencer.
+            supprimer_fichiers(stockage, nouvelles)
+            raise
 
+        transaction.on_commit(
+            lambda: supprimer_fichiers(
+                stockage, [nom for nom in anciennes if nom not in nouvelles]
+            )
+        )
         return Response(
             DossierKYCSerialiseur(dossier).data, status=status.HTTP_201_CREATED
         )

@@ -16,7 +16,7 @@ Plateforme web **mobile d'abord** d'intermédiation et de gestion d'achats group
 - **Administrateur** : console séparée ; valide les dossiers KYC, modère le fil, exécute les décaissements, supervise le séquestre.
 
 ## Périmètre du MVP
-Les 31 fonctionnalités marquées `MVP` dans `03-fonctionnalites/backlog.md`. Carte validée le 2026-10-26 ([[carte]]) : **27 sont constatées** dans le code (route et écran présents), **4 sont partielles** (F-008 notifications, F-011 pièces KYC, F-016 maintien / renoncer, F-031 relances et clôture J+14), et **aucune n'est recettée**. Aucune fonctionnalité n'est `terminée`.
+Les 31 fonctionnalités marquées `MVP` dans `03-fonctionnalites/backlog.md`. Carte validée le 2026-10-26, états mis à jour le 2026-10-27 à `abaa622` ([[carte]]) : **4 sont `terminées`** après recette OK (F-030, F-016, F-008, F-011), **26 sont constatées** (route et écran présents), **1 est partielle** (F-031 relances et clôture J+14). Le backlog, plus strict, ne compte que les recettes jouées : 21 constatées et 6 à faire (échecs de la recette T1 du 2026-10-26, dont F-024 et F-031).
 
 **Critère de fin du MVP** (critère de la mission qui le termine) : les 31 fonctionnalités MVP en `terminée` dans le backlog, la commande « Vérifier » de `CLAUDE.md` verte, `regles-auditor` sans point critique.
 
@@ -33,8 +33,8 @@ Les 31 fonctionnalités marquées `MVP` dans `03-fonctionnalites/backlog.md`. Ca
 Utilisateur (rôle acheteur / groupeur), DossierKYC, Réputation ; Catégorie, Produit, Campagne (cycle de vie §9), PalierPrix, médias ; Participation (code de retrait), Avis ; Séquestre, Transaction, Décaissement ; Commentaire, J'aime, DemandeProduit, Intérêt, Notification. Sensibles : téléphones, pièces d'identité (jamais publiques, jamais chez Cloudinary).
 
 ## Risques
-- La suite de tests dure environ sept minutes : chaque boucle de vérification est lente.
-- Le retard de `staging` sur `master` est levé (C-001, 2026-10-27) : `master`, `origin/staging` et `origin/master` sont à `ccd9187`. Depuis, `staging` porte `fb4963c` (F-030) et `474656a` (outillage), non poussés. L'ancien `staging` est sauvegardé dans `sauvegarde/staging-92bc906` (`92bc906`).
+- La suite de tests dure environ 20 minutes (308 tests, 1243 s au « Vérifier » du 2026-10-27) : chaque boucle de vérification est lente.
+- Le retard de `staging` sur `master` est levé (C-001, 2026-10-27) : `master`, `origin/staging` et `origin/master` sont à `ccd9187`. Depuis, `staging` et `origin/staging` sont à `abaa622` (F-011 fusionnée et poussée le 2026-10-27, après « Vérifier » vert) ; `master` reste à `ccd9187`, son avance est une décision de l'utilisateur. L'ancien `staging` est sauvegardé dans `sauvegarde/staging-92bc906` (`92bc906`).
 - Les contradictions du cahier des charges sont tranchées le 2026-10-26 (livraison, qui décaisse, abonnements, « livré ou remboursé », KYC, annulation, rôle, J+14…) : [[2026-10-26-decisions-carte]]. Le cahier des charges n'est pas encore réécrit (C-003) : le code et le texte divergent d'ici là.
 - « Livré ou remboursé » est tenu ainsi : les fonds sont libérés avant la distribution. Un groupeur qui ne livre pas ne rembourse donc pas l'acheteur tout seul. Les textes d'écran qui disent le contraire doivent être corrigés (C-009).
 - F-031 n'est pas faite : un colis non retiré bloque la campagne en `distribution` tant qu'elle ne l'est pas.

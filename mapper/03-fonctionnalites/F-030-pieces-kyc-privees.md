@@ -1,6 +1,6 @@
 # F-030 — Les pièces KYC ne sont jamais servies publiquement
 
-Statut : terminée (2026-10-27) : recette RECETTE OK, reviewer-tester VALIDÉE. Critique ; T9 de [[M-001-terminer-le-mvp]], décision D-F030 ; branche `fix/F-030-fuite-kyc`. **Correctif non commité au 2026-10-27** (fichiers : `backend/config/service/fichiers.py`, `backend/config/urls.py`, `backend/groupachat/tests/test_securite.py`) ; commit et fusion dans `staging` attendent la décision de l'utilisateur.
+Statut : terminée (2026-10-27) : recette RECETTE OK, reviewer-tester VALIDÉE. Critique ; T9 de [[M-001-terminer-le-mvp]], décision D-F030 ; branche `fix/F-030-fuite-kyc`. Correctif commité `fb4963c` (« Ferme la traversée qui exposait les pièces d'identité ») sur `fix/F-030-fuite-kyc`, fusionné dans `staging` et poussé sur `origin/staging` (2026-10-27). Fichiers : `backend/config/service/fichiers.py`, `backend/config/urls.py`, `backend/groupachat/tests/test_securite.py`. Il était non commité au moment de la recette.
 
 ## Correctif (2026-10-27) et réponses aux questions ouvertes
 - Ce qu'a fait le correctif : `media_publique` (`backend/config/service/fichiers.py`) refuse sur le chemin **résolu** (`Path.resolve()`, liens suivis), vérifie `relative_to(MEDIA_ROOT)`, compare le premier dossier en `casefold` à `kyc`, et répond 404. `backend/config/urls.py` ne sert plus `/medias/` par `static(MEDIA_URL…)` en DEBUG (seconde fuite : ce doublon contournait la vue).
@@ -63,7 +63,7 @@ Pas d'interface propre. Contrôle de contrat : l'écran de dépôt/suivi KYC (bo
 4. Pièces déjà exposées en production : la rotation/suppression des pièces réelles est une opération hors code, décidée par l'utilisateur (voir D-F030).
 
 ## Résultat de la recette (2026-10-27) — RECETTE OK
-Base `ccd9187` + correctif non commité (arbre de travail, HEAD ccd9187). Serveur réel `runserver` en DEBUG=0 puis DEBUG=1, `curl --path-as-is`, `MEDIA_ROOT` et base sqlite fictifs hors dépôt (réglages de recette dans le scratchpad), comptes P, P2 (groupeurs), T (acheteur), A (administrateur).
+Base `ccd9187` + correctif non commité à la date de la recette (arbre de travail, HEAD ccd9187) ; commité ensuite en `fb4963c`. Serveur réel `runserver` en DEBUG=0 puis DEBUG=1, `curl --path-as-is`, `MEDIA_ROOT` et base sqlite fictifs hors dépôt (réglages de recette dans le scratchpad), comptes P, P2 (groupeurs), T (acheteur), A (administrateur).
 - R1 à R12, R20 et les extras (`/medias/kyc`, `/medias/`, `../../etc/passwd` en clair et en `%2e%2e`) : **404, aucune fuite de `PIECE-SECRETE`, aucun `Location`**, en DEBUG=0 et 1, anonyme. R12 (lien symbolique `catalogue/lien -> kyc`) : 404. R11 : 404, jamais 500.
 - R13/R14 : mêmes 27 refus (404) pour T, P et A connectés, en DEBUG=0 et 1.
 - R15/R16 : P et A reçoivent 200, octets du fichier, `Cache-Control: private, no-store` (recto et verso). R17 : T, anonyme, et groupeur P2 sur le dossier de P : 404. R18 : dossier inconnu, côté `dos`, verso absent : 404, pas de 500.

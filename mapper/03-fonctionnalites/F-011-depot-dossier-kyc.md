@@ -8,7 +8,7 @@ tags: [fonctionnalite, F-011, kyc, groupeur, mvp]
 
 # F-011 — Devenir groupeur : dépôt du dossier KYC avec pièces obligatoires
 
-Statut : **terminée** (2026-10-27) : reviewer-tester VALIDÉE à la seconde relecture (la première relecture était À CORRIGER, points réglés) ; recette **RECETTE OK** (serveur ✅, web ✅, mobile —). Livraison non commitée au 2026-10-27 (branche `fix/F-011-depot-dossier-kyc`, partie de `staging` `769ec1a`). Tâche T4 de [[M-001-terminer-le-mvp]] ; décisions [[2026-10-27-decisions-f011]] ; suivis C-042 à C-050 dans [[backlog]].
+Statut : **terminée** (2026-10-27) : reviewer-tester VALIDÉE à la seconde relecture (la première relecture était À CORRIGER, points réglés) ; recette **RECETTE OK** (serveur ✅, web ✅, mobile —). Commitée `abaa622` (« Exige les pièces d'identité recto et verso pour le dossier KYC »), fusionnée dans `staging` en avance rapide (`769ec1a..abaa622`) et poussée sur `origin/staging`. « Vérifier » complet sur `staging` après fusion : `CHECK: OK (complet)`, migrations « No changes detected », 308 tests passés en 1243,23 s. Tâche T4 de [[M-001-terminer-le-mvp]] ; décisions [[2026-10-27-decisions-f011]] ; suivis C-042 à C-050 dans [[backlog]].
 
 Rôle : **Acheteur** qui demande à devenir groupeur (T4 de [[M-001-terminer-le-mvp]]). Décision Q5 ([[2026-10-26-decisions-carte]]) : pièces obligatoires, champ recto / verso dans `Profil.tsx`, obligation côté serveur. Source : `CAHIER_DES_CHARGES.md` §5 (« Un acheteur peut demander à devenir groupeur… il dépose son dossier KYC et attend la validation »). Liés : F-030 (pièces privées, recettée), F-023 (l'administrateur consulte), F-012 (écran d'attente), C-020, C-038.
 
@@ -110,7 +110,7 @@ Non, tant que les questions 1 à 5 n'ont pas de réponse (contrat d'API et limit
 Obligation dans le sérialiseur seul (`PieceKycField`, `comptes/pieces_kyc.py`), modèle en `blank=True` ; format lu par Pillow (JPEG, PNG, WebP ; MPO traité comme JPEG), 8 Mo ; multipart ; 409 « Votre dossier est déjà validé. » ; anciennes pièces effacées en `on_commit` après redépôt ; `upload_to` aléatoire (migration `0004_noms_aleatoires_des_pieces_kyc`) ; limite `depot_kyc` 5/jour par compte (POST seul, `LIMITE_DEPOT_KYC`) ; démo : pièces fictives pour Afi Doe, `VERSION_DEMO` = "6" ; C-038 : refus -> `/profil/devenir-groupeur` ; écran `ChampPiece` (sans `capture`).
 Non vérifié : rendu à 390 px (pas de Playwright installé dans le dépôt).
 
-## Recette — 2026-10-27 (base 769ec1a + arbre de travail non commité)
+## Recette — 2026-10-27 (base 769ec1a + arbre de travail, commité en `abaa622`)
 **RECETTE OK** · serveur ✅ · web ✅ · mobile — (pas d'app dans ce dépôt ; appareil photo Android : à vérifier par l'utilisateur sur un vrai téléphone).
 Environnement local jetable : sqlite et `MEDIA_ROOT` dans le scratchpad, `runserver` :8211, Vite boutique :5211 et admin :5212, `charger_demo` (VERSION_DEMO 6), Chrome headless 390 px. Aucune base ni `backend/medias/` réels touchés.
 

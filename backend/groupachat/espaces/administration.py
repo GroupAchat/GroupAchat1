@@ -132,9 +132,10 @@ class DecaissementAdminVueEnsemble(
     @action(detail=True, methods=["post"])
     def executer(self, requete, pk=None):
         """Libère les fonds vers le groupeur."""
-        decaissement = self.get_object()
+        # get_object ne sert qu'au 404 et à la permission : l'objet lu ici
+        # peut être périmé, le service relit sous verrou et rend l'état réel.
         try:
-            executer_decaissement(decaissement, requete.user)
+            decaissement = executer_decaissement(self.get_object(), requete.user)
         except ErreurPaiement as erreur:
             return Response({"detail": str(erreur)},
                             status=status.HTTP_400_BAD_REQUEST)

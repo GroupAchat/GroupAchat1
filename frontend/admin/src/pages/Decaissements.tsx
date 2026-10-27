@@ -23,7 +23,7 @@ import { api, useAction, useRequete } from "@commun/outils/requetes";
  * auteur.
  */
 export default function Decaissements() {
-  const { donnees, chargement, recharger } = useRequete<Page<Decaissement>>(
+  const { donnees, chargement, erreur, recharger } = useRequete<Page<Decaissement>>(
     "/admin/decaissements/",
   );
   const [encours, setEncours] = useState<number | null>(null);
@@ -32,9 +32,12 @@ export default function Decaissements() {
     setEncours(identifiant);
     try {
       await api.post(`/admin/decaissements/${identifiant}/executer/`);
-      await recharger();
     } finally {
       setEncours(null);
+      // Rechargée même après un refus : le serveur a pu changer l'état de la
+      // demande (campagne annulée entre-temps). Sans cela, la ligne restait à
+      // libérer avec un bouton qui redonnait la même erreur.
+      await recharger();
     }
   });
 
@@ -52,6 +55,7 @@ export default function Decaissements() {
       </header>
 
       <Alerte>{executer.erreur?.message}</Alerte>
+      <Alerte>{erreur?.message}</Alerte>
 
       {chargement ? (
         <div className="space-y-3">
@@ -59,11 +63,14 @@ export default function Decaissements() {
           <Squelette className="h-28" />
         </div>
       ) : demandes.length === 0 ? (
-        <EtatVide
-          icone={<Banknote className="size-7" />}
-          titre="Aucune demande"
-          texte="Les groupeurs demandent leurs fonds une fois leur campagne financée."
-        />
+        // Un échec de chargement n'est pas « aucune demande » : l'alerte parle.
+        erreur ? null : (
+          <EtatVide
+            icone={<Banknote className="size-7" />}
+            titre="Aucune demande"
+            texte="Les groupeurs demandent leurs fonds une fois leur campagne financée."
+          />
+        )
       ) : (
         <>
           {aTraiter.length > 0 && (
@@ -126,6 +133,9 @@ function LigneDecaissement({
             Demandé le {dateLongue(demande.demande_le)}
             {demande.execute_le && ` · versé le ${dateLongue(demande.execute_le)}`}
           </p>
+          {demande.statut === "refuse" && demande.motif_refus && (
+            <p className="texte-doux text-xs">{demande.motif_refus}</p>
+          )}
         </div>
 
         <div className="tabulaire text-right text-sm">

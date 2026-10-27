@@ -212,6 +212,8 @@ class CampagneGroupeurVueEnsemble(viewsets.ModelViewSet):
         except ErreurPaiement as erreur:
             return Response({"detail": str(erreur)},
                             status=status.HTTP_400_BAD_REQUEST)
+        # Le service a écrit le point de remise sur l'instance qu'il verrouille.
+        campagne.refresh_from_db(fields=["point_remise"])
         return Response({"participants_notifies": notifies,
                          "point_remise": campagne.point_remise})
 

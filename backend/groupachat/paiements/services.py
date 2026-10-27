@@ -279,6 +279,21 @@ def _verrouiller(campagne: Campagne) -> Campagne:
     return Campagne.objects.select_for_update().get(pk=campagne.pk)
 
 
+# Ordre unique des verrous : campagne, puis décaissement, puis séquestre.
+# Deux transactions qui se croisent (annuler / exécuter / mettre à disposition)
+# attendent alors sur la même ligne sans s'interbloquer, et la seconde relit
+# l'état laissé par la première. Pas de select_related ici : PostgreSQL
+# verrouillerait aussi les lignes jointes, hors de cet ordre.
+def _verrouiller_decaissement(campagne: Campagne) -> Decaissement | None:
+    """Le décaissement de la campagne, verrouillé, ou None."""
+    return Decaissement.objects.select_for_update().filter(campagne=campagne).first()
+
+
+def _verrouiller_sequestre(campagne: Campagne) -> Sequestre:
+    """Le séquestre, créé s'il manque, verrouillé."""
+    return Sequestre.objects.select_for_update().get_or_create(campagne=campagne)[0]
+
+
 def _delai_de_decision_expire(campagne: Campagne) -> bool:
     """Le groupeur a-t-il laissé passer son délai de décision ?
 
@@ -334,12 +349,21 @@ def annuler(campagne: Campagne, motif: str = "") -> Campagne:
     tâche appliquerait, la devancer ne lèse personne.
     """
     campagne = _verrouiller(campagne)
+    decaissement = _verrouiller_decaissement(campagne)
+    # Garde indépendante du statut : rembourser des parts dont l'argent est
+    # déjà chez le groupeur ferait sortir plus que le consigné.
+    if decaissement and decaissement.statut == Decaissement.Statut.EXECUTE:
+        raise ErreurPaiement(
+            "Les fonds ont déjà été versés au groupeur : "
+            "cette campagne ne peut plus être annulée."
+        )
     if campagne.statut not in (
         Campagne.Statut.MINIMUM_NON_ATTEINT,
         Campagne.Statut.EN_COURS,
         Campagne.Statut.FINANCEE,
     ):
         raise ErreurPaiement("Cette campagne ne peut plus être annulée.")
+    _verrouiller_sequestre(campagne)
 
     campagne.statut = Campagne.Statut.ANNULEE
     campagne.motif_annulation = motif or "Groupage non abouti."
@@ -365,6 +389,12 @@ def annuler(campagne: Campagne, motif: str = "") -> Campagne:
     sequestre.solde_le = timezone.now()
     sequestre.save(update_fields=["statut", "solde_le"])
 
+    if decaissement and decaissement.statut in (
+        Decaissement.Statut.DEMANDE,
+        Decaissement.Statut.APPROUVE,
+    ):
+        _refuser_decaissement_en_attente(decaissement, campagne)
+
     # La réputation retient aussi les campagnes qui n'ont pas abouti : une
     # note qui ne peut que monter ne dit plus rien de personne.
     from groupachat.comptes.models import Reputation
@@ -373,6 +403,33 @@ def annuler(campagne: Campagne, motif: str = "") -> Campagne:
     reputation.campagnes_annulees += 1
     reputation.save(update_fields=["campagnes_annulees"])
     return campagne
+
+
+def _refuser_decaissement_en_attente(
+    decaissement: Decaissement, campagne: Campagne
+) -> None:
+    """Un retrait demandé ne survit pas à l'annulation : l'argent est rendu.
+
+    Sans ce refus, la ligne resterait « à libérer » dans la console, et
+    l'exécuter verserait une seconde fois la même somme.
+    """
+    decaissement.statut = Decaissement.Statut.REFUSE
+    decaissement.motif_refus = (
+        f"Campagne annulée le {timezone.localdate():%d/%m/%Y} : "
+        f"{campagne.motif_annulation}"
+    )
+    decaissement.save(update_fields=["statut", "motif_refus"])
+    Notification.objects.create(
+        destinataire=campagne.groupeur,
+        genre=Notification.Genre.CAMPAGNE_ANNULEE,
+        titre="Demande de retrait annulée",
+        message=(
+            f"Votre demande de retrait de {decaissement.montant_net} FCFA "
+            "est annulée avec la campagne."
+        ),
+        campagne=campagne,
+        lien=f"/groupeur/campagnes/{campagne.id}",
+    )
 
 
 def _prevenir_participants(campagne, genre, titre, message) -> int:
@@ -450,6 +507,9 @@ def rembourser_les_indecis() -> list[int]:
 @transaction.atomic
 def demander_decaissement(campagne: Campagne) -> Decaissement:
     """Le groupeur réclame les fonds d'une campagne financée."""
+    # Sous verrou : un double clic ou une annulation concurrente donnent un
+    # refus lisible, et non un 500 sur l'unicité ou un retrait orphelin.
+    campagne = _verrouiller(campagne)
     if campagne.statut != Campagne.Statut.FINANCEE:
         raise ErreurPaiement("Seule une campagne financée peut être décaissée.")
     if Decaissement.objects.filter(campagne=campagne).exists():
@@ -472,9 +532,33 @@ def demander_decaissement(campagne: Campagne) -> Decaissement:
 
 @transaction.atomic
 def executer_decaissement(decaissement: Decaissement, administrateur) -> Decaissement:
-    """L'administrateur libère les fonds vers le groupeur."""
+    """L'administrateur libère les fonds vers le groupeur.
+
+    L'objet reçu ne sert qu'à retrouver les clés : il a été lu avant la
+    transaction et peut dater d'avant une annulation. Tout est relu sous
+    verrou, et c'est l'objet relu qui est rendu.
+    """
+    campagne = Campagne.objects.select_for_update().get(pk=decaissement.campagne_id)
+    decaissement = Decaissement.objects.select_for_update().get(pk=decaissement.pk)
+    sequestre = _verrouiller_sequestre(campagne)
+
+    # Toutes les gardes avant l'appel à l'opérateur : avec un vrai agrégateur,
+    # une erreur après l'appel laisserait de l'argent parti sans écriture.
     if decaissement.statut == Decaissement.Statut.EXECUTE:
         raise ErreurPaiement("Ce décaissement a déjà été exécuté.")
+    if decaissement.statut == Decaissement.Statut.REFUSE:
+        raise ErreurPaiement(
+            "Ce décaissement a été refusé : la campagne a été annulée."
+        )
+    if campagne.statut != Campagne.Statut.FINANCEE:
+        raise ErreurPaiement(
+            "Ce décaissement ne peut plus être exécuté : "
+            "la campagne n'est plus financée."
+        )
+    if sequestre.solde < decaissement.montant_brut:
+        raise ErreurPaiement(
+            "Le séquestre ne contient pas assez de fonds pour ce versement."
+        )
 
     succes, reference = _executer_paiement(
         decaissement.montant_net,
@@ -495,7 +579,6 @@ def executer_decaissement(decaissement: Decaissement, administrateur) -> Decaiss
         update_fields=["statut", "execute_le", "execute_par", "reference"]
     )
 
-    sequestre = sequestre_de(decaissement.campagne)
     # Le montant brut, frais compris, quitte le séquestre : les frais sont le
     # revenu de la plateforme, pas de l'argent encore détenu pour autrui.
     sequestre.montant_libere += decaissement.montant_brut
@@ -503,7 +586,6 @@ def executer_decaissement(decaissement: Decaissement, administrateur) -> Decaiss
     sequestre.solde_le = timezone.now()
     sequestre.save(update_fields=["montant_libere", "statut", "solde_le"])
 
-    campagne = decaissement.campagne
     campagne.statut = Campagne.Statut.APPROVISIONNEMENT
     campagne.save(update_fields=["statut"])
 
@@ -529,11 +611,15 @@ def mettre_a_disposition(campagne: Campagne, point_remise: str = "") -> int:
     C'est le geste qui déclenche la distribution : **tous les participants
     sont notifiés**, avec le point de remise et le rappel de leur code.
     """
-    if campagne.statut not in (
-        Campagne.Statut.APPROVISIONNEMENT,
-        Campagne.Statut.DECAISSEE,
-        Campagne.Statut.FINANCEE,
-    ):
+    campagne = _verrouiller(campagne)
+    # Depuis « financée », les fonds seraient encore au séquestre alors que
+    # les codes de retrait seraient actifs : la marchandise partirait gratuite.
+    if campagne.statut == Campagne.Statut.FINANCEE:
+        raise ErreurPaiement(
+            "Les fonds n'ont pas encore été versés : "
+            "la marchandise ne peut pas être mise à disposition."
+        )
+    if campagne.statut != Campagne.Statut.APPROVISIONNEMENT:
         raise ErreurPaiement("Cette campagne n'en est pas à la distribution.")
 
     if point_remise:

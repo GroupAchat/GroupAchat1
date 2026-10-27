@@ -280,8 +280,13 @@ class TestDecaissement:
         sequestre = Sequestre.objects.get(campagne=campagne_financee)
         assert sequestre.montant_libere == 180000
         assert sequestre.solde == 0
+        assert sequestre.statut == Sequestre.Statut.LIBERE
         campagne_financee.refresh_from_db()
         assert campagne_financee.statut == Campagne.Statut.APPROVISIONNEMENT
+        assert Notification.objects.filter(
+            destinataire=campagne_financee.groupeur, titre="Fonds versés",
+            lien=f"/groupeur/campagnes/{campagne_financee.id}",
+        ).count() == 1
 
     def test_une_campagne_non_financee_ne_se_decaisse_pas(self, connecte, campagne):
         reponse = connecte(campagne.groupeur).post(

@@ -8,10 +8,10 @@ tags: [fonctionnalite, F-008, notifications, mvp]
 
 # F-008 — Notifications : la cloche et la page mènent à l'écran concerné
 
-Statut : **terminée** (2026-10-27) : reviewer-tester VALIDÉE (deux passes), recette **RECETTE OK** (serveur OK, web OK à 390 px, mobile —). Correctif **non commité** au 2026-10-27 : branche `fix/F-008-liens-notifications`, partie de `staging` `f8b78f9`. T3 de [[M-001-terminer-le-mvp]]. Décisions : [[2026-10-27-decisions-f008]]. Rôle : Acheteur (et Groupeur pour ses propres notifications). Source : `CAHIER_DES_CHARGES.md` (notifications aux étapes du cycle de vie) ; [[carte]] C-16 ; recette T1 (404 confirmée).
+Statut : **terminée** (2026-10-27) : reviewer-tester VALIDÉE (deux passes), recette **RECETTE OK** (serveur OK, web OK à 390 px, mobile —). Correctif commité `769ec1a` (« Répare les liens des notifications qui menaient à une page introuvable ») sur `fix/F-008-liens-notifications`, partie de `staging` `f8b78f9`, fusionné dans `staging` et poussé sur `origin/staging` (2026-10-27) ; il était non commité au moment de la recette. T3 de [[M-001-terminer-le-mvp]]. Décisions : [[2026-10-27-decisions-f008]]. Rôle : Acheteur (et Groupeur pour ses propres notifications). Source : `CAHIER_DES_CHARGES.md` (notifications aux étapes du cycle de vie) ; [[carte]] C-16 ; recette T1 (404 confirmée).
 Hors périmètre : C-016 (une erreur s'affiche comme état vide), C-017 (textes : lien vide sur « Remboursement effectué », « Minimum atteint » renvoyé à chaque paiement au-delà du minimum).
 
-Livraison (`git diff --stat`, non commité) : `backend/groupachat/paiements/services.py` (4 insertions, 2 suppressions) ; `backend/groupachat/echanges/tests.py` (+51) ; nouveaux : `backend/groupachat/echanges/migrations/0004_corriger_liens_des_notifications.py` (migration de données) et `backend/groupachat/tests/test_notifications_liens.py` (7 tests).
+Livraison (`git diff --stat` au moment de la recette, non commité ; commitée ensuite en `769ec1a`) : `backend/groupachat/paiements/services.py` (4 insertions, 2 suppressions) ; `backend/groupachat/echanges/tests.py` (+51) ; nouveaux : `backend/groupachat/echanges/migrations/0004_corriger_liens_des_notifications.py` (migration de données) et `backend/groupachat/tests/test_notifications_liens.py` (7 tests).
 
 ## Le défaut
 `backend/groupachat/paiements/services.py` crée deux notifications d'acheteur avec le lien `/participations/<id>` : « Paiement enregistré » (l. 115) et « Votre produit est arrivé » (l. 560). Or la boutique (`frontend/boutique/src/App.tsx` l. 44-45) sert `/mes-achats` et `/mes-achats/:id`. `/participations/` n'est qu'une route d'**API** (`api.py` l. 33). Le clic (cloche `Cloche.tsx` l. 263, page `Notifications.tsx` l. 145 : `<Link to={notification.lien}>`) tombe sur la route `*` (page introuvable). C'est le lien de l'acheteur vers son code de retrait : sans lui, le parcours « je suis prévenu que mon produit est arrivé, je clique, je montre mon QR » est rompu.
@@ -103,7 +103,7 @@ Web — le dépôt n'a aucun outil de test front (`npm run verifier` = `tsc -b`)
 7. **Jeton de lien** : le contrôle côté serveur ne vérifie pas que `campagne` ou `participation` du lien existe encore ; sans suppression possible en base c'est sans conséquence. Confirmer qu'aucune suppression de participation n'est prévue. **Réponse : non tranchée**, suivi à confirmer par l'utilisateur ; sans suppression possible, sans conséquence.
 
 ## Recette (recetter, 2026-10-27)
-**RECETTE OK** — commit de base `f8b78f9`, arbre de travail non commité (services.py, echanges/tests.py, migration 0004, test_notifications_liens.py). Matrice : serveur ✅ · web ✅ · mobile —.
+**RECETTE OK** — commit de base `f8b78f9`, arbre de travail non commité à la date de la recette (services.py, echanges/tests.py, migration 0004, test_notifications_liens.py) ; commité ensuite en `769ec1a`. Matrice : serveur ✅ · web ✅ · mobile —.
 Environnement : `runserver` local (port 8124, sqlite et médias dans le scratchpad, `DJANGO_ORIGINES_SURES` pour l'origine de Vite), Vite 5199 relayé vers lui, Chrome headless 390 x 844 (playwright-core). Données fictives. Décisions D1 à D3 de l'utilisateur appliquées ; hors périmètre non comptés (lien vide de `remboursement`, erreur affichée comme état vide, `kyc_decide` refusé, `relance_retrait`).
 
 ### Tests

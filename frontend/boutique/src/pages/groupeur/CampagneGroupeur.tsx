@@ -212,7 +212,7 @@ export default function CampagneGroupeur() {
           />
         )}
 
-        {["decaissee", "approvisionnement"].includes(campagne.statut) && (
+        {campagne.statut === "approvisionnement" && (
           <Etape
             icone={Megaphone}
             titre="Annoncez l'arrivée de la marchandise"

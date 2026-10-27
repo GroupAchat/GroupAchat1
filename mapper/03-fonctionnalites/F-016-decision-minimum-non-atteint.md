@@ -81,7 +81,7 @@ Web : le dépôt n'a **aucun outil de test front** (pas de vitest ni playwright 
 6. **Message du délai.** Afficher la date butoir (`cloturee_le` + 7 jours) au groupeur ? Le champ n'est peut-être pas dans la réponse de la campagne ; à vérifier. Suivi, pas bloquant. → Suivi C-027, hors F-016.
 7. **Notification au groupeur après sa décision** : aucune n'est créée aujourd'hui (seuls les acheteurs sont prévenus). Voulu ? Non bloquant. → Suivi C-028, hors F-016.
 
-## Recette (2026-10-27, commit de base 474656a, correctif non commité)
+## Recette (2026-10-27, commit de base 474656a, correctif non commité à la date de la recette ; commité ensuite en `f8b78f9`)
 **RECETTE OK** · serveur ✅ · web ✅ · mobile —
 
 Environnement : `runserver` sur 8123, base sqlite et médias dans le scratchpad (module `reglages_f016`), boutique Vite sur 5199 relayée vers 8123, sessions réelles (cookie `sessionid` + jeton CSRF), Chrome headless 390 px (playwright-core). Jeu fictif : campagnes de 10 pièces minimum, Ama 3 pièces et Yao 2 (90 000 FCFA consignés).

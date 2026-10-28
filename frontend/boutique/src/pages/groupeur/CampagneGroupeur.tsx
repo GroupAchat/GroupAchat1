@@ -168,7 +168,7 @@ export default function CampagneGroupeur() {
             texte={
               campagne.minimum_atteint
                 ? "Clôturez pour figer la collecte et demander vos fonds."
-                : `Encore ${campagne.quantite_minimale - campagne.quantite_reservee} pièces avant le minimum. Au-delà de la date limite, la campagne est annulée et tout le monde est remboursé.`
+                : `Encore ${campagne.quantite_minimale - campagne.quantite_reservee} pièces avant le minimum. À la date limite, vous déciderez de maintenir la commande ou d'y renoncer (remboursement). Sans réponse sous 7 jours, les participants sont remboursés.`
             }
             action={
               <Bouton

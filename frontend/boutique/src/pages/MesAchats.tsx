@@ -57,7 +57,7 @@ export default function MesAchats() {
         <EtatVide
           icone={<ShoppingBag className="size-7" />}
           titre="Aucun achat pour l'instant"
-          texte="Rejoignez une campagne : votre argent reste consigné jusqu'à la livraison."
+          texte="Rejoignez une campagne : votre part est consignée tant que la collecte n'est pas acquise."
           action={
             <Link to="/catalogue">
               <Bouton>Voir les campagnes</Bouton>
@@ -315,7 +315,7 @@ export function DetailAchat() {
           <Jauge pourcentage={campagne.pourcentage} atteint={campagne.minimum_atteint} />
           <p className="texte-doux tabulaire text-xs">
             {campagne.quantite_reservee} / {campagne.quantite_minimale} pièces — votre
-            argent reste consigné jusqu'à la livraison.
+            part est consignée tant que la collecte n'est pas acquise.
           </p>
         </Carte>
       )}

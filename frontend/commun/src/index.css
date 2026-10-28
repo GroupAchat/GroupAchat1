@@ -93,6 +93,9 @@
   --bordure: #e9e5df;
   --texte: #1a1714;
   --texte-doux: #6d6558;
+  /* Hauteur de la barre d'onglets mobile : la barre d'action de la fiche s'y
+     pose au-dessus, sinon elle la recouvre et le bouton devient intouchable. */
+  --hauteur-onglets: 4rem;
   color-scheme: light;
 }
 
@@ -151,6 +154,18 @@
 }
 
 @layer components {
+  /* Barre d'action fixe : au-dessus des onglets sur téléphone, collée au bas
+     de l'écran dès que les onglets disparaissent (md). */
+  .barre-action-mobile {
+    bottom: calc(var(--hauteur-onglets) + env(safe-area-inset-bottom));
+  }
+
+  @media (min-width: 48rem) {
+    .barre-action-mobile {
+      bottom: 0;
+    }
+  }
+
   .surface {
     background: var(--fond-carte);
     border: 1px solid var(--bordure);

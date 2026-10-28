@@ -125,7 +125,7 @@ export function BarreOnglets() {
       className="verre fixed inset-x-0 bottom-0 z-40 border-t md:hidden"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      <ul className="mx-auto flex max-w-lg">
+      <ul className="mx-auto flex min-h-[var(--hauteur-onglets)] max-w-lg">
         {onglets.map((onglet) => (
           <li key={onglet.vers} className="flex-1">
             <NavLink
@@ -133,7 +133,7 @@ export function BarreOnglets() {
               end={onglet.exact}
               className={({ isActive }) =>
                 fusionner(
-                  "relative flex flex-col items-center gap-0.5 py-2.5 text-[0.62rem] font-semibold transition-colors",
+                  "relative flex h-full flex-col items-center justify-center gap-0.5 py-2.5 text-[0.62rem] font-semibold transition-colors",
                   isActive ? "text-[color:var(--color-accent)]" : "texte-doux",
                 )
               }

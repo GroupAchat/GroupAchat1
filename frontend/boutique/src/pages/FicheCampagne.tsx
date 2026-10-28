@@ -115,7 +115,7 @@ export default function FicheCampagne() {
   ].filter((visuel): visuel is ElementGalerie => Boolean(visuel.url));
 
   return (
-    <div className="pb-28 lg:pb-14">
+    <div className="pb-[calc(var(--hauteur-onglets)+7rem)] md:pb-28 lg:pb-14">
       {/* ── Téléphone : la grande photo d'en-tête ──────────────────────────── */}
       <div className="relative aspect-[4/3] w-full overflow-hidden lg:hidden">
         <Visuel source={visuels[0]?.vignette ?? null} nom={campagne.produit.nom} />
@@ -370,8 +370,10 @@ export default function FicheCampagne() {
               <div className="flex gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-950/40">
                 <ShieldCheck className="size-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
                 <p className="text-sm text-emerald-900 dark:text-emerald-200">
-                  <strong>Livré ou remboursé.</strong> Votre part reste
-                  consignée jusqu'à la livraison.
+                  <strong>Remboursé si le groupage échoue.</strong> Votre
+                  part est consignée tant que la collecte n'est pas acquise.
+                  Une fois les fonds remis au groupeur, votre code de retrait
+                  prouve la remise du colis.
                 </p>
               </div>
               <div className="surface flex gap-3 rounded-2xl p-4 text-sm">
@@ -512,8 +514,7 @@ export default function FicheCampagne() {
       {/* ── Barre d'action, collée en bas sur téléphone ──────────────────── */}
       {ouverte && !estLeGroupeur && (
         <div
-          className="verre fixed inset-x-0 bottom-0 z-30 border-t p-3 lg:hidden"
-          style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+          className="verre barre-action-mobile fixed inset-x-0 z-30 border-t p-3 lg:hidden"
         >
           <div className="flex items-center gap-3">
             <div className="shrink-0">
@@ -755,8 +756,9 @@ function FeuilleParticipation({
             <div>
               <p className="text-lg font-bold">Votre part est consignée</p>
               <p className="texte-doux mt-1 text-sm">
-                {francs(reussite.montant_total)} bloqués jusqu'à la livraison.
-                Votre code de retrait vous attend.
+                {francs(reussite.montant_total)} consignés. Ils ne sont remis
+                au groupeur qu'une fois la collecte réussie. Votre code de
+                retrait vous attend.
               </p>
             </div>
             <div className="surface-douce rounded-2xl p-4">

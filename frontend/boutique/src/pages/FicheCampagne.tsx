@@ -862,7 +862,7 @@ function FeuilleParticipation({
                     className={fusionner(
                       "flex items-center gap-3 rounded-2xl border p-3 text-left transition-all",
                       operateur === moyen.cle
-                        ? "border-[color:var(--color-accent)] bg-accent-doux"
+                        ? "border-[color:var(--color-accent)] bg-fond-message"
                         : "surface",
                     )}
                   >

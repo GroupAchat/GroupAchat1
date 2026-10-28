@@ -183,7 +183,7 @@ function Message({
           className={fusionner(
             "rounded-2xl rounded-tl-sm px-4 py-3",
             message.est_du_groupeur
-              ? "bg-accent-doux"
+              ? "bg-fond-message"
               : "surface-douce",
           )}
         >

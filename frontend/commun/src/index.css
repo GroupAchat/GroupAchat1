@@ -51,6 +51,7 @@
   --color-accent-fort: var(--teinte-accent-fort);
   --color-accent-contraste: var(--teinte-accent-contraste);
   --color-second: var(--teinte-second);
+  --color-fond-message: var(--teinte-fond-message);
 
   --radius-douce: 1rem;
   --radius-carte: 1.5rem;
@@ -102,6 +103,11 @@
   /* Hauteur de la barre d'onglets mobile : la barre d'action de la fiche s'y
      pose au-dessus, sinon elle la recouvre et le bouton devient intouchable. */
   --hauteur-onglets: 4rem;
+  /* Fond des bulles et messages où l'on pose du texte `--texte`. En clair c'est
+     l'accent doux ; en sombre cette teinte pâle rendait le texte clair
+     illisible, d'où une valeur propre (voir les blocs sombres). L'accent doux
+     lui-même ne change pas : le texte d'accent y reste posé en sombre. */
+  --teinte-fond-message: var(--teinte-accent-doux);
   color-scheme: light;
 }
 
@@ -113,6 +119,7 @@
     --bordure: #322c26;
     --texte: #f6f3ef;
     --texte-doux: #a79d90;
+    --teinte-fond-message: color-mix(in srgb, var(--teinte-accent) 22%, var(--fond-carte));
     color-scheme: dark;
   }
 }
@@ -124,6 +131,7 @@
   --bordure: #322c26;
   --texte: #f6f3ef;
   --texte-doux: #a79d90;
+  --teinte-fond-message: color-mix(in srgb, var(--teinte-accent) 22%, var(--fond-carte));
   color-scheme: dark;
 }
 

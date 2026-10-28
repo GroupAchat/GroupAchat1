@@ -134,7 +134,11 @@ Sans elle :
 
 - une campagne dépassée **reste au catalogue** et accepte des participations ;
 - les acheteurs d'un groupage manqué **ne sont jamais prévenus** ;
-- un groupeur qui disparaît laisse l'argent consigné **pour toujours**.
+- un groupeur qui disparaît laisse l'argent consigné **pour toujours** ;
+- un colis non retiré **bloque la campagne en distribution pour toujours** :
+  la tâche relance les acheteurs à J+3 et J+7 après la mise à disposition,
+  puis, à J+14, déclare les colis restants réputés livrés et termine la
+  campagne.
 
 Le délai laissé au groupeur après une collecte manquée se règle par
 `DELAI_DECISION_JOURS` (7 par défaut ; `0` désactive le remboursement
@@ -145,6 +149,10 @@ Pour voir ce que la tâche ferait sans rien changer :
 ```bash
 python manage.py cloturer_les_campagnes_echues --a-blanc
 ```
+
+Avant le premier passage réel en production, lancer ce mode à blanc : il
+liste les campagnes à relancer, celles à clore à J+14, et celles qu'un solde
+de séquestre encore consigné bloque (à trancher par l'administrateur).
 
 ## 5. Ce qui est figé à la construction
 

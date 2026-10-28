@@ -199,13 +199,15 @@ class CampagneResumeSerialiseur(_AvancementMixin, serializers.ModelSerializer):
     minimum_atteint = serializers.SerializerMethodField()
     prix_courant = serializers.SerializerMethodField()
     jours_restants = serializers.SerializerMethodField()
+    # Calculée par le serveur : l'écran n'a pas à recopier la règle des 14 jours.
+    fin_du_retrait_le = serializers.DateTimeField(read_only=True)
 
     class Meta:
         model = Campagne
         fields = ["id", "titre", "produit", "groupeur", "prix_unitaire", "prix_courant",
                   "quantite_minimale", "quantite_reservee", "nombre_participants",
                   "pourcentage", "minimum_atteint", "date_limite", "jours_restants",
-                  "point_remise", "statut", "publiee_le"]
+                  "point_remise", "statut", "publiee_le", "fin_du_retrait_le"]
 
 
 class CampagneDetailSerialiseur(CampagneResumeSerialiseur):

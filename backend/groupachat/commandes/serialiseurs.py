@@ -32,7 +32,7 @@ class ParticipationSerialiseur(serializers.ModelSerializer):
         fields = ["id", "campagne", "quantite", "prix_unitaire_applique",
                   "montant_total", "statut", "statut_libelle", "code_retrait",
                   "charge_qr", "cree_le", "payee_le", "retiree_le",
-                  "peut_etre_notee", "avis"]
+                  "reputee_livree_le", "peut_etre_notee", "avis"]
         read_only_fields = fields
 
     def get_avis(self, participation) -> dict | None:
@@ -58,7 +58,8 @@ class ParticipantSerialiseur(serializers.ModelSerializer):
     class Meta:
         model = Participation
         fields = ["id", "nom_complet", "telephone", "quantite", "montant_total",
-                  "statut", "statut_libelle", "payee_le", "retiree_le"]
+                  "statut", "statut_libelle", "payee_le", "retiree_le",
+                  "reputee_livree_le"]
         read_only_fields = fields
 
 

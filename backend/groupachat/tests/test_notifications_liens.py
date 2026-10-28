@@ -16,15 +16,23 @@ from __future__ import annotations
 
 import re
 from datetime import timedelta
+from io import StringIO
 
 import pytest
+from django.core.management import call_command
 from django.utils import timezone
 
 from groupachat.catalogue.models import Campagne
 from groupachat.commandes.models import Participation
 from groupachat.comptes.models import DossierKYC, Utilisateur
 from groupachat.echanges.models import Notification
-from groupachat.paiements.services import cloturer_les_echus
+from groupachat.paiements.services import (
+    cloturer,
+    cloturer_les_echus,
+    demander_decaissement,
+    executer_decaissement,
+    mettre_a_disposition,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -184,6 +192,29 @@ class TestParcoursComplet:
                 f"/api/groupeur/campagnes/{autre.id}/{decision}/", {}, format="json"
             )
 
+        # Campagne 4 (F-031) : relancée à J+3, puis close à J+14 avec un colis
+        # jamais retiré. Joué par la tâche elle-même, pas par écriture directe.
+        retardataire = Campagne.objects.create(
+            produit=produit, groupeur=campagne.groupeur, titre="Retardataire",
+            prix_unitaire=18000, quantite_minimale=2, point_remise="Lomé",
+            date_limite=timezone.now() + timedelta(days=5),
+            statut=Campagne.Statut.EN_COURS, publiee_le=timezone.now(),
+        )
+        _participer(connecte(yao), retardataire, 2)
+        cloturer(retardataire)
+        executer_decaissement(demander_decaissement(retardataire), administrateur)
+        mettre_a_disposition(retardataire)
+        for age in (timedelta(days=3), timedelta(days=7), timedelta(days=14)):
+            Campagne.objects.filter(pk=retardataire.pk).update(
+                mise_a_disposition_le=timezone.now() - age)
+            if age == timedelta(days=14):
+                # Les relances reculent avec le temps : le préavis de 72 h
+                # courrait sinon depuis la relance J+7 d'« aujourd'hui ».
+                Campagne.objects.filter(pk=retardataire.pk).update(
+                    relance_retrait_j3_le=timezone.now() - timedelta(days=11),
+                    relance_retrait_j7_le=timezone.now() - timedelta(days=7))
+            call_command("cloturer_les_campagnes_echues", stdout=StringIO())
+
         # Décision sur un dossier KYC.
         dossier = DossierKYC.objects.get(utilisateur=groupeur_en_attente)
         connecte(administrateur).post(
@@ -213,6 +244,7 @@ class TestParcoursComplet:
             "groupage_non_abouti", "decision_attendue", "campagne_maintenue",
             "campagne_annulee", "nouveau_commentaire", "reponse_commentaire",
             "nouvel_avis", "kyc_decide",
+            "relance_retrait", "livraison_reputee", "campagne_terminee",
         }
         for notification in Notification.objects.exclude(lien=""):
             assert _route_existe(notification.lien), (

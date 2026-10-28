@@ -19,6 +19,7 @@ export type StatutParticipation =
   | "payee"
   | "prete"
   | "retiree"
+  | "reputee_livree"
   | "remboursee"
   | "annulee";
 
@@ -136,6 +137,8 @@ export interface CampagneResume {
   point_remise: string;
   statut: StatutCampagne;
   publiee_le: string | null;
+  /** Fin du délai de retrait (mise à disposition + 14 j), calculée par le serveur. */
+  fin_du_retrait_le: string | null;
 }
 
 export interface Campagne extends Omit<CampagneResume, "produit"> {
@@ -167,6 +170,7 @@ export interface Participation {
   cree_le: string;
   payee_le: string | null;
   retiree_le: string | null;
+  reputee_livree_le: string | null;
   peut_etre_notee: boolean;
   avis: Avis | null;
 }
@@ -201,6 +205,7 @@ export interface Participant {
   statut_libelle: string;
   payee_le: string | null;
   retiree_le: string | null;
+  reputee_livree_le: string | null;
 }
 
 export interface AuteurPublic {

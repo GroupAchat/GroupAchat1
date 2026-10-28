@@ -57,12 +57,13 @@ from groupachat.paiements.services import (
     mettre_a_disposition,
     valider_retrait,
 )
+from groupachat.paiements.retraits import relancer_retrait, reputer_livree
 
 # ⚠️ **À incrémenter dès qu'on touche au jeu de données.** C'est ce numéro,
 # et lui seul, qui décide si un redéploiement remet la démonstration à plat.
 # Laissé inchangé, les nouveautés n'apparaîtraient jamais sur un serveur déjà
 # démarré une fois.
-VERSION_DEMO = "6"
+VERSION_DEMO = "7"
 
 MOT_DE_PASSE = "demo2026Groupe"
 
@@ -139,6 +140,7 @@ class Command(BaseCommand):
         self._campagne_financee(valide, rayons, acheteurs)
         self._campagne_en_distribution(valide, rayons, acheteurs, admin)
         self._campagne_terminee(valide, rayons, acheteurs, admin)
+        self._campagne_reputee_livree(valide, rayons, acheteurs, admin)
         self._campagne_annulee(valide, rayons, acheteurs)
         self._brouillon(valide, rayons)
         self._offre_concurrente(concurrent, acheteurs)
@@ -640,6 +642,13 @@ class Command(BaseCommand):
         decaissement = demander_decaissement(campagne)
         executer_decaissement(decaissement, admin)
         mettre_a_disposition(campagne, point_remise="Boutique Abalo, Bè-Kpota")
+        # Reculée de quatre jours et relancée par le service lui-même : un
+        # acheteur de démonstration a ainsi « Votre colis vous attend » dans
+        # sa cloche, sans écriture directe de la notification.
+        Campagne.objects.filter(pk=campagne.pk).update(
+            mise_a_disposition_le=timezone.now() - timedelta(days=4)
+        )
+        relancer_retrait(campagne)
         self.stdout.write(
             "  • Campagne en distribution (ventilateurs) — codes de retrait actifs"
         )
@@ -661,6 +670,37 @@ class Command(BaseCommand):
             participation.refresh_from_db()
             valider_retrait(campagne, participation.code_retrait, groupeur)
         self.stdout.write("  • Campagne terminée (blenders) — tous les colis retirés")
+
+    def _campagne_reputee_livree(self, groupeur, rayons, acheteurs, admin):
+        """Un colis jamais retiré : quatorze jours plus tard, la livraison est réputée."""
+        campagne = self._campagne(
+            groupeur, rayons["Électroménager"], "Bouilloire inox 1,7 L", "Tefal",
+            15000, 4, jours=1,
+            titre="Bouilloires Tefal — lot de septembre",
+        )
+        parts = [
+            self._payer(campagne, acheteur, quantite)
+            for acheteur, quantite in zip(acheteurs, (1, 1, 2))
+        ]
+        cloturer(campagne)
+        executer_decaissement(demander_decaissement(campagne), admin)
+        mettre_a_disposition(campagne, point_remise="Boutique Abalo, Bè-Kpota")
+        for participation in parts[:2]:
+            participation.refresh_from_db()
+            valider_retrait(campagne, participation.code_retrait, groupeur)
+        # Le temps recule, puis le service joue : la part restante devient
+        # « réputée livrée » comme en production. La relance J+7 est reculée
+        # elle aussi, pour respecter le préavis de 72 h.
+        Campagne.objects.filter(pk=campagne.pk).update(
+            mise_a_disposition_le=timezone.now() - timedelta(days=15),
+            relance_retrait_j3_le=timezone.now() - timedelta(days=12),
+            relance_retrait_j7_le=timezone.now() - timedelta(days=8),
+        )
+        reputer_livree(campagne)
+        self.stdout.write(
+            "  • Campagne terminée sans retrait complet (bouilloires) — "
+            "un colis réputé livré"
+        )
 
     def _campagne_annulee(self, groupeur, rayons, acheteurs):
         campagne = self._campagne(

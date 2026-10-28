@@ -21,12 +21,25 @@ dégressifs**.
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
 
 from groupachat.noyau import hebergement
+
+# Les délais du cahier des charges (§4 « Colis non récupéré »), comptés depuis
+# la mise à disposition. Des constantes du code et non des variables
+# d'environnement : le cahier les fixe, et nul ne doit pouvoir les régler
+# sans que l'acheteur en soit informé.
+DELAI_PREMIERE_RELANCE_JOURS = 3
+DELAI_SECONDE_RELANCE_JOURS = 7
+DELAI_RETRAIT_JOURS = 14
+# Une part n'est jamais réputée livrée sans qu'une relance annonçant la
+# clôture ait précédé d'au moins ce nombre d'heures (décision D3 de F-031).
+PREAVIS_AVANT_LIVRAISON_REPUTEE_HEURES = 72
 
 
 class Categorie(models.Model):
@@ -345,6 +358,16 @@ class Campagne(models.Model):
     mise_a_disposition_le = models.DateTimeField(
         "marchandise à disposition depuis", null=True, blank=True
     )
+    # Les relances de retrait déjà envoyées. Posées sous le verrou de la
+    # campagne, elles rendent la tâche horaire idempotente : toutes les parts
+    # d'une campagne passent « prêtes » au même instant, l'étape est donc la
+    # même pour toutes.
+    relance_retrait_j3_le = models.DateTimeField(
+        "relance de retrait J+3 envoyée le", null=True, blank=True
+    )
+    relance_retrait_j7_le = models.DateTimeField(
+        "relance de retrait J+7 envoyée le", null=True, blank=True
+    )
     motif_annulation = models.TextField("motif de l'annulation", blank=True)
 
     class Meta:
@@ -364,6 +387,17 @@ class Campagne(models.Model):
         if not self.titre:
             self.titre = str(self.produit)[:160]
         super().save(*args, **kwargs)
+
+    @property
+    def fin_du_retrait_le(self):
+        """Dernier instant du délai de retrait, ou None avant la mise à disposition.
+
+        Calculée par le serveur pour que les écrans n'aient pas à recopier la
+        règle des quatorze jours.
+        """
+        if self.mise_a_disposition_le is None:
+            return None
+        return self.mise_a_disposition_le + timedelta(days=DELAI_RETRAIT_JOURS)
 
     @property
     def categorie(self) -> Categorie:

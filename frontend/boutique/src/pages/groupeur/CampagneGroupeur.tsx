@@ -5,6 +5,7 @@ import {
   Banknote,
   Check,
   CircleCheck,
+  Clock,
   Megaphone,
   PackageCheck,
   Phone,
@@ -96,6 +97,9 @@ export default function CampagneGroupeur() {
 
   const payes = (participants ?? []).filter((p) => p.statut !== "en_attente_paiement");
   const retires = payes.filter((p) => p.statut === "retiree").length;
+  // Les parts non retirées à J+14 : le groupeur peut encore les remettre, le
+  // code de l'acheteur restant valable.
+  const reputes = payes.filter((p) => p.statut === "reputee_livree").length;
   const erreurAction =
     publier.erreur?.message ??
     cloturer.erreur?.message ??
@@ -240,8 +244,16 @@ export default function CampagneGroupeur() {
           <Etape
             icone={CircleCheck}
             titre="Campagne terminée"
-            texte="Tous les colis ont été remis. Cette campagne compte désormais dans votre réputation."
-            action={null}
+            texte={
+              reputes > 0
+                ? `${retires} / ${payes.length} colis remis, ${reputes} réputé(s) livré(s) : le délai de retrait de 14 jours est écoulé. Cette campagne compte dans votre réputation. Si vous avez encore un colis, validez le code de l'acheteur.`
+                : "Tous les colis ont été remis. Cette campagne compte désormais dans votre réputation."
+            }
+            action={
+              reputes > 0 ? (
+                <Bouton onClick={() => setFeuilleScan(true)}>Valider un retrait tardif</Bouton>
+              ) : null
+            }
           />
         )}
 
@@ -290,6 +302,11 @@ export default function CampagneGroupeur() {
                       <Phone className="size-3" />
                       {telephoneLisible(participant.telephone)}
                     </a>
+                    {participant.statut === "reputee_livree" && (
+                      <p className="texte-doux text-xs font-semibold">
+                        {participant.statut_libelle}
+                      </p>
+                    )}
                   </div>
                   <div className="shrink-0 text-right">
                     <p className="tabulaire font-bold">
@@ -302,6 +319,10 @@ export default function CampagneGroupeur() {
                   {participant.statut === "retiree" ? (
                     <span className="grid size-8 shrink-0 place-items-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
                       <Check className="size-4" strokeWidth={3} />
+                    </span>
+                  ) : participant.statut === "reputee_livree" ? (
+                    <span className="texte-doux grid size-8 shrink-0 place-items-center rounded-full bg-[color:var(--fond-doux)]">
+                      <Clock className="size-4" />
                     </span>
                   ) : (
                     <span className="grid size-8 shrink-0 place-items-center rounded-full bg-accent-doux text-[color:var(--color-accent)]">

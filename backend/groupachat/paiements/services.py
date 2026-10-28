@@ -209,10 +209,16 @@ def cloturer(campagne: Campagne) -> str:
     parce qu'il complète de sa poche. Rembourser d'office lui retirerait
     cette possibilité et ferait échouer des groupages qui auraient abouti.
     """
+    # Verrou de la campagne en tête, avant tout accès au séquestre : c'est
+    # l'ordre d'`annuler` et d'`executer_decaissement` (campagne, décaissement,
+    # séquestre). Sans lui, `cloturer` écrivait le séquestre d'abord et
+    # `annuler` simultané provoquait « deadlock detected » (C-052). Relire
+    # l'état ici évite aussi de rouvrir une campagne annulée entre-temps.
+    campagne = _verrouiller(campagne)
     if campagne.statut != Campagne.Statut.EN_COURS:
         return campagne.statut
 
-    sequestre = sequestre_de(campagne)
+    sequestre = _verrouiller_sequestre(campagne)
     campagne.cloturee_le = timezone.now()
 
     if campagne.minimum_atteint:
@@ -658,6 +664,10 @@ def valider_retrait(campagne: Campagne, code: str, agent) -> Participation:
 
     Le code est cherché **dans cette campagne seulement** : un code valide
     d'une autre campagne ne doit pas ouvrir celle-ci.
+
+    Un code présenté après la clôture à J+14 reste accepté : il vaut preuve
+    de livraison, et la refuser priverait les deux parties de la seule preuve
+    possible (décision D2 de F-031).
     """
     code = (code or "").strip().upper()
     # Un QR scanné arrive sous la forme GA|<campagne>|<code>.
@@ -667,15 +677,25 @@ def valider_retrait(campagne: Campagne, code: str, agent) -> Participation:
             raise ErreurPaiement("Ce QR code ne concerne pas cette campagne.")
         code = morceaux[2]
 
-    participation = campagne.participations.filter(code_retrait=code).first()
+    # Sous verrou, campagne puis part : sans lui, le groupeur qui valide le
+    # dernier code pendant que la tâche passe à J+14 terminerait la campagne
+    # deux fois (`campagnes_terminees` +2).
+    campagne = _verrouiller(campagne)
+    participation = (
+        campagne.participations.select_for_update().filter(code_retrait=code).first()
+    )
     if participation is None:
         raise ErreurPaiement("Code inconnu pour cette campagne.")
     if participation.statut == Participation.Statut.RETIREE:
         raise ErreurPaiement(
             f"Colis déjà retiré le {participation.retiree_le:%d/%m/%Y à %H:%M}."
         )
-    if participation.statut != Participation.Statut.PRETE:
-        raise ErreurPaiement("Cette part n'est pas prête à être retirée.")
+    en_retard = participation.statut == Participation.Statut.REPUTEE_LIVREE
+    if not en_retard:
+        if participation.statut != Participation.Statut.PRETE:
+            raise ErreurPaiement("Cette part n'est pas prête à être retirée.")
+        if campagne.statut != Campagne.Statut.DISTRIBUTION:
+            raise ErreurPaiement("La distribution de cette campagne est close.")
 
     participation.statut = Participation.Statut.RETIREE
     participation.retiree_le = timezone.now()
@@ -691,14 +711,43 @@ def valider_retrait(campagne: Campagne, code: str, agent) -> Participation:
         lien=f"/mes-achats/{participation.id}",
     )
 
+    if en_retard:
+        _crediter_retrait_tardif(campagne)
     # Dernier colis remis : la campagne est terminée et la réputation du
     # groupeur en tient compte.
-    if not campagne.participations.filter(statut=Participation.Statut.PRETE).exists():
-        campagne.statut = Campagne.Statut.TERMINEE
-        campagne.save(update_fields=["statut"])
-        _crediter_reputation(campagne)
+    elif not campagne.participations.filter(statut=Participation.Statut.PRETE).exists():
+        _terminer(campagne)
 
     return participation
+
+
+def _terminer(campagne: Campagne) -> None:
+    """distribution → terminée, et crédit de réputation. Campagne verrouillée.
+
+    Seul chemin vers `terminee` après la distribution. La garde sur le statut
+    empêche de créditer deux fois la même campagne quand le dernier code et
+    la tâche de J+14 se croisent.
+    """
+    if campagne.statut == Campagne.Statut.TERMINEE:
+        return
+    campagne.statut = Campagne.Statut.TERMINEE
+    campagne.save(update_fields=["statut"])
+    _crediter_reputation(campagne)
+
+
+def _crediter_retrait_tardif(campagne: Campagne) -> None:
+    """Un participant de plus servi, dans une campagne déjà comptée.
+
+    `campagnes_terminees` ne bouge pas : la campagne a été créditée à J+14.
+    """
+    from django.db.models import F
+
+    from groupachat.comptes.models import Reputation
+
+    Reputation.objects.get_or_create(groupeur=campagne.groupeur)
+    Reputation.objects.filter(groupeur=campagne.groupeur).update(
+        participants_servis=F("participants_servis") + 1
+    )
 
 
 def _crediter_reputation(campagne: Campagne) -> None:

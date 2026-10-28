@@ -3,6 +3,7 @@ import {
   Bell,
   BellRing,
   CheckCheck,
+  Clock,
   PackageCheck,
   ShieldCheck,
   Undo2,
@@ -27,6 +28,8 @@ const ICONES: Record<string, typeof Bell> = {
   remboursement: Undo2,
   kyc_decide: ShieldCheck,
   relance_retrait: PackageCheck,
+  livraison_reputee: Clock,
+  campagne_terminee: CheckCheck,
   nouveau_commentaire: BellRing,
   reponse_commentaire: BellRing,
 };

@@ -12,6 +12,7 @@ import {
   EtatVide,
   Squelette,
 } from "@commun/composants/ui";
+import { Confirmation } from "@commun/composants/Confirmation";
 import { dateLongue, depuis, francs, telephoneLisible } from "@commun/outils/formats";
 import { api, useAction, useRequete } from "@commun/outils/requetes";
 
@@ -27,6 +28,9 @@ export default function Decaissements() {
     "/admin/decaissements/",
   );
   const [encours, setEncours] = useState<number | null>(null);
+  // La demande dont on attend la confirmation : rien n'est versé tant qu'elle
+  // n'est pas confirmée.
+  const [aConfirmer, setAConfirmer] = useState<Decaissement | null>(null);
 
   const executer = useAction(async (identifiant: number) => {
     setEncours(identifiant);
@@ -54,7 +58,6 @@ export default function Decaissements() {
         </p>
       </header>
 
-      <Alerte>{executer.erreur?.message}</Alerte>
       <Alerte>{erreur?.message}</Alerte>
 
       {chargement ? (
@@ -84,7 +87,10 @@ export default function Decaissements() {
                   action={
                     <Bouton
                       chargement={encours === demande.id}
-                      onClick={() => void executer.lancer(demande.id)}
+                      onClick={() => {
+                        executer.effacerErreur();
+                        setAConfirmer(demande);
+                      }}
                     >
                       Libérer {francs(demande.montant_net)}
                     </Bouton>
@@ -104,6 +110,32 @@ export default function Decaissements() {
           )}
         </>
       )}
+
+      <Confirmation
+        ouverte={aConfirmer !== null}
+        titre="Libérer les fonds ?"
+        texte={
+          aConfirmer
+            ? `Libérer ${francs(aConfirmer.montant_net)} à ${aConfirmer.groupeur} pour la campagne « ${aConfirmer.campagne_titre} » ? Le versement ne peut pas être annulé.`
+            : ""
+        }
+        libelleAction={aConfirmer ? `Libérer ${francs(aConfirmer.montant_net)}` : "Libérer"}
+        ton="danger"
+        envoi={executer.envoi}
+        erreur={executer.erreur?.message}
+        surConfirmation={() => {
+          if (!aConfirmer) return;
+          // `null` = refus du serveur : la feuille reste ouverte avec le message.
+          void executer.lancer(aConfirmer.id).then((resultat) => {
+            if (resultat !== null) setAConfirmer(null);
+          });
+        }}
+        surFermeture={() => {
+          if (executer.envoi) return;
+          executer.effacerErreur();
+          setAConfirmer(null);
+        }}
+      />
     </div>
   );
 }

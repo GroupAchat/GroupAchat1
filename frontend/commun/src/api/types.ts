@@ -300,7 +300,7 @@ export interface Page<T> {
 
 export interface TableauDeBordGroupeur {
   campagnes: { total: number; en_cours: number; a_distribuer: number; terminees: number };
-  collecte: { montant_consigne: number; pieces: number; participants: number };
+  collecte: { montant_detenu: number; montant_consigne: number; pieces: number; participants: number };
   decaissements: { montant_recu: number; frais_payes: number };
   reputation: { note: string; campagnes_terminees: number; participants_servis: number };
 }

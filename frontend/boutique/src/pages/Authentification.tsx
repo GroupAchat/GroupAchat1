@@ -28,7 +28,7 @@ function Cadre({
   children: React.ReactNode;
 }) {
   return (
-    <div className="relative mx-auto flex min-h-[calc(100dvh-4rem)] max-w-md flex-col justify-center px-5 py-10">
+    <div className="relative mx-auto overflow-x-clip flex min-h-[calc(100dvh-4rem)] max-w-md flex-col justify-center px-5 py-10">
       <span className="pointer-events-none absolute -right-24 -top-10 size-72 rounded-full bg-[color:var(--color-accent)]/12 blur-3xl" />
       <motion.div
         initial={{ opacity: 0, y: 18 }}

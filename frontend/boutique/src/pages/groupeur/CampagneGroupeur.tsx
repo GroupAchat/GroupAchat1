@@ -20,6 +20,7 @@ import { Link, useParams } from "react-router-dom";
 
 import type { Campagne, Participant } from "@commun/api/types";
 import { PhotosDuLot } from "@/composants/PhotosDuLot";
+import { Confirmation } from "@commun/composants/Confirmation";
 import { Feuille } from "@commun/composants/Feuille";
 import { Jauge } from "@/composants/Jauge";
 import {
@@ -33,7 +34,7 @@ import {
   fusionner,
   Squelette,
 } from "@commun/composants/ui";
-import { codeLisible, dateLongue, francs, telephoneLisible } from "@commun/outils/formats";
+import { codeLisible, dateLongue, francs, pluriel, telephoneLisible } from "@commun/outils/formats";
 import { api, useAction, useRequete } from "@commun/outils/requetes";
 
 /**
@@ -54,6 +55,10 @@ export default function CampagneGroupeur() {
   >(`/groupeur/campagnes/${id}/participants/`);
   const [feuilleRetrait, setFeuilleRetrait] = useState(false);
   const [feuilleScan, setFeuilleScan] = useState(false);
+  // Les gestes qui déplacent de l'argent ou préviennent des tiers attendent
+  // une confirmation : `pointAPrevenir` porte le point saisi jusque-là.
+  const [confirmerRenoncement, setConfirmerRenoncement] = useState(false);
+  const [pointAPrevenir, setPointAPrevenir] = useState<string | null>(null);
 
   const tout = async () => {
     await Promise.all([recharger(), rechargerParticipants()]);
@@ -201,7 +206,10 @@ export default function CampagneGroupeur() {
                 <Bouton
                   ton="contour"
                   chargement={annuler.envoi}
-                  onClick={() => void annuler.lancer("")}
+                  onClick={() => {
+                    annuler.effacerErreur();
+                    setConfirmerRenoncement(true);
+                  }}
                 >
                   Renoncer et rembourser
                 </Bouton>
@@ -228,7 +236,10 @@ export default function CampagneGroupeur() {
               <FormulaireDisposition
                 defaut={campagne.point_remise}
                 envoi={miseADisposition.envoi}
-                surEnvoi={(point) => void miseADisposition.lancer(point)}
+                surEnvoi={(point) => {
+                  miseADisposition.effacerErreur();
+                  setPointAPrevenir(point);
+                }}
               />
             }
           />
@@ -356,6 +367,44 @@ export default function CampagneGroupeur() {
 
       </div>
 
+      <Confirmation
+        ouverte={confirmerRenoncement}
+        titre="Renoncer et rembourser ?"
+        texte={`Rembourser les ${pluriel(payes.length, "participant")} ? Le montant consigné leur est rendu et la campagne est annulée.`}
+        libelleAction="Renoncer et rembourser"
+        ton="danger"
+        envoi={annuler.envoi}
+        erreur={annuler.erreur?.message}
+        surConfirmation={() =>
+          void annuler.lancer("").then((resultat) => {
+            if (resultat !== null) setConfirmerRenoncement(false);
+          })
+        }
+        surFermeture={() => {
+          if (annuler.envoi) return;
+          annuler.effacerErreur();
+          setConfirmerRenoncement(false);
+        }}
+      />
+      <Confirmation
+        ouverte={pointAPrevenir !== null}
+        titre="Prévenir les participants ?"
+        texte={`Prévenir ${pluriel(payes.length, "participant")} que leur commande est à retirer à ${pointAPrevenir ?? ""} ? Chacun reçoit une notification.`}
+        libelleAction="Prévenir"
+        envoi={miseADisposition.envoi}
+        erreur={miseADisposition.erreur?.message}
+        surConfirmation={() => {
+          if (pointAPrevenir === null) return;
+          void miseADisposition.lancer(pointAPrevenir).then((resultat) => {
+            if (resultat !== null) setPointAPrevenir(null);
+          });
+        }}
+        surFermeture={() => {
+          if (miseADisposition.envoi) return;
+          miseADisposition.effacerErreur();
+          setPointAPrevenir(null);
+        }}
+      />
       <FeuilleRetrait
         ouverte={feuilleRetrait}
         surFermeture={() => setFeuilleRetrait(false)}
@@ -466,8 +515,11 @@ function FormulaireDisposition({
       />
       <Bouton
         chargement={envoi}
+        // Un point vide serait annoncé tel quel aux participants : refusé
+        // avant même de demander confirmation.
+        disabled={point.trim() === ""}
         icone={<Send className="size-4" />}
-        onClick={() => surEnvoi(point)}
+        onClick={() => surEnvoi(point.trim())}
       >
         Prévenir les participants
       </Bouton>

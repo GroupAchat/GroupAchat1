@@ -1,6 +1,12 @@
 @import url("https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap");
 @import "tailwindcss";
 
+/* Tailwind ne scanne que le paquet qui compile : sans cette ligne, les
+   classes qui n'existent que dans le socle (Feuille, Confirmation, ton
+   « danger » de ui.tsx) manquaient aux deux CSS compilés — la feuille de
+   confirmation de la console s'affichait hors écran, sans fond. */
+@source ".";
+
 /* ───────────────────────────────────────────────────────────────────────────
    Le système de design de Group Achat.
 

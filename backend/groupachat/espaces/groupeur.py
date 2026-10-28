@@ -37,7 +37,7 @@ from groupachat.commandes.serialiseurs import (
     ParticipantSerialiseur,
     RetraitSerialiseur,
 )
-from groupachat.paiements.models import Decaissement
+from groupachat.paiements.models import Decaissement, Sequestre
 from groupachat.paiements.services import (
     ErreurPaiement,
     # Renommés : les actions de la vue portent les mêmes noms, et lire
@@ -381,6 +381,15 @@ class TableauDeBordGroupeurVue(APIView):
             campagne__groupeur=requete.user, statut=Decaissement.Statut.EXECUTE
         ).aggregate(net=Sum("montant_net", default=0), frais=Sum("frais", default=0))
 
+        # Le détenu, pas le cumul des parts : une part libérée au groupeur
+        # n'est plus en séquestre, et la tuile du tableau de bord porte ce nom.
+        sequestres = Sequestre.objects.filter(campagne__groupeur=requete.user).aggregate(
+            consigne=Sum("montant_consigne", default=0),
+            libere=Sum("montant_libere", default=0),
+            rembourse=Sum("montant_rembourse", default=0),
+        )
+        detenu = sequestres["consigne"] - sequestres["libere"] - sequestres["rembourse"]
+
         reputation = getattr(requete.user, "reputation", None)
         return Response(
             {
@@ -397,6 +406,7 @@ class TableauDeBordGroupeurVue(APIView):
                     ).count(),
                 },
                 "collecte": {
+                    "montant_detenu": detenu,
                     "montant_consigne": payees.aggregate(
                         total=Sum("montant_total", default=0)
                     )["total"],

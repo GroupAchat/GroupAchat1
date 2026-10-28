@@ -758,6 +758,43 @@ class TestAvisProteges:
         avis_d_ama.refresh_from_db()
         assert avis_d_ama.reponse == ""
 
+    def test_une_seconde_reponse_est_refusee_et_la_premiere_reste(
+        self, connecte, campagne, avis_d_ama
+    ):
+        """C-065 : la seconde réponse écrasait la première (200)."""
+        api = connecte(campagne.groupeur)
+        adresse = f"/api/avis/{avis_d_ama.id}/repondre/"
+        assert api.post(adresse, {"reponse": "Merci"}, format="json").status_code == 200
+        avis_d_ama.refresh_from_db()
+        date_premiere = avis_d_ama.repondu_le
+
+        reponse = api.post(adresse, {"reponse": "Autre"}, format="json")
+
+        assert reponse.status_code == 400
+        assert reponse.data == {"reponse": ["Vous avez déjà répondu à cet avis."]}
+        avis_d_ama.refresh_from_db()
+        assert avis_d_ama.reponse == "Merci"
+        assert avis_d_ama.repondu_le == date_premiere
+
+    def test_une_reponse_vide_est_refusee_sans_rien_ecrire(
+        self, connecte, campagne, avis_d_ama
+    ):
+        reponse = connecte(campagne.groupeur).post(
+            f"/api/avis/{avis_d_ama.id}/repondre/", {"reponse": ""}, format="json"
+        )
+        assert reponse.status_code == 400
+        avis_d_ama.refresh_from_db()
+        assert avis_d_ama.reponse == ""
+        assert avis_d_ama.repondu_le is None
+
+    def test_un_visiteur_ne_repond_pas_a_un_avis(self, client, avis_d_ama):
+        reponse = client.post(
+            f"/api/avis/{avis_d_ama.id}/repondre/", {"reponse": "Hop"}, format="json"
+        )
+        assert reponse.status_code in (401, 403)
+        avis_d_ama.refresh_from_db()
+        assert avis_d_ama.reponse == ""
+
     def test_on_ne_deplace_pas_un_avis_vers_une_autre_commande(
         self, connecte, campagne, ama, avis_d_ama
     ):

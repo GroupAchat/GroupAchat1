@@ -70,7 +70,7 @@ export default function TableauDeBord() {
           <Tuile
             icone={Wallet}
             libelle="Consigné en séquestre"
-            valeur={francs(bord.collecte.montant_consigne)}
+            valeur={francs(bord.collecte.montant_detenu)}
             detail={`${bord.collecte.pieces} pièces vendues`}
             index={0}
             vedette

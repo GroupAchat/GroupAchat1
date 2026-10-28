@@ -3,9 +3,11 @@
 
 from __future__ import annotations
 
+from django.db import transaction
 from django.utils import timezone
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
 from groupachat.commandes.models import Avis, Participation
@@ -171,7 +173,15 @@ class AvisVueEnsemble(viewsets.ModelViewSet):
         serialiseur = ReponseAvisSerialiseur(data=requete.data)
         serialiseur.is_valid(raise_exception=True)
 
-        avis.reponse = serialiseur.validated_data["reponse"]
-        avis.repondu_le = timezone.now()
-        avis.save(update_fields=["reponse", "repondu_le"])
+        # Verrou sur l'avis : sans lui, deux requêtes simultanées lisent
+        # toutes deux « pas de réponse » et la seconde écrase la première.
+        with transaction.atomic():
+            avis = Avis.objects.select_for_update().get(pk=avis.pk)
+            if avis.reponse:
+                raise ValidationError(
+                    {"reponse": ["Vous avez déjà répondu à cet avis."]}
+                )
+            avis.reponse = serialiseur.validated_data["reponse"]
+            avis.repondu_le = timezone.now()
+            avis.save(update_fields=["reponse", "repondu_le"])
         return Response(AvisSerialiseur(avis, context=self.get_serializer_context()).data)

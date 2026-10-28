@@ -19,6 +19,7 @@ from groupachat.commandes.serialiseurs import (
 from groupachat.paiements.services import ErreurPaiement, encaisser
 from groupachat.echanges.models import Notification
 from groupachat.noyau.permissions import (
+    EstAuteurOuLectureSeule,
     LectureLibreEcritureVerifiee,
     NumeroVerifie,
 )
@@ -109,7 +110,10 @@ class AvisVueEnsemble(viewsets.ModelViewSet):
     """
 
     serializer_class = AvisSerialiseur
-    permission_classes = [LectureLibreEcritureVerifiee]
+    permission_classes = [LectureLibreEcritureVerifiee, EstAuteurOuLectureSeule]
+    # Le droit de réponse appartient au groupeur, pas à l'auteur : sans cette
+    # déclaration, la garde d'auteur lui refuserait de répondre.
+    actions_ouvertes = ("repondre",)
 
     def get_queryset(self):
         avis = Avis.objects.select_related(

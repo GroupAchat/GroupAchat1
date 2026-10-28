@@ -150,6 +150,14 @@ class AvisSerialiseur(serializers.ModelSerializer):
                   "modifie_le"]
         read_only_fields = ["reponse", "repondu_le", "cree_le", "modifie_le"]
 
+    def get_fields(self):
+        fields = super().get_fields()
+        # Sans ça, l'auteur pouvait déplacer son avis vers une autre commande
+        # (et donc vers un autre groupeur) à la modification.
+        if self.instance is not None:
+            fields["participation"].read_only = True
+        return fields
+
     def get_auteur(self, avis) -> dict:
         """Prénom et initiale : assez pour reconnaître, pas pour identifier."""
         acheteur = avis.participation.acheteur

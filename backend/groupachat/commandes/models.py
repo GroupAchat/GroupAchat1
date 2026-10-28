@@ -224,6 +224,16 @@ class Avis(models.Model):
         return f"{self.note}/5 — {self.participation}"
 
     @property
+    def auteur_id(self) -> int:
+        """L'acheteur qui a écrit l'avis.
+
+        Sans cet attribut, la permission d'auteur du noyau (qui ne connaît
+        aucun sujet) ne saurait pas lire le propriétaire d'un avis : il vit
+        sur la participation, pas sur l'avis.
+        """
+        return self.participation.acheteur_id
+
+    @property
     def groupeur(self):
         return self.participation.campagne.groupeur
 

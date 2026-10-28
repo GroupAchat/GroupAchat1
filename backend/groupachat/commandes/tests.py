@@ -7,7 +7,7 @@ import pytest
 from django.utils import timezone
 
 from groupachat.catalogue.models import Campagne, PalierPrix
-from groupachat.commandes.models import Participation
+from groupachat.commandes.models import Avis, Participation
 from groupachat.comptes.models import Reputation
 from groupachat.echanges.models import Notification
 from groupachat.paiements.models import Decaissement, Sequestre, Transaction
@@ -630,3 +630,163 @@ class TestCampagneFigee:
         assert reponse.status_code == 409
         campagne.refresh_from_db()
         assert campagne.prix_unitaire == 18000
+
+
+class TestAvisProteges:
+    """D-F010 : seul l'auteur modifie ou supprime son avis ; F-021 : la
+    réputation ne bouge donc que par la main de l'auteur."""
+
+    @pytest.fixture
+    def avis_d_ama(self, connecte, campagne, ama):
+        part = participer_et_payer(connecte, ama, campagne, quantite=10)[
+            "participation"
+        ]
+        connecte(campagne.groupeur).post(
+            f"/api/groupeur/campagnes/{campagne.id}/cloturer/", {}, format="json"
+        )
+        reponse = connecte(ama).post(
+            "/api/avis/",
+            {"participation": part["id"], "note": 4, "commentaire": "Bien."},
+            format="json",
+        )
+        assert reponse.status_code == 201, reponse.data
+        return Avis.objects.get(id=reponse.data["id"])
+
+    @staticmethod
+    def _rien_n_a_bouge(avis, campagne):
+        avis.refresh_from_db()
+        assert avis.note == 4
+        assert avis.modifie_le is None
+        assert Avis.objects.count() == 1
+        reputation = Reputation.objects.get(groupeur=campagne.groupeur)
+        assert float(reputation.note) == 4.0
+        assert reputation.avis_recus == 1
+
+    def test_l_auteur_modifie_son_avis_et_la_reputation_suit(
+        self, connecte, campagne, ama, avis_d_ama
+    ):
+        reponse = connecte(ama).patch(
+            f"/api/avis/{avis_d_ama.id}/",
+            {"note": 2, "commentaire": "Finalement décevant"},
+            format="json",
+        )
+        assert reponse.status_code == 200, reponse.data
+        avis_d_ama.refresh_from_db()
+        assert avis_d_ama.note == 2
+        assert avis_d_ama.modifie_le is not None
+        reputation = Reputation.objects.get(groupeur=campagne.groupeur)
+        assert float(reputation.note) == 2.0
+        assert reputation.avis_recus == 1
+
+    def test_l_auteur_supprime_son_avis_et_la_reputation_retombe(
+        self, connecte, campagne, ama, avis_d_ama
+    ):
+        api = connecte(ama)
+        assert api.delete(f"/api/avis/{avis_d_ama.id}/").status_code == 204
+        assert Avis.objects.count() == 0
+        reputation = Reputation.objects.get(groupeur=campagne.groupeur)
+        assert float(reputation.note) == 0
+        assert reputation.avis_recus == 0
+        assert api.get(f"/api/avis/{avis_d_ama.id}/").status_code == 404
+
+    def test_un_autre_acheteur_ne_modifie_ni_ne_supprime_un_avis(
+        self, connecte, campagne, yao, avis_d_ama
+    ):
+        api = connecte(yao)
+        assert api.patch(
+            f"/api/avis/{avis_d_ama.id}/", {"note": 1}, format="json"
+        ).status_code == 403
+        assert api.put(
+            f"/api/avis/{avis_d_ama.id}/",
+            {"participation": avis_d_ama.participation_id, "note": 1},
+            format="json",
+        ).status_code == 403
+        assert api.delete(f"/api/avis/{avis_d_ama.id}/").status_code == 403
+        self._rien_n_a_bouge(avis_d_ama, campagne)
+
+    def test_le_groupeur_vise_ne_modifie_ni_ne_supprime_l_avis_qui_le_concerne(
+        self, connecte, campagne, avis_d_ama
+    ):
+        api = connecte(campagne.groupeur)
+        assert api.patch(
+            f"/api/avis/{avis_d_ama.id}/", {"note": 5}, format="json"
+        ).status_code == 403
+        assert api.delete(f"/api/avis/{avis_d_ama.id}/").status_code == 403
+        self._rien_n_a_bouge(avis_d_ama, campagne)
+
+    def test_sans_session_on_ne_touche_pas_a_un_avis(
+        self, client, campagne, avis_d_ama
+    ):
+        client.force_authenticate(user=None)
+        assert client.patch(
+            f"/api/avis/{avis_d_ama.id}/", {"note": 1}, format="json"
+        ).status_code in (401, 403)
+        assert client.delete(f"/api/avis/{avis_d_ama.id}/").status_code in (401, 403)
+        self._rien_n_a_bouge(avis_d_ama, campagne)
+
+    def test_un_numero_non_verifie_ne_supprime_pas_un_avis(
+        self, connecte, campagne, yao, avis_d_ama
+    ):
+        yao.telephone_verifie = False
+        yao.save()
+        assert connecte(yao).delete(f"/api/avis/{avis_d_ama.id}/").status_code == 403
+        self._rien_n_a_bouge(avis_d_ama, campagne)
+
+    def test_le_groupeur_garde_son_droit_de_reponse(
+        self, connecte, campagne, avis_d_ama
+    ):
+        reponse = connecte(campagne.groupeur).post(
+            f"/api/avis/{avis_d_ama.id}/repondre/", {"reponse": "Merci"},
+            format="json",
+        )
+        assert reponse.status_code == 200, reponse.data
+        avis_d_ama.refresh_from_db()
+        assert avis_d_ama.reponse == "Merci"
+        assert avis_d_ama.repondu_le is not None
+        assert avis_d_ama.note == 4
+        reputation = Reputation.objects.get(groupeur=campagne.groupeur)
+        assert float(reputation.note) == 4.0
+
+    def test_un_tiers_ne_repond_pas_a_la_place_du_groupeur(
+        self, connecte, yao, avis_d_ama
+    ):
+        reponse = connecte(yao).post(
+            f"/api/avis/{avis_d_ama.id}/repondre/", {"reponse": "Faux"},
+            format="json",
+        )
+        assert reponse.status_code == 403
+        avis_d_ama.refresh_from_db()
+        assert avis_d_ama.reponse == ""
+
+    def test_on_ne_deplace_pas_un_avis_vers_une_autre_commande(
+        self, connecte, campagne, ama, avis_d_ama
+    ):
+        seconde = Participation.objects.create(
+            acheteur=ama, campagne=campagne, quantite=1,
+            prix_unitaire_applique=18000, montant_total=18000,
+            statut=Participation.Statut.PAYEE,
+        )
+        connecte(ama).patch(
+            f"/api/avis/{avis_d_ama.id}/",
+            {"participation": seconde.id, "note": 3},
+            format="json",
+        )
+        avis_d_ama.refresh_from_db()
+        assert avis_d_ama.participation_id != seconde.id
+        assert not Avis.objects.filter(participation=seconde).exists()
+
+    def test_la_note_hors_bornes_est_refusee_a_la_modification(
+        self, connecte, campagne, ama, avis_d_ama
+    ):
+        api = connecte(ama)
+        for note in (0, 6):
+            reponse = api.patch(
+                f"/api/avis/{avis_d_ama.id}/", {"note": note}, format="json"
+            )
+            assert reponse.status_code == 400
+        self._rien_n_a_bouge(avis_d_ama, campagne)
+
+    def test_avis_inexistant_donne_404(self, connecte, ama):
+        api = connecte(ama)
+        assert api.patch("/api/avis/999999/", {"note": 3}, format="json").status_code == 404
+        assert api.delete("/api/avis/999999/").status_code == 404

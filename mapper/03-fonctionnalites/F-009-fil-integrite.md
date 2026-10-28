@@ -1,7 +1,7 @@
 ---
 type: fonctionnalite
 id: F-009
-statut: à faire
+statut: à vérifier
 date: 2026-10-28
 tags: [fonctionnalite, F-009, fil, commentaires, integrite, securite, mvp]
 ---
@@ -83,3 +83,37 @@ Web (R12-R13) : contrôle navigateur, `npm run verifier`.
 ## Prêt à coder ?
 
 **Oui**, avec les recommandations par défaut de Q1 à Q3 (404 partout, brouillon fermé). Ces trois réponses ne changent pas la structure des tests, seulement des valeurs attendues ; le développeur peut commencer et l'utilisateur ajuster.
+
+
+## Décisions prises (T12b, Q6) et réalisation
+
+- Q1 = (a), Q2 = (b), Q3 = 404 : **404 partout** pour une campagne inexistante et pour un brouillon, en lecture comme en écriture, **y compris pour le groupeur propriétaire**. Les autres statuts (`annulee`, `minimum_non_atteint`, `terminee`…) gardent leur fil, comme la fiche campagne.
+- `echanges/vues.py` : `initial()` charge la campagne (`get_object_or_404`, brouillon exclu) après authentification et permissions ; elle couvre liste, création, modification, retrait et `jaime`. `perform_create` réutilise cette campagne.
+- `echanges/serialiseurs.py` : `validate_reponse_a` compare la campagne du parent à `campagne_id` du contexte (400 sur `reponse_a`). La modération admin (`/api/admin/commentaires/`) est une autre vue, sans ce contexte : inchangée.
+- Écran : aucun changement ; `ErreurApi` remonte le premier message de `reponse_a`.
+- Hors périmètre : la fuite possible de `CampagneVueEnsemble.retrieve` est suivie par C-063 du backlog.
+
+## Recette — 2026-10-28
+
+**RECETTE OK** — base `c7023f4` + modifications non commitées du worktree `fix/F-009-fil-integrite`. Matrice : serveur ✅ · web ✅ · mobile —.
+
+Serveur Django local (SQLite jetable, `charger_demo`, port 8021), vraies requêtes HTTP avec session et CSRF (`curl`). Compte de messages et de notifications relu en base après chaque refus.
+
+| # | Observé | Verdict |
+|---|---|---|
+| R1 | `ama` POST camp. 1 : 201, commentaires 13→14, notifications 129→130 | ✅ |
+| R2 | réponse à un message d'`yao` sur la même campagne : 201, `reponse_a` = 15, notification `reponse_commentaire` « Réponse à votre message », `lien: /campagnes/1` (reçue par `yao`) | ✅ |
+| R3 | réponse à un message de la campagne 13 depuis la 1 : 400 `{"reponse_a":["Ce message n'appartient pas à la discussion de cette campagne."]}` ; compteurs inchangés (16 / 132) | ✅ |
+| R4 | brouillon 12, `ama` : POST et GET 404 ; compteurs inchangés | ✅ |
+| R5 | brouillon 12, son groupeur `90001122` : POST et GET 404 (Q2 = b) ; compteurs inchangés | ✅ |
+| R6/R7 | campagne 999999 : POST et GET 404 JSON, jamais 500 ; compteurs inchangés | ✅ |
+| R8 | réponse à une réponse : 400 « On ne répond pas à une réponse… » | ✅ |
+| R9 | `reponse_a` 999999 : 400 sur `reponse_a`, pas de 500 | ✅ |
+| R10 | sans session : 403, rien d'écrit | ✅ |
+| R11 | campagnes 9 (terminée) et 11 (minimum non atteint) : lecture 200 et écriture 201 | ✅ |
+| `jaime` | via `/campagnes/12/commentaires/<id>/jaime/` : 404 ; sur la campagne 1 en cours : 200 `jaime_par_moi: true` | ✅ |
+| Modération | admin `masquer` 200 (message disparu du fil), `retablir` 200 (revenu) ; `ama` : 403 | ✅ |
+| R12 | Chrome headless 390 px, build de la boutique servi par Django : écrire, répondre (sous le message), aimer fonctionnent ; aucune erreur JS | ✅ |
+| R13 | réponse 400 simulée par interception réseau (corps identique au vrai 400 de R3, car l'écran n'offre pas de réponse hors campagne) : message rouge « Ce message n'appartient pas à la discussion de cette campagne. » sous le champ, texte saisi conservé. Capture : `scratchpad/t12br/discussion-390.png` | ✅ |
+
+Tests : `python -m pytest groupachat/echanges/tests.py` relancé en fin de recette, code de sortie 0 (récapitulatif texte non capturé). Non testé : navigateur sur `annulee` (couvert côté serveur par R11).

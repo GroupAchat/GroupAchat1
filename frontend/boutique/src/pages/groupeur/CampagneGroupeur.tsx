@@ -46,7 +46,7 @@ import { api, useAction, useRequete } from "@commun/outils/requetes";
  */
 export default function CampagneGroupeur() {
   const { id } = useParams();
-  const { donnees: campagne, chargement, recharger } = useRequete<Campagne>(
+  const { donnees: campagne, chargement, erreur, recharger } = useRequete<Campagne>(
     `/groupeur/campagnes/${id}/`,
   );
   const { donnees: participants, recharger: rechargerParticipants } = useRequete<
@@ -100,7 +100,10 @@ export default function CampagneGroupeur() {
   // Les parts non retirées à J+14 : le groupeur peut encore les remettre, le
   // code de l'acheteur restant valable.
   const reputes = payes.filter((p) => p.statut === "reputee_livree").length;
+  // Le rechargement qui suit une action peut échouer alors que l'action a
+  // réussi : la page reste affichée, l'alerte dit que les chiffres sont périmés.
   const erreurAction =
+    erreur?.message ??
     publier.erreur?.message ??
     cloturer.erreur?.message ??
     maintenir.erreur?.message ??

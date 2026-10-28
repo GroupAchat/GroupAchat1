@@ -20,6 +20,7 @@ from groupachat.catalogue.models import (
 )
 from groupachat.commandes.models import Participation
 from groupachat.comptes.models import DossierKYC, Reputation, Utilisateur
+from groupachat.echanges.models import Commentaire
 
 pytestmark = pytest.mark.django_db
 
@@ -535,3 +536,73 @@ class TestPhotosDuLot:
         fiche = client.get(f"/api/catalogue/campagnes/{campagne.id}/").data
         assert len(fiche["medias"]) == 1
         assert "res.cloudinary.com/essai" in fiche["medias"][0]["adresse"]
+
+
+class TestContratDuPrixAffiche:
+    """L'écran recalcule le prix du palier à partir de ces champs (C-013).
+
+    `frontend/commun/src/outils/prix.ts` n'a que cette fiche pour reproduire la
+    règle du serveur : si un de ces champs change de nom ou de forme, l'écran
+    afficherait un prix faux sans qu'aucune erreur ne se voie.
+    """
+
+    def test_le_detail_d_une_campagne_expose_les_paliers_et_le_prix_unitaire(
+        self, client, groupeur, rayons
+    ):
+        campagne = creer_campagne(
+            groupeur, rayons["alimentation"], "Riz", 7000, minimum=10
+        )
+        PalierPrix.objects.create(campagne=campagne, quantite_min=20, prix_unitaire=6000)
+        PalierPrix.objects.create(campagne=campagne, quantite_min=10, prix_unitaire=6500)
+        acheteur = Utilisateur.objects.create_user(
+            "92223344", "mdpSolide2026", nom="N", prenom="P", telephone_verifie=True
+        )
+        Participation.objects.create(
+            campagne=campagne, acheteur=acheteur, quantite=8,
+            prix_unitaire_applique=7000, montant_total=56000,
+            statut=Participation.Statut.PAYEE, code_retrait="CODEPRIX",
+        )
+
+        fiche = client.get(f"/api/catalogue/campagnes/{campagne.id}/").data
+
+        assert fiche["prix_unitaire"] == 7000
+        assert fiche["quantite_reservee"] == 8
+        assert sorted(
+            (palier["quantite_min"], palier["prix_unitaire"]) for palier in fiche["paliers"]
+        ) == [(10, 6500), (20, 6000)]
+        # Le prix courant ne compte que les pièces payées : l'écran ne doit
+        # donc pas s'en servir pour la part que l'acheteur s'apprête à prendre.
+        assert fiche["prix_courant"] == 7000
+
+    def test_les_commentaires_ne_gonflent_pas_la_jauge_de_la_fiche(
+        self, client, groupeur, rayons
+    ):
+        """Régression C-013 : 15 pièces payées s'affichaient « 30 » avec 2 commentaires.
+
+        Symptôme : la jointure sur les commentaires multipliait les lignes de
+        participations avant les `Sum`. Le prix calculé par l'écran sur ce
+        total en était faussé.
+        """
+        campagne = creer_campagne(
+            groupeur, rayons["alimentation"], "Huile", 28000, minimum=15
+        )
+        for numero, quantite in (("92223344", 8), ("93334455", 7)):
+            acheteur = Utilisateur.objects.create_user(
+                numero, "mdpSolide2026", nom="N", prenom="P", telephone_verifie=True
+            )
+            Participation.objects.create(
+                campagne=campagne, acheteur=acheteur, quantite=quantite,
+                prix_unitaire_applique=28000, montant_total=quantite * 28000,
+                statut=Participation.Statut.PAYEE, code_retrait=f"CODE{numero[:4]}",
+            )
+            Commentaire.objects.create(campagne=campagne, auteur=acheteur, texte="Bonjour")
+        Commentaire.objects.create(
+            campagne=campagne, auteur=groupeur, texte="Retiré", masque_le=timezone.now()
+        )
+
+        fiche = client.get(f"/api/catalogue/campagnes/{campagne.id}/").data
+
+        assert fiche["quantite_reservee"] == 15
+        assert fiche["montant_collecte"] == 15 * 28000
+        assert fiche["nombre_participants"] == 2
+        assert fiche["nombre_commentaires"] == 2

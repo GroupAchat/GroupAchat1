@@ -8,7 +8,8 @@ qu'on cherche justement à rassurer.
 
 from __future__ import annotations
 
-from django.db.models import Count, Prefetch, Q, Sum
+from django.db.models import Count, OuterRef, Prefetch, Q, Subquery, Sum
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
@@ -22,6 +23,7 @@ from groupachat.catalogue.serialiseurs import (
     ProduitSerialiseur,
 )
 from groupachat.commandes.models import Participation
+from groupachat.echanges.models import Commentaire
 
 # ⚠️ **Deux listes, et la distinction compte.**
 #
@@ -175,12 +177,22 @@ class CampagneVueEnsemble(viewsets.ReadOnlyModelViewSet):
         # La fiche s'ouvre quel que soit le sort de la campagne ; seul
         # un brouillon reste privé, et son groupeur a son propre espace.
         if self.action == "retrieve":
-            return campagnes.annotate(
-                nombre_commentaires=Count(
-                    "commentaires",
-                    filter=Q(commentaires__masque_le__isnull=True),
-                    distinct=True,
+            # ⚠️ Sous-requête, pas `Count("commentaires")` : cette jointure
+            # multipliait les lignes de participations avant les `Sum` de la
+            # jauge, et la fiche annonçait 30 pièces réservées pour 15 payées
+            # (autant de fois qu'il y avait de commentaires). Le prix affiché,
+            # qui se calcule sur ce total, en devenait faux.
+            commentaires_visibles = (
+                Commentaire.objects.filter(
+                    campagne=OuterRef("pk"), masque_le__isnull=True
                 )
+                .order_by()
+                .values("campagne")
+                .annotate(total=Count("pk"))
+                .values("total")
+            )
+            return campagnes.annotate(
+                nombre_commentaires=Coalesce(Subquery(commentaires_visibles), 0)
             )
 
         # Par défaut on ne montre que ce à quoi on peut encore participer :

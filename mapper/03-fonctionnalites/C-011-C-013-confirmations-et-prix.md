@@ -1,7 +1,7 @@
 ---
 type: fonctionnalite
 id: C-011-C-013
-statut: à faire
+statut: à vérifier
 couvre: [F-005, F-017, F-019]
 mission: M-001 (T13)
 ---
@@ -124,3 +124,40 @@ Client : `frontend/` n'a pas de banc de tests déclaré dans ce dossier de fiche
 ## Prêt à coder ?
 
 **Oui, avec la solution (b)** pour C-013 : tous les scénarios sont vérifiables, la cause de C-011 est établie, et aucune question ne bloque (1 et 3 ont une recommandation par défaut). Si l'utilisateur choisit (c), la fiche doit être reprise (contrat d'API, test serveur de la route).
+
+## Recette — 2026-10-28
+
+**RECETTE OK** — worktree `fix/C-011-C-013-confirmations-et-prix`, non commité (base `c7023f4`).
+Matrice : serveur ✅ · web boutique ✅ · web admin (non-régression) ✅ · mobile —
+
+Méthode : base SQLite jetable + `charger_demo`, Django local (127.0.0.1:8123) servant les deux interfaces compilées, Chrome headless à 390×844 avec vraies sessions, MutationObserver pour la persistance des confirmations (texte apparu, jamais disparu, aucun `.squelette` après le clic). Chaque montant relu en base (participation, séquestre).
+
+### Prix (R1 à R10) — campagne 4 (8 payées, 28 000, paliers 15 → 26 000 / 40 → 24 500)
+- Feuille, quantités 1 / 2 / 6 : 28 000 la pièce ; 7 (pile au seuil, 8+7=15) : 26 000, total 182 000 ; 8, 9, 20 : 26 000. Total, « la pièce », bouton « Payer » et barre « Ma part » concordent.
+- Paiements réels : camp. 3 q1 (sous le seuil) 145 000 ; camp. 4 q7 (pile) 182 000 ; camp. 1 q12 (au-dessus du palier 20) 16 500 → 198 000 ; camp. 6 q3 594 000. Écran = `prix_unitaire_applique` / `montant_total` de `POST /participations/` = ligne de « Mes achats » = base. Séquestre : camp. 4 224 000 → 406 000, camp. 1 198 000 → 396 000.
+- R10 prix figé : après le paiement camp. 3 q1 à 145 000, un autre acheteur paie 5 pièces à 132 000 (palier franchi) ; la part de 145 000 reste inchangée en base et dans « Mes achats ».
+- R9 visiteur : prix 28 000 visible dans la barre et le tableau de paliers ; feuille = invitation à créer un compte. Seul `GET /comptes/moi/` renvoie 403 (sondage de session, invisible).
+- R5 (palier supprimé en base jetable sur la camp. 13) : 17 500 × 3 = 52 500, pas de NaN ; R8 (maximum posé à 15) : « Plus » se désactive à 3, l'appel direct renvoie 400 « Il ne reste que 3 pièce(s). », rien d'écrit.
+
+### Confirmations (R11 à R22), 390 px
+- R11 : « Paiement confirmé » (montant, code de retrait) reste affichée après le rechargement, sans squelette ; mesuré sur 5 paiements. R13 : « Voir mon QR code » ouvre `/mes-achats/<id>` avec le QR. R14 : fermeture puis réouverture = formulaire neuf.
+- R17 : campagne 6 préparée par le parcours réel (un acheteur paie 3 pièces pour atteindre le minimum, le groupeur clôt, statut `financee`, aucun décaissement). « Demande enregistrée » (1 237 500 FCFA) reste affichée ; base : un décaissement `demande` de 1 237 500. R18 : au rechargement, pas de feuille fantôme ; une 2e demande renvoie « Un décaissement a déjà été demandé. » et n'écrit rien.
+- R19 : « Colis remis à Kodjo Agbeko » reste affichée, la page derrière passe à « 1 / 4 colis remis », participation `retiree`. R20 : code d'une autre campagne et code inconnu → « Code inconnu pour cette campagne. » ; code déjà utilisé → « Colis déjà retiré le … » ; rien d'écrit.
+- R15 : collecte close pendant l'ouverture de la feuille → « La collecte de cette campagne est close. » dans la feuille, aucune confirmation, aucune participation créée, séquestre inchangé. Payer la part d'autrui : 404.
+- R16 : le groupeur voit « Gérer ma campagne », pas « Participer ». R21 : acheteur sur les routes groupeur : 403. R22 : autre groupeur : 404, part restée `prete`. Anonyme : 403.
+- R23 : boutons de fermeture et de validation atteignables (`elementFromPoint`), `scrollWidth` = 390 ; captures dans le dossier de recette.
+
+### Jauge
+Camp. 1 (6 commentaires visibles, 7 en base) : écran et API 11 pièces / 198 000 (base : 11 / 198 000) ; après paiement 23 / 396 000, identiques à la base. Camp. 2 (9 / 126 000) et 4 (8 / 224 000) idem. Le correctif de `nombre_commentaires` tient.
+
+### R24 à R27
+Premier chargement : squelette, puis la fiche. Changement d'id (1 → 3 par navigation client, réponse retardée) : squelette, l'ancienne campagne n'apparaît pas. Campagne inconnue : « Cette campagne est introuvable », aucune feuille. R26 : rechargement coupé après un paiement réussi : la confirmation reste, et l'alerte « Connexion impossible. Vérifiez votre réseau. » s'affiche en haut de page.
+
+### Non-régression `useRequete`
+`MesAchats` : modification d'un avis (PATCH 200) mise à jour sans squelette ; `Notifications` : « Tout marquer comme lu » mis à jour ; console admin `Décaissements` : « Libérer » déplace la ligne dans l'historique ; `Dossiers` : « Valider » retire le dossier de la liste. Aucun ne reste en squelette.
+
+### Pas pu tester / remarques (sans bloquer)
+- La **publication** d'un premier avis n'est pas rejouée : toutes les parts retirées de la démo ont déjà un avis. Seule la modification l'est.
+- Une panne réseau au **tout premier** chargement d'une fiche affiche « Cette campagne est introuvable » (même écran que l'id inconnu) : `FicheCampagne` ne distingue pas l'erreur de l'absence. Comportement antérieur, hors périmètre ; à décider.
+- Après une demande de retrait, la page groupeur propose encore « Demander le retrait » (statut `financee` tant que l'admin n'a pas libéré) : c'est C-012, connu, hors périmètre.
+- Tests : `groupachat/tests/test_prix_affiche_et_facture.py` rejoué par moi : 10 passed (84 s). `catalogue/tests.py` : non rejoué jusqu'au bout (lenteur du hachage en SQLite) ; on s'en remet aux 87 passed du relecteur. `npm run verifier` : exit 0.

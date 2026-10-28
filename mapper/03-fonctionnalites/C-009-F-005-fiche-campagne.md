@@ -1,7 +1,7 @@
 ---
 type: fonctionnalite
 id: C-009-F-005
-statut: à faire
+statut: terminée (C-009) ; F-005 partielle
 date: 2026-10-28
 tags: [fonctionnalite, C-009, F-005, C-8, C-4, textes, mobile, fiche-campagne, mvp]
 ---
@@ -96,3 +96,7 @@ Environnement : base SQLite jetable + `charger_demo`, Django 127.0.0.1:8031, Vit
 | Non-régression | OK | 390 px : bas de `MesAchats` (dernier élément y 719, onglets 779), `Catalogue` (723/779), `CampagneGroupeur` (719/779) non masqués. |
 
 Constats sans gravité : à 390 px le bandeau de l'accueil (textes Q2) n'est pas affiché (flux plein écran), les textes ne se lisent qu'à partir de la largeur de bureau ; la fiche d'une campagne échue (3) ou terminée (9) garde le bloc « Remboursé si le groupage échoue » : cohérent avec R8, qui ne le contredit pas. Non joués : thème sombre ; `env(safe-area-inset-bottom)` non mesurable en headless (la formule `calc(var(--hauteur-onglets) + env(...))` est dans `index.css`).
+
+## Livraison — 2026-10-28
+
+Commit `04a86fd` (« Corrige la promesse affichée et dégage le bouton Participer sur mobile »), fusionné dans `staging`. T6 terminée (C-009) : textes de la promesse corrigés, décisions Q1 et Q2 ([[2026-10-28-decisions-t6-t11-t12]]) ; `Accueil.tsx`, `MesAchats.tsx` et `NouvelleCampagne.tsx` ajoutés au périmètre. T12a (F-005, bouton à 390 px) livrée dans la même boucle. Reste de F-005 : C-011 et C-013, T13 de [[M-001-terminer-le-mvp]]. Réserve R2 : feuille « Paiement confirmé » non observée, à rejouer après T13. « Vérifier » sur `staging` : `406 passed, 9 skipped in 2072.38s`, `CHECK: OK (complet)`.

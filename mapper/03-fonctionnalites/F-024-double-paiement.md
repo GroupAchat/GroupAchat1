@@ -8,7 +8,7 @@ tags: [fonctionnalite, F-024, F-018, C-014, C-021, decaissement, sequestre, arge
 
 # F-024 — Décaissement : plus de double paiement (avec F-018, C-014, C-021)
 
-Statut : **terminée** (2026-10-27) : RECETTE OK après reprise, relecture `reviewer-tester` VALIDÉE. **Non commitée** : la base est `abaa622`, l'arbre de travail porte le correctif (commit et fusion attendent la décision de l'utilisateur). Tâche T10 de [[M-001-terminer-le-mvp]] ; décision D-F024 ([[2026-10-26-decisions-carte]], section « Décisions après l'état des lieux »). Panne d'origine : [[2026-10-26-recette-failles]] n°3 et [[recette-etat-des-lieux-2026-10-26]].
+Statut : **terminée** (2026-10-27) : RECETTE OK après reprise, relecture `reviewer-tester` VALIDÉE. **Commitée** `7a31195` (« Ferme le double paiement d'un décaissement après annulation »), dans `staging` (constaté par `git log` le 2026-10-28) ; la base était `abaa622`. Tâche T10 de [[M-001-terminer-le-mvp]] ; décision D-F024 ([[2026-10-26-decisions-carte]], section « Décisions après l'état des lieux »). Panne d'origine : [[2026-10-26-recette-failles]] n°3 et [[recette-etat-des-lieux-2026-10-26]].
 
 Rôles : **Administrateur** (exécute), **Groupeur** (demande, annule, met à disposition), **Acheteur** (remboursé), **Système**. Couches : serveur oui · web admin oui · web boutique oui · mobile non (pas d'application dans ce dépôt). Source : `CAHIER_DES_CHARGES.md` §6 (« Décaissement », 100 % moins 1 500 FCFA), §9 (cycle de vie) ; Q4, Q6, Q9, Q14 de [[2026-10-26-decisions-carte]].
 Hors périmètre : refuser un décaissement avec motif, par l'administrateur (F-042) ; relances de retrait (F-031, voir « Cohérence »).

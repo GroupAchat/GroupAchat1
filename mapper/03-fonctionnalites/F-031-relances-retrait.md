@@ -8,7 +8,7 @@ tags: [fonctionnalite, F-031, retrait, reputation, tache-planifiee, mvp]
 
 # F-031 — Relances de retrait à J+3 et J+7, livraison réputée acquise à J+14
 
-Statut : **terminée** (recette OK le 2026-10-28, section « Recette — 2026-10-28 » ci-dessous ; T5 de [[M-001-terminer-le-mvp]], avec C-052). Implémentée sur la branche `feat/F-031-relances-retrait`, partie de `staging` `7a31195` ; code non encore commité à la date de cette note : commit et fusion dans `staging` acceptés par l'utilisateur, à faire. Conception : `archi-backend`, 2026-10-27, base `abaa622`. Rôle : **Système**. Sources : `CAHIER_DES_CHARGES.md` §4 (« Colis non récupéré », « Réputation », « Séquestre »), §3 (administrateur, points 4 et 5), §8 (notifications), §9 (cycle de vie) ; décision **Q13** et **Q4** de [[2026-10-26-decisions-carte]] ; verrous de [[2026-10-27-decisions-f016]] ; [[carte]] (parcours « colis non retiré », Q13, Q15).
+Statut : **terminée** (recette OK le 2026-10-28, section « Recette — 2026-10-28 » ci-dessous ; T5 de [[M-001-terminer-le-mvp]], avec C-052). Implémentée sur la branche `feat/F-031-relances-retrait`, partie de `staging` `7a31195` ; commitée `5dc1562` (« Relance les retraits oubliés et clôt la campagne au quatorzième jour »), fusionnée dans `staging` le 2026-10-28. Conception : `archi-backend`, 2026-10-27, base `abaa622`. Rôle : **Système**. Sources : `CAHIER_DES_CHARGES.md` §4 (« Colis non récupéré », « Réputation », « Séquestre »), §3 (administrateur, points 4 et 5), §8 (notifications), §9 (cycle de vie) ; décision **Q13** et **Q4** de [[2026-10-26-decisions-carte]] ; verrous de [[2026-10-27-decisions-f016]] ; [[carte]] (parcours « colis non retiré », Q13, Q15).
 
 **Pourquoi c'est MVP** : sans F-031, un seul participant qui ne vient pas chercher son colis laisse la campagne en `distribution` pour toujours. Elle n'atteint jamais `terminee`, et la réputation du groupeur n'est jamais créditée.
 
@@ -514,7 +514,7 @@ Courses (R28 à R31) : si la base de la CI est SQLite, elles sont **non vérifia
 
 ## Recette — 2026-10-28
 
-**RECETTE OK** · base `7a31195` + code non commité de la branche `feat/F-031-relances-retrait` · `serveur ✅ · web boutique ✅ · web admin ✅ (non-régression) · mobile —`
+**RECETTE OK** · base `7a31195` + code de la branche `feat/F-031-relances-retrait` (commitée ensuite en `5dc1562`) · `serveur ✅ · web boutique ✅ · web admin ✅ (non-régression) · mobile —`
 
 Environnement : SQLite jetable `/tmp/claude-1000/-home-attito-Boulot-nanatech-groupe-4-groupe-achat-GroupAchat1/37d3c70e-6597-49b8-bb11-132f1e1eb6a5/scratchpad/f031/base.sqlite3` (réglages `recette_settings.py`, jamais `.env` ni base du dépôt), `charger_demo` version « 7 », vrai `manage.py cloturer_les_campagnes_echues` (processus séparé), Django sur le port 8123 servant les deux interfaces compilées dans `/tmp/claude-1000/-home-attito-Boulot-nanatech-groupe-4-groupe-achat-GroupAchat1/37d3c70e-6597-49b8-bb11-132f1e1eb6a5/scratchpad/f031/web`, Chrome headless à 390 px. Le temps avance en reculant `mise_a_disposition_le`. Courses R28 à R33 : testées sur PostgreSQL par `reviewer-tester`, non rejouées ici.
 

@@ -305,7 +305,7 @@ function ChampReponse({ avis, surEnvoi }: { avis: Avis; surEnvoi: () => void }) 
 
 function ReponseGroupeur({ avis }: { avis: Avis }) {
   return (
-    <div className="bg-accent-doux rounded-2xl px-4 py-3">
+    <div className="bg-fond-message rounded-2xl px-4 py-3">
       <p className="mb-1 flex items-center gap-1.5 text-xs font-bold">
         <BadgeCheck className="size-3.5" />
         Réponse du groupeur

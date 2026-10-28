@@ -181,7 +181,7 @@ function Tuile({
       <Carte
         className={
           vedette
-            ? "relative overflow-hidden border-transparent text-white"
+            ? "relative isolate overflow-hidden border-transparent text-white"
             : undefined
         }
       >

@@ -221,7 +221,7 @@ export function Cloche() {
                       <div
                         className={fusionner(
                           "flex gap-3 border-b px-4 py-3 transition-colors last:border-0",
-                          lue ? "hover:surface-douce" : "bg-accent-doux/60",
+                          lue ? "hover:surface-douce" : "bg-fond-message/60",
                         )}
                       >
                         <span

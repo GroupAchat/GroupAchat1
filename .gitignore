@@ -43,3 +43,6 @@ CLAUDE.template.md
 # Bases locales de développement (données de démonstration ou réelles).
 *.sqlite3
 .ruff_cache/
+
+# Les deux interfaces compilées, assemblées par `make construire`.
+backend/web/

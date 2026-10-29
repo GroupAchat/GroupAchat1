@@ -46,3 +46,5 @@ CLAUDE.template.md
 
 # Les deux interfaces compilées, assemblées par `make construire`.
 backend/web/
+# Copies de travail des agents Claude (git worktree) : locales, jamais versionnées.
+.claude/worktrees/

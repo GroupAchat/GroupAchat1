@@ -1,7 +1,7 @@
 ---
 type: architecture
 statut: à jour
-date: 2026-10-28
+date: 2026-10-29
 tags: [architecture]
 ---
 
@@ -36,9 +36,16 @@ brouillon → en_cours → (date limite : clôture automatique, cloturer_les_cam
 ## Frontend — `frontend/`
 | Dossier | Rôle | Écrans |
 |---|---|---|
-| `commun/src/` | socle unique (aucune page) | `api/client.ts`, `api/types.ts`, `contexte/Session.tsx`, `outils/`, `composants/ui.tsx`, `index.css` |
+| `commun/src/` | socle unique (aucune page) | `api/client.ts`, `api/types.ts`, `contexte/Session.tsx`, `outils/`, `composants/ui.tsx`, `composants/Confirmation.tsx` (T16), `index.css` |
 | `boutique/src/` | acheteurs et groupeurs, port 5173 | Accueil, Catalogue, FicheCampagne, Authentification, MesAchats, Notifications, Profil, Communauté ; groupeur : EspaceGroupeur, TableauDeBord, NouvelleCampagne, CampagneGroupeur |
 | `admin/src/` | console, port 5174 | TableauAdmin, Dossiers, Décaissements (modération incluse) |
 
 ## Vérification
 `bash .claude/skills/verify/scripts/check.sh complet` : migrations, pytest (406 tests au 2026-10-28, après F-031 : `406 passed, 9 skipped` sous SQLite (9 ignorés, sans détail au relevé) ; 356 après F-024 (`356 passed, 5 skipped`), 308 après F-011, 255 avant ; la suite complète dure environ 30 à 35 minutes (1818 s et 2072 s au « Vérifier » sur `staging`, 2026-10-28 ; 1355 s au « Vérifier » de F-031, 1243 s pour F-011) ; 7 minutes était la durée de 165 tests), `npm run verifier`. `check.sh rapide` : 338 passed, 9 skipped (F-031). Les courses de F-024 ne tournent réellement que sous PostgreSQL (passe de relecture : 53 passed, 0 skipped).
+
+## Démo locale — outillage à la racine (T14, `fafebab`)
+- `Makefile` à la racine : `make preparer-presentation` (installe si besoin, migre, charge la démo, compile), `make servir` (Django seul, sur les builds existants), `make lancer`, `make dev` (exige `PORT=8000`), `make verifier`, `make verifier-rapide`, `make tests`. `make` seul liste les cibles. Fiche : [[T14-makefile]] ; démo : [[presentation-2026-10-29]].
+- Les builds vont dans `backend/web/` (ignoré par git) : boutique à la racine, `admin.html` et ses assets à côté. Django les sert via `RACINE_WEB` (`config/settings.py`), comme le `Dockerfile`. Une seule origine, aucun proxy ni CORS.
+- Réglages posés par le Makefile **dans l'environnement du processus**, jamais dans `.env` : `DJANGO_FORCER_SQLITE=1` (`SQLITE=1` par défaut ; la base est alors `backend/base-de-secours.sqlite3`), `DJANGO_DEBUG=1`, `VITE_API_URL` vide à la compilation. Décisions : [[2026-10-28-decisions-t14-t17]] (D4 à D7).
+- Vérification sur `staging` : « Vérifier » complet `446 passed, 9 skipped` (T16 et T17, `f78f52b` et `f32b69c`). `make verifier` le lance en SQLite.
+- Socle : `composants/Confirmation.tsx` (T16) et les jetons de thème de T17 (`--teinte-fond-message`, `bg-fond-message`, `--teinte-accent-doux` en sombre) sont dans `frontend/commun/src/` ; aucun nouveau dossier.

@@ -1,10 +1,12 @@
 ---
 type: fonctionnalite
 id: T17
-statut: en cours
+statut: terminée
 couvre: [C-077, C-078]
 mission: M-001 (T17)
 base: f78f52b
+commit: 75fe4ba
+fusion: f32b69c (staging)
 date: 2026-10-28
 tags: [fonctionnalite, T17, M-001]
 ---
@@ -74,3 +76,42 @@ Branche : `fix/T17-contrastes`, worktree `.claude/worktrees/t17-contrastes`, bas
 ## Prêt à coder ?
 
 Oui : les défauts sont localisés et les scénarios sont vérifiables. Aucune question ouverte.
+
+## Recette — 2026-10-28
+
+**RECETTE OK** · commit de base `f78f52b` (changements non commités sur `fix/T17-contrastes`) · serveur — (aucune règle touchée) · web admin ✅ · web boutique ✅ · mobile —
+
+Méthode : builds Vite des deux interfaces (`staging` `f78f52b` extrait par `git archive`, et le worktree), une origine Django par build (ports 8101 = T17, 8102 = `staging`), SQLite jetable remplie par `charger_demo`, Chrome headless piloté en CDP, 390 px (1280 px pour R1). Contraste = couleur du texte (alpha composé) contre la couleur **médiane des pixels de la capture** sous l'élément (donc le dégradé réellement visible), formule WCAG. `npm run verifier` : passe. Captures : `/tmp/claude-1000/-home-attito-Boulot-nanatech-groupe-4-groupe-achat-GroupAchat1/2a0ded33-5526-4bfe-abb2-5db865f4b85d/scratchpad/shots/`.
+
+| # | Résultat | Mesure (T17 contre `staging`) |
+|---|---|---|
+| R1 console, clair | OK | libellé « Détenu en séquestre » 5,87:1 (390 px), 6,5:1 (1280 px) ; « Remboursé » 7,28:1 / 6,97:1. `staging` : 1,0:1 (texte blanc sur blanc, carte vide à l'écran). `scrollWidth` 390 / 1280. `admin-new-clair-390.png`, `admin-stg-clair-390.png` |
+| R2 console, sombre | OK | libellé 5,87:1, « Remboursé » 7,86:1 : lisible. Le fond uni de `staging` (10,1:1) devient le dégradé (écart accepté, voir plus bas). `admin-new-sombre-390.png` |
+| R3 `/groupeur`, tuile « Consigné en séquestre » | OK | clair : 6,98:1 (`staging` 1,0:1) ; sombre : 6,98:1 (`staging` 11,65:1, fond uni). `scrollWidth` 390. `groupeur-new-clair-390-centre.png`, `groupeur-new-sombre-390-centre.png` |
+| R4 « Réponse du groupeur », sombre | OK | fiche `/campagnes/9` et `/groupeur`, groupeur et acheteur : texte 14,81:1 (groupeur) et 11,63:1 (acheteur) ; date 6,14:1 et 4,82:1. `staging` : 1,0 à 1,03:1. |
+| R4 clair | OK | inchangé : 16,06:1 (groupeur), 16,6:1 (acheteur), mêmes couleurs calculées que `staging` (0 différence de style sur la fiche, hors sombre). |
+| R4 plus : fil `Discussion` (`/campagnes/1`) | OK | sombre : nom et texte 14,81:1 / 11,63:1, date ≥ 4,82:1 (`staging` 1,0:1). Clair inchangé. |
+| R4 plus : `/notifications`, non lues | OK | sombre : titre 14,81:1 (groupeur) / 11,63:1 (acheteur), texte et date 6,14:1 / 4,82:1 (`staging` 2,4:1). Clair : titre 16,06:1 / 16,6:1 (`staging` 11,35:1 et 3,37:1), texte 5,17:1 / 5,35:1. |
+| R4 plus : panneau de la cloche | OK | sombre : 15,37:1 et 13,51:1 pour le titre, ≥ 5,6:1 pour le reste ; clair : ≥ 5,41:1. |
+| Non-régression sombre/clair, groupeur et acheteur | OK | comparaison des styles calculés de tous les éléments, `staging` contre T17, 11 à 14 pages × 2 thèmes × 2 profils : 0 différence sur onglet actif, badges accent, boutons doux, hors les cinq usages visés. Les seules différences sont les fonds `bg-fond-message`, plus le titre des notifications non lues. |
+| R5 débordement | OK | `scrollWidth` = 390 sur console, `/groupeur`, fiches campagne, `/notifications`, clair et sombre. |
+
+Écarts avec l'énoncé, à connaître avant la démo (non bloquants) :
+1. **Bouton de moyen de paiement sélectionné (feuille de participation), en sombre, acheteur** : pas identique à `staging`, il change volontairement (`bg-accent-doux` devient `bg-fond-message`). `staging` : texte clair sur fond pêche, 1,03:1 (illisible) ; T17 : fond brun sombre, texte 11,63:1. En clair : identique. Groupeur : la feuille de participation ne s'ouvre pas (pas de bouton « Participer » sur les campagnes testées), non rejoué.
+2. En sombre, les deux cartes de séquestre passent du fond uni au dégradé : accepté dans l'énoncé.
+3. Le titre d'une notification non lue passe à la couleur du texte (décision de l'utilisateur) : vérifié dans les deux thèmes.
+
+Défauts nouveaux : aucun introduit par T17. Préexistants, vus au passage, **identiques sur `staging`**, hors périmètre :
+- Mineur : à 390 px, le panneau de la cloche est coupé du côté gauche (le titre « Notifications » touche le bord de l'écran) : `cloche-stg-acheteur-clair.png` et `cloche-new-acheteur-sombre.png`.
+- Mineur : en sombre, profil groupeur, le libellé de l'onglet actif (bleu marine sur fond sombre) et le logo sont peu contrastés (`groupeur-new-sombre-390-centre.png`) ; identique à `staging`, donc non-régression respectée.
+
+Pas pu tester : rien de bloquant ; thème clair à 1280 px mesuré uniquement pour R1 (comme demandé). Environnement arrêté : serveurs 8101/8102 et Chrome headless fermés ; la base `backend/base-de-secours.sqlite3` du worktree a été restaurée à son état d'origine.
+
+## Clôture — 2026-10-28
+
+**Terminée.** Relecture finale VALIDÉE, recette « RECETTE OK » (section « Recette — 2026-10-28 »).
+
+- **Passes de relecture.** (1) Première passe : `isolate` sur les cartes vedettes et `--teinte-accent-doux` redéfinie en sombre ; relecture **À CORRIGER** : 15 usages de `accent-fort` sur `accent-doux` à 1,30:1 pour le groupeur. (2) Reprise ciblée : `--teinte-fond-message` / `bg-fond-message` sur cinq usages (Discussion, Avis, Notifications, Cloche, FicheCampagne) ; relecture **À CORRIGER** : titre d'une notification non lue en `accent-fort` sur le nouveau fond, 1,30:1. (3) Second refus : arrêt, décision de l'utilisateur : le titre d'une notification non lue prend la couleur du texte, dans les deux thèmes ([[2026-10-28-decisions-t14-t17]], D1). (4) Relecture finale : VALIDÉE.
+- **Preuves.** Commit `75fe4ba` (« Rend lisibles la carte du séquestre et les bulles en thème sombre »), fusionné dans `staging` par `f32b69c` (accord de l'utilisateur). « Vérifier » complet sur `staging` `f32b69c` : `446 passed, 9 skipped in 1418.89s`, migrations « No changes detected », `CHECK: OK (complet)`.
+- **Reste, hors T17, au backlog** : C-083 (panneau de la cloche coupé à 390 px), C-084 (thème sombre, profil groupeur : onglet actif et logo), C-085 (piste globale d'accent en sombre, après la présentation).
+- **Mission** : [[M-001-terminer-le-mvp]] (T17 `terminée`). Backlog : C-077 et C-078 `terminé`.

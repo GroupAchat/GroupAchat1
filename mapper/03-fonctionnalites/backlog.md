@@ -1,7 +1,7 @@
 ---
 type: backlog
 statut: à jour
-date: 2026-10-28
+date: 2026-10-29
 tags: [backlog]
 ---
 
@@ -19,7 +19,9 @@ Au 2026-10-28 : F-031 `terminée` après recette OK ([[F-031-relances-retrait]],
 
 Au 2026-10-28, après la recette T7 (`staging` à `60b6cbd`) : 29 fonctionnalités `terminée`, F-009 et F-014 `à vérifier`. Passent `terminée` les 22 fonctionnalités recettées OK ou OK avec réserve par la recette T7 (F-001 à F-004, F-005 à F-007, F-010, F-012, F-013, F-015, F-017, F-019 à F-023, F-025 à F-029), qui s'ajoutent aux sept déjà `terminées`. La recette T7 est la preuve de bout en bout que la recette T1 réservait (« Aucune n'est terminée », T7). Le rapport annonce « 14 OK, 16 OK avec réserve » : sa propre matrice donne 18 OK, 12 OK avec réserve et 1 KO ; ce sont ces chiffres qui ont servi ici. F-014 n'est pas passée `terminée` (téléversement Cloudinary réel non joué). F-009 : KO avant `60b6cbd`, à revérifier.
 
-Au 2026-10-28, après T16 (commit `f78f52b`, fusionné dans `staging`, recette reprise OK) : C-064, C-065, C-066, C-067 et C-071 `terminé` ; C-026 `en cours` (confirmation faite, motif de renoncement à faire). Aucune fonctionnalité ne change de statut : ces défauts étaient rattachés à des fonctionnalités déjà `terminée`. F-009 et F-014 restent `à vérifier`. T17 (en cours, [[T17-contrastes]]) : contrastes C-077 et C-078, rattachés à F-015, F-020 et F-026.
+Au 2026-10-28, après T16 (commit `f78f52b`, fusionné dans `staging`, recette reprise OK) : C-064, C-065, C-066, C-067 et C-071 `terminé` ; C-026 `en cours` (confirmation faite, motif de renoncement à faire). Aucune fonctionnalité ne change de statut : ces défauts étaient rattachés à des fonctionnalités déjà `terminée`. F-009 et F-014 restent `à vérifier`. T17 (terminée le 2026-10-28, [[T17-contrastes]], commit `75fe4ba`, fusion `f32b69c`) : contrastes C-077 et C-078, rattachés à F-015, F-020 et F-026, passent `terminé`.
+
+Au 2026-10-29 : aucune fonctionnalité ne change de statut. Trois défauts relevés par la recette T17, préexistants et identiques sur `staging`, entrent au backlog hors mission : C-083 à C-085. T14 (Makefile de présentation, [[T14-makefile]], commit `fafebab`) est un outillage et n'a pas de ligne ici. T15 (sécurité et configuration) reste `bloquée` dans [[M-001-terminer-le-mvp]] ; le code SMS affiché à l'écran à l'inscription n'est retiré qu'après la présentation.
 
 Au 2026-10-27 (pour mémoire) : F-030, F-016, F-008, F-011, F-024 et F-018 `terminées` après recette OK.
 
@@ -166,9 +168,12 @@ C-010 à C-022 : gênes et cosmétiques relevés par la recette T1 ; C-023 à C-
 | C-074 | 404 de `/pieces/…`, `/medias/…` et de l'API en anglais (« Not Found », « No Campagne matches… ») : reprend C-023 | à faire | recette T7, cosmétique |
 | C-075 | Avatars « KS » et « NA » rognés à gauche dans la liste des dossiers de la console, à 390 px (F-023) | à faire | recette T7, cosmétique |
 | C-076 | Inscription : trois secondes d'attente avant le code (hachage) ; le bouton « Continuer » reste en rotation sans autre retour (F-002) | à faire | recette T7, acceptable pour la démonstration ; à savoir avant de jouer |
-| C-077 | Contraste en thème clair : carte « Détenu en séquestre » de la console (`frontend/admin/src/pages/TableauAdmin.tsx` l. 80-84, texte blanc sur surface blanche) et tuile « Consigné en séquestre » de l'espace groupeur (`frontend/boutique/src/pages/groupeur/TableauDeBord.tsx` l. 72) (F-015, F-026) | en cours | recette T16 (reprise), défaut 1 ; préexistant, visible en démonstration. Fiche [[T17-contrastes]] (D1, R1 à R3) |
-| C-078 | Contraste en thème sombre : bulle « Réponse du groupeur » illisible, rectangle blanc sur la fiche campagne et sur `/groupeur` (`frontend/boutique/src/composants/Avis.tsx`, `ReponseGroupeur`) (F-020) | en cours | recette T16 (reprise), défaut 2 ; préexistant, visible en démonstration. Fiche [[T17-contrastes]] (D2, R4) |
+| C-077 | Contraste en thème clair : carte « Détenu en séquestre » de la console (`frontend/admin/src/pages/TableauAdmin.tsx` l. 80-84, texte blanc sur surface blanche) et tuile « Consigné en séquestre » de l'espace groupeur (`frontend/boutique/src/pages/groupeur/TableauDeBord.tsx` l. 72) (F-015, F-026) | terminé | recette T16 (reprise), défaut 1 ; préexistant. Corrigé par T17 (commit `75fe4ba`, fusion `f32b69c`), recette OK le 2026-10-28. Fiche [[T17-contrastes]] (D1, R1 à R3) |
+| C-078 | Contraste en thème sombre : bulle « Réponse du groupeur » illisible, rectangle blanc sur la fiche campagne et sur `/groupeur` (`frontend/boutique/src/composants/Avis.tsx`, `ReponseGroupeur`) (F-020) | terminé | recette T16 (reprise), défaut 2 ; préexistant. Corrigé par T17 (commit `75fe4ba`, fusion `f32b69c`), recette OK le 2026-10-28. Fiche [[T17-contrastes]] (D2, R4) |
 | C-079 | Console, `/decaissements` à 390 px : titre de campagne coupé mot par mot, montant serré à droite (la ligne ne s'empile pas) | à faire | recette T16 (reprise), cosmétique ; préexistant ; hors T17 |
 | C-080 | « Rembourser les 1 participant » garde « les » devant un singulier (la forme « le participant » serait juste) ; l'accord de « Prévenir » est corrigé par T16 (`pluriel()`) | à faire | recette T16 (reprise), cosmétique ; préexistant, `CampagneGroupeur.tsx` |
 | C-081 | Deux clics synchrones sur « Libérer » dans le même tick produisent deux POST (le second est refusé par le serveur, rien d'écrit en double) ; un double toucher réel (90 ms) n'en produit qu'un | à faire | recette T16 (reprise), cosmétique ; console |
 | C-082 | Lueur de la pastille d'`Authentification` coupée net au bord du conteneur à 1280 px (`overflow-x-clip`) | à faire | recette T16, cosmétique ; accepté pour la démonstration, à reprendre si le temps le permet (D5 de [[T16-defauts-genants]]) |
+| C-083 | Panneau de la cloche coupé du côté gauche à 390 px : le titre « Notifications » touche le bord de l'écran (`frontend/boutique/src/composants/Cloche.tsx`) | à faire | recette T17, mineur ; préexistant, identique sur `staging` ; hors T17 |
+| C-084 | Thème sombre, profil groupeur : libellé de l'onglet actif (bleu marine sur fond sombre) et logo peu contrastés | à faire | recette T17, mineur ; préexistant, identique sur `staging` (non-régression respectée) ; hors T17 |
+| C-085 | Piste globale d'accent en thème sombre : redéfinir `--teinte-accent` et `--teinte-accent-fort` dans `frontend/commun/src/index.css` (accent du groupeur à environ 1,7:1 sur carte sombre ; `accent-fort` de l'acheteur à 3,55:1) | à faire | piste du relecteur de T17 ; au backlog après la présentation ([[2026-10-28-decisions-t14-t17]], D3) |

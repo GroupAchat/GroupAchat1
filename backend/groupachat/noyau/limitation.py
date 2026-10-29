@@ -23,7 +23,11 @@ dans :meth:`CodeVerification.emettre`, et non ici.
 
 from __future__ import annotations
 
-from rest_framework.throttling import AnonRateThrottle, SimpleRateThrottle
+from rest_framework.throttling import (
+    AnonRateThrottle,
+    SimpleRateThrottle,
+    UserRateThrottle,
+)
 
 
 class LimiteParNumero(SimpleRateThrottle):
@@ -79,3 +83,31 @@ class LimiteInscription(AnonRateThrottle):
     """Créations de compte depuis une même adresse."""
 
     scope = "inscription"
+
+
+class LimiteDepotKyc(UserRateThrottle):
+    """Dépôts de dossier KYC d'un même compte.
+
+    Par **compte** et non par adresse : l'utilisateur est déjà identifié et
+    vérifié, et une IP d'opérateur est partagée par tout un quartier. Sans
+    limite, un compte qui se fait rejeter pouvait renvoyer des pièces de
+    plusieurs mégaoctets en boucle et remplir le disque. Ne compte que les
+    dépôts qui **écrivent** (la vue l'appelle après validation) : se tromper
+    de numéro ne doit pas coûter un dépôt.
+
+    ⚠️ Le compteur vit dans le cache, donc par processus : avec plusieurs
+    processus ou après un redémarrage, la limite est contournable.
+    """
+
+    scope = "depot_kyc"
+
+
+class LimiteEssaisKyc(UserRateThrottle):
+    """Toutes les tentatives de dépôt d'un compte, valides ou non.
+
+    Plafond large qui protège la bande passante : un 400 n'écrit rien mais
+    la requête, elle, a transporté jusqu'à plusieurs Mo. Même réserve que
+    ci-dessus : le compteur est dans le cache, par processus.
+    """
+
+    scope = "essais_kyc"

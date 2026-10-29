@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from django.db import IntegrityError, transaction
 from django.db.models import F, Prefetch
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import action
@@ -46,6 +47,25 @@ class CommentaireVueEnsemble(viewsets.ModelViewSet):
     def campagne_id(self):
         return self.kwargs["campagne_pk"]
 
+    def initial(self, requete, *args, **kwargs):
+        super().initial(requete, *args, **kwargs)
+        # Après l'authentification et les permissions : un visiteur qui tente
+        # d'écrire reçoit son 401/403 avant de pouvoir deviner, par un 404,
+        # quelles campagnes existent. Ce contrôle couvre toutes les routes du
+        # fil (liste, création, modification, retrait, « j'aime »).
+        self.campagne = self._campagne_du_fil()
+
+    def _campagne_du_fil(self) -> Campagne:
+        # Un brouillon est privé, même pour son groupeur : personne n'y lit ni
+        # n'y écrit avant la publication. 404 plutôt que 403, pour ne pas
+        # révéler qu'un brouillon existe. Les autres statuts, y compris
+        # annulée ou minimum non atteint, gardent leur fil : une participante
+        # y retrouve ses échanges (même règle que la fiche campagne).
+        return get_object_or_404(
+            Campagne.objects.exclude(statut=Campagne.Statut.BROUILLON),
+            pk=self.campagne_id,
+        )
+
     def get_queryset(self):
         return (
             Commentaire.objects.filter(
@@ -66,6 +86,9 @@ class CommentaireVueEnsemble(viewsets.ModelViewSet):
 
     def get_serializer_context(self):
         contexte = super().get_serializer_context()
+        # Le sérialiseur doit connaître la campagne de l'URL pour refuser une
+        # réponse à un message d'une autre campagne.
+        contexte["campagne_id"] = int(self.campagne_id)
         # Les « j'aime » du lecteur sont chargés en une fois : sans ça, le fil
         # poserait une requête par message pour savoir s'il l'a déjà aimé.
         if self.request.user.is_authenticated:
@@ -77,11 +100,10 @@ class CommentaireVueEnsemble(viewsets.ModelViewSet):
         return contexte
 
     def perform_create(self, serialiseur):
-        campagne = Campagne.objects.get(pk=self.campagne_id)
         commentaire = serialiseur.save(
-            auteur=self.request.user, campagne=campagne
+            auteur=self.request.user, campagne=self.campagne
         )
-        self._notifier(campagne, commentaire)
+        self._notifier(self.campagne, commentaire)
 
     def _notifier(self, campagne, commentaire) -> None:
         if commentaire.reponse_a_id and commentaire.reponse_a.auteur_id != commentaire.auteur_id:

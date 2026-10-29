@@ -3,8 +3,15 @@
 
 from __future__ import annotations
 
-import pytest
+import importlib
+from datetime import timedelta
 
+import pytest
+from django.apps import apps as django_apps
+from django.db import migrations
+from django.utils import timezone
+
+from groupachat.catalogue.models import Campagne
 from groupachat.echanges.models import Commentaire, DemandeProduit, Notification
 
 pytestmark = pytest.mark.django_db
@@ -107,6 +114,137 @@ class TestFilPublic:
         assert Commentaire.objects.filter(id=message["id"]).exists()
 
 
+class TestIntegriteDuFil:
+    """Le fil ne s'ouvre que sur une campagne publiée et ne mélange pas les campagnes."""
+
+    @staticmethod
+    def _autre_campagne(campagne, statut=Campagne.Statut.EN_COURS, titre="Autre"):
+        return Campagne.objects.create(
+            produit=campagne.produit, groupeur=campagne.groupeur, titre=titre,
+            prix_unitaire=5000, quantite_minimale=5,
+            date_limite=timezone.now() + timedelta(days=5),
+            point_remise="Lomé", statut=statut,
+        )
+
+    def test_on_ne_repond_pas_a_un_message_d_une_autre_campagne(
+        self, connecte, campagne, ama, yao
+    ):
+        campagne_b = self._autre_campagne(campagne)
+        m_b = Commentaire.objects.create(campagne=campagne_b, auteur=yao,
+                                         texte="Question sur B")
+        avant = Commentaire.objects.count()
+
+        reponse = connecte(ama).post(
+            fil(campagne), {"texte": "x", "reponse_a": m_b.id}, format="json"
+        )
+
+        assert reponse.status_code == 400
+        assert "reponse_a" in reponse.data
+        assert "campagne" in str(reponse.data["reponse_a"][0])
+        assert Commentaire.objects.count() == avant
+        assert not Notification.objects.filter(
+            genre=Notification.Genre.REPONSE_COMMENTAIRE
+        ).exists()
+
+    def test_on_ne_commente_pas_le_brouillon_d_un_autre(
+        self, connecte, campagne, ama, groupeur
+    ):
+        brouillon = self._autre_campagne(campagne, Campagne.Statut.BROUILLON)
+
+        reponse = connecte(ama).post(fil(brouillon), {"texte": "x"}, format="json")
+
+        assert reponse.status_code == 404
+        assert Commentaire.objects.count() == 0
+        assert not Notification.objects.filter(destinataire=groupeur).exists()
+
+    def test_le_groupeur_ne_peut_pas_non_plus_ecrire_dans_son_brouillon(
+        self, connecte, campagne, groupeur
+    ):
+        brouillon = self._autre_campagne(campagne, Campagne.Statut.BROUILLON)
+
+        reponse = connecte(groupeur).post(fil(brouillon), {"texte": "x"},
+                                          format="json")
+
+        assert reponse.status_code == 404
+        assert Commentaire.objects.count() == 0
+
+    def test_le_fil_d_un_brouillon_ne_se_lit_pas_meme_pour_son_groupeur(
+        self, connecte, client, campagne, groupeur, ama
+    ):
+        brouillon = self._autre_campagne(campagne, Campagne.Statut.BROUILLON)
+        Commentaire.objects.create(campagne=brouillon, auteur=ama, texte="Ancien")
+
+        assert client.get(fil(brouillon)).status_code == 404
+        assert connecte(groupeur).get(fil(brouillon)).status_code == 404
+
+    def test_on_n_aime_pas_un_message_d_un_brouillon(
+        self, connecte, campagne, ama, yao
+    ):
+        brouillon = self._autre_campagne(campagne, Campagne.Statut.BROUILLON)
+        message = Commentaire.objects.create(campagne=brouillon, auteur=ama,
+                                             texte="Ancien")
+
+        reponse = connecte(yao).post(f"{fil(brouillon)}{message.id}/jaime/", {},
+                                     format="json")
+
+        assert reponse.status_code == 404
+        message.refresh_from_db()
+        assert message.nombre_jaime == 0
+
+    def test_une_campagne_inexistante_donne_404_et_non_500(self, connecte, client, ama):
+        chemin = "/api/campagnes/999999/commentaires/"
+
+        ecriture = connecte(ama).post(chemin, {"texte": "x"}, format="json")
+        lecture = client.get(chemin)
+
+        assert ecriture.status_code == 404
+        assert lecture.status_code == 404
+        assert Commentaire.objects.count() == 0
+
+    def test_un_visiteur_garde_son_refus_avant_le_404(self, client):
+        # Pas de fuite sur l'existence d'une campagne pour qui ne peut pas écrire.
+        reponse = client.post("/api/campagnes/999999/commentaires/", {"texte": "x"},
+                              format="json")
+        assert reponse.status_code in (401, 403)
+
+    def test_repondre_a_un_message_inexistant_donne_400(
+        self, connecte, campagne, ama
+    ):
+        reponse = connecte(ama).post(
+            fil(campagne), {"texte": "x", "reponse_a": 999999}, format="json"
+        )
+        assert reponse.status_code == 400
+        assert "reponse_a" in reponse.data
+        assert Commentaire.objects.count() == 0
+
+    def test_une_campagne_close_garde_son_fil_ouvert(
+        self, connecte, client, campagne, ama
+    ):
+        for statut in (Campagne.Statut.ANNULEE, Campagne.Statut.TERMINEE,
+                       Campagne.Statut.MINIMUM_NON_ATTEINT):
+            close = self._autre_campagne(campagne, statut, titre=f"Close {statut}")
+            ecriture = connecte(ama).post(fil(close), {"texte": "Merci"},
+                                          format="json")
+            assert ecriture.status_code == 201, statut
+            assert client.get(fil(close)).data["count"] == 1, statut
+
+    def test_une_reponse_dans_la_bonne_campagne_reste_acceptee(
+        self, connecte, campagne, ama, yao
+    ):
+        m_a = Commentaire.objects.create(campagne=campagne, auteur=yao, texte="Q")
+
+        reponse = connecte(ama).post(
+            fil(campagne), {"texte": "Oui", "reponse_a": m_a.id}, format="json"
+        )
+
+        assert reponse.status_code == 201
+        assert Commentaire.objects.get(id=reponse.data["id"]).reponse_a_id == m_a.id
+        assert Notification.objects.filter(
+            destinataire=yao, genre=Notification.Genre.REPONSE_COMMENTAIRE,
+            lien=f"/campagnes/{campagne.id}",
+        ).exists()
+
+
 class TestJaime:
     def test_aimer_puis_retirer_son_jaime(self, connecte, campagne, ama, yao):
         message = connecte(ama).post(fil(campagne), {"texte": "Bon prix !"},
@@ -201,3 +339,50 @@ class TestCloche:
 
         api.post("/api/notifications/tout-marquer-lu/", {}, format="json")
         assert api.get("/api/notifications/non-lues/").data["non_lues"] == 0
+
+
+class TestCorrectionDesAnciensLiens:
+    """F-008 : la migration 0004 répare les liens écrits avant le correctif."""
+
+    def _migration(self):
+        return importlib.import_module(
+            "groupachat.echanges.migrations.0004_corriger_liens_des_notifications"
+        )
+
+    def _creer(self, ama, lien):
+        return Notification.objects.create(
+            destinataire=ama, genre="paiement_enregistre", titre="t",
+            message="m", lien=lien,
+        )
+
+    def test_l_ancien_lien_de_la_commande_est_reecrit(self, ama):
+        ancienne = self._creer(ama, "/participations/7")
+        self._migration().corriger(django_apps, None)
+        ancienne.refresh_from_db()
+        assert ancienne.lien == "/mes-achats/7"
+
+    def test_les_autres_liens_ne_sont_pas_touches(self, ama):
+        intacts = ["", "/campagnes/7", "/groupeur/campagnes/7", "/groupeur",
+                   "/participations/7/x", "/api/participations/7",
+                   "/participations/abc", "/mes-achats/7"]
+        lignes = [self._creer(ama, lien) for lien in intacts]
+        self._migration().corriger(django_apps, None)
+        for ligne, lien in zip(lignes, intacts):
+            ligne.refresh_from_db()
+            assert ligne.lien == lien
+
+    def test_la_correction_se_rejoue_sans_effet(self, ama):
+        ligne = self._creer(ama, "/participations/12")
+        self._migration().corriger(django_apps, None)
+        self._migration().corriger(django_apps, None)
+        ligne.refresh_from_db()
+        assert ligne.lien == "/mes-achats/12"
+
+    def test_le_retour_de_la_migration_ne_touche_a_rien(self, ama):
+        """Le retour est neutre : il ne doit pas casser un lien correct."""
+        ligne = self._creer(ama, "/mes-achats/9")
+        operation = self._migration().Migration.operations[0]
+        assert operation.reverse_code is migrations.RunPython.noop
+        operation.reverse_code(django_apps, None)
+        ligne.refresh_from_db()
+        assert ligne.lien == "/mes-achats/9"

@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """Routes de Group Achat."""
 
-from django.conf import settings
-from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path, re_path
 
@@ -24,10 +22,9 @@ urlpatterns = [
     path("pieces/<int:dossier_id>/<str:cote>/", piece_kyc, name="piece-kyc"),
 ]
 
-if settings.DEBUG:
-    # Doublon inoffensif en développement, pratique quand on sert les médias
-    # avec le rechargement automatique.
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# Pas de `static(MEDIA_URL…)` en développement : il servait `MEDIA_ROOT` tel
+# quel, `kyc/` compris, sans passer par `media_publique`. La route ci-dessus
+# sert déjà les médias publics, DEBUG ou non.
 
 # ⚠️ **En dernier, toujours.** Cette route attrape tout ce qui reste : placee
 # avant les autres, elle avalerait l'API et l'administration Django.

@@ -36,6 +36,7 @@ import {
 import { Visuel } from "@/composants/Visuel";
 import { useSession } from "@commun/contexte/Session";
 import { dateLongue, francs, tempsRestant } from "@commun/outils/formats";
+import { prixPourQuantite } from "@commun/outils/prix";
 import { api, useAction, useRequete } from "@commun/outils/requetes";
 
 /** Un élément de la galerie, photo ou vidéo. */
@@ -60,7 +61,7 @@ export default function FicheCampagne() {
   const { id } = useParams();
   const naviguer = useNavigate();
   const { peutAgir, utilisateur } = useSession();
-  const { donnees: campagne, chargement, recharger } = useRequete<Campagne>(
+  const { donnees: campagne, chargement, erreur, recharger } = useRequete<Campagne>(
     `/catalogue/campagnes/${id}/`,
   );
   const [quantite, setQuantite] = useState(1);
@@ -81,6 +82,14 @@ export default function FicheCampagne() {
   const estLeGroupeur = utilisateur?.id === campagne.groupeur.id;
   const ouverte = campagne.collecte_ouverte;
   const prixUnitaire = campagne.prix_courant;
+  // Le serveur facture le palier atteint en comptant la part demandée, pas
+  // seulement les pièces déjà payées : sans ça, l'écran annonçait 35 000 FCFA
+  // là où 32 000 étaient facturés.
+  const prixMaPart = prixPourQuantite(
+    campagne.prix_unitaire,
+    campagne.paliers,
+    campagne.quantite_reservee + quantite,
+  );
   const remise =
     prixUnitaire < campagne.prix_unitaire
       ? Math.round(((campagne.prix_unitaire - prixUnitaire) / campagne.prix_unitaire) * 100)
@@ -115,7 +124,14 @@ export default function FicheCampagne() {
   ].filter((visuel): visuel is ElementGalerie => Boolean(visuel.url));
 
   return (
-    <div className="pb-28 lg:pb-14">
+    <div className="pb-[calc(var(--hauteur-onglets)+7rem)] md:pb-28 lg:pb-14">
+      {/* Un rechargement raté garde la page affichée : sans cette alerte,
+          l'écran resterait périmé sans que personne le sache. */}
+      {erreur && (
+        <div className="mx-auto max-w-6xl px-4 pt-4 lg:px-8">
+          <Alerte>{erreur.message}</Alerte>
+        </div>
+      )}
       {/* ── Téléphone : la grande photo d'en-tête ──────────────────────────── */}
       <div className="relative aspect-[4/3] w-full overflow-hidden lg:hidden">
         <Visuel source={visuels[0]?.vignette ?? null} nom={campagne.produit.nom} />
@@ -344,7 +360,7 @@ export default function FicheCampagne() {
                 <div>
                   <p className="texte-doux mb-1.5 text-sm font-medium">Ma part</p>
                   <p className="tabulaire text-xl font-extrabold">
-                    {francs(prixUnitaire * quantite)}
+                    {francs(prixMaPart * quantite)}
                   </p>
                 </div>
                 <Bouton
@@ -370,8 +386,10 @@ export default function FicheCampagne() {
               <div className="flex gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-950/40">
                 <ShieldCheck className="size-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
                 <p className="text-sm text-emerald-900 dark:text-emerald-200">
-                  <strong>Livré ou remboursé.</strong> Votre part reste
-                  consignée jusqu'à la livraison.
+                  <strong>Remboursé si le groupage échoue.</strong> Votre
+                  part est consignée tant que la collecte n'est pas acquise.
+                  Une fois les fonds remis au groupeur, votre code de retrait
+                  prouve la remise du colis.
                 </p>
               </div>
               <div className="surface flex gap-3 rounded-2xl p-4 text-sm">
@@ -502,7 +520,7 @@ export default function FicheCampagne() {
                 className="hidden lg:flex"
                 onClick={() => setFeuilleOuverte(true)}
               >
-                Participer — {francs(prixUnitaire * quantite)}
+                Participer — {francs(prixMaPart * quantite)}
               </Bouton>
             )}
           </aside>
@@ -512,14 +530,13 @@ export default function FicheCampagne() {
       {/* ── Barre d'action, collée en bas sur téléphone ──────────────────── */}
       {ouverte && !estLeGroupeur && (
         <div
-          className="verre fixed inset-x-0 bottom-0 z-30 border-t p-3 lg:hidden"
-          style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+          className="verre barre-action-mobile fixed inset-x-0 z-30 border-t p-3 lg:hidden"
         >
           <div className="flex items-center gap-3">
             <div className="shrink-0">
               <p className="texte-doux text-xs">Ma part</p>
               <p className="tabulaire font-extrabold">
-                {francs(prixUnitaire * quantite)}
+                {francs(prixMaPart * quantite)}
               </p>
             </div>
             <Bouton taille="lg" className="flex-1" onClick={() => setFeuilleOuverte(true)}>
@@ -536,10 +553,9 @@ export default function FicheCampagne() {
         quantite={quantite}
         surQuantite={setQuantite}
         peutAgir={peutAgir}
-        surSucces={async () => {
-          setFeuilleOuverte(false);
-          await recharger();
-        }}
+        // La feuille reste ouverte : c'est elle qui porte la confirmation de
+        // paiement, et l'utilisateur la ferme lui-même.
+        surSucces={recharger}
       />
     </div>
   );
@@ -711,7 +727,11 @@ function FeuilleParticipation({
   const maximum = campagne.quantite_maximale
     ? Math.max(1, campagne.quantite_maximale - campagne.quantite_reservee)
     : 20;
-  const prix = campagne.prix_courant;
+  const prix = prixPourQuantite(
+    campagne.prix_unitaire,
+    campagne.paliers,
+    campagne.quantite_reservee + quantite,
+  );
 
   const payer = useAction(async () => {
     const participation = await api.post<Participation>("/participations/", {
@@ -755,8 +775,9 @@ function FeuilleParticipation({
             <div>
               <p className="text-lg font-bold">Votre part est consignée</p>
               <p className="texte-doux mt-1 text-sm">
-                {francs(reussite.montant_total)} bloqués jusqu'à la livraison.
-                Votre code de retrait vous attend.
+                {francs(reussite.montant_total)} consignés. Ils ne sont remis
+                au groupeur qu'une fois la collecte réussie. Votre code de
+                retrait vous attend.
               </p>
             </div>
             <div className="surface-douce rounded-2xl p-4">
@@ -821,6 +842,7 @@ function FeuilleParticipation({
                   <p className="tabulaire text-xl font-extrabold">
                     {francs(prix * quantite)}
                   </p>
+                  <p className="texte-doux tabulaire text-xs">{francs(prix)} la pièce</p>
                 </div>
               </div>
             </div>
@@ -840,7 +862,7 @@ function FeuilleParticipation({
                     className={fusionner(
                       "flex items-center gap-3 rounded-2xl border p-3 text-left transition-all",
                       operateur === moyen.cle
-                        ? "border-[color:var(--color-accent)] bg-accent-doux"
+                        ? "border-[color:var(--color-accent)] bg-fond-message"
                         : "surface",
                     )}
                   >

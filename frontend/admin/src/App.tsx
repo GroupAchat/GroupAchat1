@@ -16,6 +16,7 @@ import {
   useLocation,
 } from "react-router-dom";
 
+import { ErreurApi } from "@commun/api/client";
 import type { Utilisateur } from "@commun/api/types";
 import { Marque } from "@commun/composants/Marque";
 import { Alerte, Avatar, Bouton, Carte, Champ, fusionner } from "@commun/composants/ui";
@@ -128,11 +129,14 @@ function ConnexionAdmin() {
       { telephone, mot_de_passe: motDePasse },
     );
     if (!reponse.utilisateur.est_equipe) {
-      throw Object.assign(new Error("Ce compte n'appartient pas à l'équipe."), {
-        statut: 403,
-        champs: {},
-        pourChamp: () => undefined,
-      });
+      // La connexion a déjà ouvert une session côté serveur : sans la fermer,
+      // ce compte resterait connecté à la boutique malgré le refus affiché.
+      try {
+        await api.post("/comptes/deconnexion/");
+      } catch {
+        // Le message d'équipe prime sur l'échec de la déconnexion.
+      }
+      throw new ErreurApi(403, "Ce compte n'appartient pas à l'équipe.");
     }
     definir(reponse.utilisateur);
     return reponse;

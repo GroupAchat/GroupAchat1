@@ -3,11 +3,11 @@
 
 from __future__ import annotations
 
-from django.conf import settings
 from django.contrib.auth import password_validation
 from rest_framework import serializers
 
 from groupachat.comptes.models import DossierKYC, Reputation, Utilisateur
+from groupachat.comptes.pieces_kyc import PieceKycField
 
 
 class ReputationSerialiseur(serializers.ModelSerializer):
@@ -151,8 +151,12 @@ class DossierKYCSerialiseur(serializers.ModelSerializer):
     # devine. Ils servent à déposer ; ce sont `lien_recto` et `lien_verso`
     # qui servent à relire, et ils passent par une vue qui vérifie qui
     # demande.
-    piece_recto = serializers.ImageField(write_only=True, required=False)
-    piece_verso = serializers.ImageField(write_only=True, required=False)
+    #
+    # Obligatoires à chaque dépôt, y compris le redépôt après un rejet : un
+    # rejet porte le plus souvent sur une pièce illisible, et la règle reste
+    # simple — un dossier déposé a toujours deux pièces.
+    piece_recto = PieceKycField(cote="recto")
+    piece_verso = PieceKycField(cote="verso")
     lien_recto = serializers.SerializerMethodField()
     lien_verso = serializers.SerializerMethodField()
 
@@ -190,26 +194,6 @@ class DossierKYCSerialiseur(serializers.ModelSerializer):
             "decide_par",
         ]
         read_only_fields = ["statut", "motif_rejet", "depose_le", "decide_le"]
-
-    def _verifier_piece(self, fichier):
-        """Refuse une pièce trop lourde.
-
-        Le plafond global de Django porte sur la requête entière ; celui-ci
-        donne un message compréhensible sur le bon champ, au lieu d'une
-        erreur de requête trop grande sans indication.
-        """
-        if fichier and fichier.size > settings.TAILLE_MAX_PIECE_OCTETS:
-            maximum = settings.TAILLE_MAX_PIECE_OCTETS // (1024 * 1024)
-            raise serializers.ValidationError(
-                f"Image trop lourde : {maximum} Mo au maximum."
-            )
-        return fichier
-
-    def validate_piece_recto(self, fichier):
-        return self._verifier_piece(fichier)
-
-    def validate_piece_verso(self, fichier):
-        return self._verifier_piece(fichier)
 
     def validate_numero_mobile_money(self, valeur: str) -> str:
         numero = Utilisateur.objects.normaliser_telephone(valeur)

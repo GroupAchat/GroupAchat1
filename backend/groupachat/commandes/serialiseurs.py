@@ -32,7 +32,7 @@ class ParticipationSerialiseur(serializers.ModelSerializer):
         fields = ["id", "campagne", "quantite", "prix_unitaire_applique",
                   "montant_total", "statut", "statut_libelle", "code_retrait",
                   "charge_qr", "cree_le", "payee_le", "retiree_le",
-                  "peut_etre_notee", "avis"]
+                  "reputee_livree_le", "peut_etre_notee", "avis"]
         read_only_fields = fields
 
     def get_avis(self, participation) -> dict | None:
@@ -58,7 +58,8 @@ class ParticipantSerialiseur(serializers.ModelSerializer):
     class Meta:
         model = Participation
         fields = ["id", "nom_complet", "telephone", "quantite", "montant_total",
-                  "statut", "statut_libelle", "payee_le", "retiree_le"]
+                  "statut", "statut_libelle", "payee_le", "retiree_le",
+                  "reputee_livree_le"]
         read_only_fields = fields
 
 
@@ -148,6 +149,14 @@ class AvisSerialiseur(serializers.ModelSerializer):
                   "note", "commentaire", "reponse", "repondu_le", "cree_le",
                   "modifie_le"]
         read_only_fields = ["reponse", "repondu_le", "cree_le", "modifie_le"]
+
+    def get_fields(self):
+        fields = super().get_fields()
+        # Sans ça, l'auteur pouvait déplacer son avis vers une autre commande
+        # (et donc vers un autre groupeur) à la modification.
+        if self.instance is not None:
+            fields["participation"].read_only = True
+        return fields
 
     def get_auteur(self, avis) -> dict:
         """Prénom et initiale : assez pour reconnaître, pas pour identifier."""

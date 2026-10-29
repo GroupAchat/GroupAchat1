@@ -69,6 +69,18 @@ class Sequestre(models.Model):
                 ),
                 name="sequestre_ne_rembourse_pas_plus_que_consigne",
             ),
+            # Chacune des deux contraintes ci-dessus laisse passer l'autre :
+            # 475 000 remboursés puis 473 500 versés sur 475 000 consignés
+            # respectent les deux, et c'est pourtant de l'argent créé. Seule
+            # la somme dit la vérité.
+            models.CheckConstraint(
+                condition=models.Q(
+                    montant_consigne__gte=(
+                        models.F("montant_libere") + models.F("montant_rembourse")
+                    ),
+                ),
+                name="sequestre_ne_sort_pas_plus_que_consigne",
+            ),
         ]
 
     def __str__(self) -> str:

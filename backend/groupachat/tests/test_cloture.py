@@ -14,8 +14,10 @@ from datetime import timedelta
 import pytest
 from django.core.management import call_command
 from django.utils import timezone
+from rest_framework.test import APIClient
 
 from groupachat.catalogue.models import Campagne
+from groupachat.comptes.models import DossierKYC, Reputation, Utilisateur
 from groupachat.commandes.models import Participation
 from groupachat.echanges.models import Notification
 from groupachat.paiements.models import Sequestre, Transaction
@@ -41,6 +43,18 @@ def faire_expirer(campagne: Campagne) -> None:
         date_limite=timezone.now() - timedelta(hours=1)
     )
     campagne.refresh_from_db()
+
+
+def _rien_n_a_change(campagne: Campagne, notifications_avant: int) -> None:
+    """Après un refus : statut, parts, séquestre et notifications intacts."""
+    campagne.refresh_from_db()
+    assert campagne.statut == Campagne.Statut.MINIMUM_NON_ATTEINT
+    assert not Participation.objects.filter(
+        statut=Participation.Statut.REMBOURSEE
+    ).exists()
+    sequestre = Sequestre.objects.get(campagne=campagne)
+    assert (sequestre.solde, sequestre.montant_rembourse) == (90000, 0)
+    assert Notification.objects.count() == notifications_avant
 
 
 class TestClotureAutomatique:
@@ -173,6 +187,184 @@ class TestDecisionDuGroupeur:
             f"/api/groupeur/campagnes/{manquee.id}/maintenir/", {}, format="json"
         ).status_code == 403
 
+    def test_le_motif_par_defaut_est_enregistre(self, connecte, manquee):
+        for corps in ({}, {"motif": ""}):
+            Campagne.objects.filter(pk=manquee.pk).update(
+                statut=Campagne.Statut.MINIMUM_NON_ATTEINT, motif_annulation=""
+            )
+            reponse = connecte(manquee.groupeur).post(
+                f"/api/groupeur/campagnes/{manquee.id}/annuler/", corps, format="json"
+            )
+            assert reponse.status_code == 200, reponse.data
+            manquee.refresh_from_db()
+            assert manquee.motif_annulation == "Groupage non abouti."
+
+    def test_le_motif_saisi_est_enregistre(self, connecte, manquee):
+        reponse = connecte(manquee.groupeur).post(
+            f"/api/groupeur/campagnes/{manquee.id}/annuler/",
+            {"motif": "Fournisseur indisponible"},
+            format="json",
+        )
+        assert reponse.status_code == 200, reponse.data
+        assert reponse.data["statut"] == "annulee"
+        assert reponse.data["motif_annulation"] == "Fournisseur indisponible"
+        manquee.refresh_from_db()
+        assert manquee.motif_annulation == "Fournisseur indisponible"
+
+    def test_la_decision_maintenir_rend_la_campagne_financee_sans_rembourser(
+        self, connecte, manquee, ama, yao
+    ):
+        reponse = connecte(manquee.groupeur).post(
+            f"/api/groupeur/campagnes/{manquee.id}/maintenir/", {}, format="json"
+        )
+        assert reponse.data["statut"] == "financee"
+        sequestre = Sequestre.objects.get(campagne=manquee)
+        assert sequestre.solde == 90000
+        assert sequestre.montant_rembourse == 0
+        assert not Transaction.objects.filter(
+            sens=Transaction.Sens.REMBOURSEMENT
+        ).exists()
+        for acheteur in (ama, yao):
+            avis = Notification.objects.get(
+                destinataire=acheteur, genre=Notification.Genre.CAMPAGNE_MAINTENUE
+            )
+            assert avis.lien == f"/campagnes/{manquee.id}"
+
+    def test_l_annulation_notifie_et_rembourse_chaque_acheteur(
+        self, connecte, manquee, ama, yao
+    ):
+        connecte(manquee.groupeur).post(
+            f"/api/groupeur/campagnes/{manquee.id}/annuler/", {}, format="json"
+        )
+        for acheteur, montant in ((ama, 54000), (yao, 36000)):
+            for genre in (
+                Notification.Genre.CAMPAGNE_ANNULEE,
+                Notification.Genre.REMBOURSEMENT,
+            ):
+                assert Notification.objects.filter(
+                    destinataire=acheteur, genre=genre
+                ).count() == 1, genre
+            remboursements = Transaction.objects.filter(
+                participation__acheteur=acheteur, sens=Transaction.Sens.REMBOURSEMENT
+            )
+            assert [t.montant for t in remboursements] == [montant]
+        sequestre = Sequestre.objects.get(campagne=manquee)
+        assert sequestre.montant_rembourse == sequestre.montant_consigne == 90000
+        assert sequestre.solde == 0
+        assert sequestre.statut == Sequestre.Statut.REMBOURSE
+
+    def test_un_autre_groupeur_ne_voit_pas_la_campagne_et_rien_n_est_ecrit(
+        self, connecte, manquee
+    ):
+        autre = Utilisateur.objects.create_user(
+            "93004455", "mdpSolide2026", nom="Autre", prenom="Groupeur",
+            telephone_verifie=True, role=Utilisateur.Role.GROUPEUR,
+        )
+        DossierKYC.objects.create(
+            utilisateur=autre, type_piece=DossierKYC.TypePiece.CNI,
+            numero_piece="CNI-9", numero_mobile_money="93004455",
+            nom_commerce="Autre", statut=DossierKYC.Statut.VALIDE,
+        )
+        avant = Notification.objects.count()
+        api = connecte(autre)
+        for action in ("maintenir", "annuler"):
+            reponse = api.post(
+                f"/api/groupeur/campagnes/{manquee.id}/{action}/", {}, format="json"
+            )
+            assert reponse.status_code == 404, action
+        _rien_n_a_change(manquee, avant)
+
+    def test_un_acheteur_et_un_anonyme_ne_decident_pas_et_rien_n_est_ecrit(
+        self, connecte, manquee, ama
+    ):
+        avant = Notification.objects.count()
+        clients = (connecte(ama), APIClient())
+        for api in clients:
+            for action in ("maintenir", "annuler", "cloturer"):
+                reponse = api.post(
+                    f"/api/groupeur/campagnes/{manquee.id}/{action}/", {}, format="json"
+                )
+                assert reponse.status_code in (401, 403), (action, reponse.status_code)
+        _rien_n_a_change(manquee, avant)
+
+    @pytest.mark.parametrize(
+        "statut",
+        [Campagne.Statut.EN_COURS, Campagne.Statut.FINANCEE, Campagne.Statut.ANNULEE],
+    )
+    def test_maintenir_hors_decision_est_refuse(self, connecte, manquee, statut):
+        Campagne.objects.filter(pk=manquee.pk).update(statut=statut)
+        avant = Notification.objects.count()
+        reponse = connecte(manquee.groupeur).post(
+            f"/api/groupeur/campagnes/{manquee.id}/maintenir/", {}, format="json"
+        )
+        assert reponse.status_code == 400
+        assert reponse.data["detail"] == "Cette campagne n'attend pas de décision."
+        manquee.refresh_from_db()
+        assert manquee.statut == statut
+        assert Notification.objects.count() == avant
+
+    def test_annuler_deux_fois_ne_rembourse_qu_une_fois(self, connecte, manquee):
+        api = connecte(manquee.groupeur)
+        url = f"/api/groupeur/campagnes/{manquee.id}/annuler/"
+        assert api.post(url, {}, format="json").status_code == 200
+        remboursements = Transaction.objects.filter(
+            sens=Transaction.Sens.REMBOURSEMENT
+        ).count()
+
+        seconde = api.post(url, {}, format="json")
+        assert seconde.status_code == 400
+        assert seconde.data["detail"] == "Cette campagne ne peut plus être annulée."
+        assert Transaction.objects.filter(
+            sens=Transaction.Sens.REMBOURSEMENT
+        ).count() == remboursements == 2
+        assert Sequestre.objects.get(campagne=manquee).montant_rembourse == 90000
+        assert Reputation.objects.get(groupeur=manquee.groupeur).campagnes_annulees == 1
+
+    def test_annuler_apres_maintien_reste_permis_tant_que_rien_n_est_decaisse(
+        self, connecte, manquee, ama
+    ):
+        """Décision D1 : le groupeur peut changer d'avis jusqu'au décaissement."""
+        api = connecte(manquee.groupeur)
+        api.post(f"/api/groupeur/campagnes/{manquee.id}/maintenir/", {}, format="json")
+        reponse = api.post(
+            f"/api/groupeur/campagnes/{manquee.id}/annuler/", {}, format="json"
+        )
+        assert reponse.status_code == 200
+        assert Participation.objects.get(acheteur=ama).statut == (
+            Participation.Statut.REMBOURSEE
+        )
+
+    def test_la_cloture_anticipee_sans_minimum_attend_la_decision(
+        self, connecte, campagne, ama
+    ):
+        participer(connecte, ama, campagne, 3)
+        reponse = connecte(campagne.groupeur).post(
+            f"/api/groupeur/campagnes/{campagne.id}/cloturer/", {}, format="json"
+        )
+        assert reponse.status_code == 200
+        assert reponse.data == {"statut": "minimum_non_atteint"}
+        assert Notification.objects.filter(
+            destinataire=ama, genre=Notification.Genre.GROUPAGE_NON_ABOUTI
+        ).exists()
+        assert Notification.objects.filter(
+            destinataire=campagne.groupeur, genre=Notification.Genre.DECISION_ATTENDUE
+        ).exists()
+        assert Sequestre.objects.get(campagne=campagne).montant_rembourse == 0
+        assert not Transaction.objects.filter(
+            sens=Transaction.Sens.REMBOURSEMENT
+        ).exists()
+
+    def test_la_cloture_anticipee_avec_minimum_finance(self, connecte, campagne, ama):
+        participer(connecte, ama, campagne, campagne.quantite_minimale)
+        reponse = connecte(campagne.groupeur).post(
+            f"/api/groupeur/campagnes/{campagne.id}/cloturer/", {}, format="json"
+        )
+        assert reponse.data == {"statut": "financee"}
+        for destinataire in (ama, campagne.groupeur):
+            assert Notification.objects.filter(
+                destinataire=destinataire, genre=Notification.Genre.CAMPAGNE_FINANCEE
+            ).exists()
+
 
 class TestDelaiDeDecision:
     @pytest.fixture
@@ -209,6 +401,82 @@ class TestDelaiDeDecision:
             cloturee_le=timezone.now() - timedelta(days=365)
         )
         assert rembourser_les_indecis() == []
+
+    def test_maintenir_est_permis_juste_avant_le_septieme_jour(
+        self, connecte, manquee, settings
+    ):
+        Campagne.objects.filter(pk=manquee.pk).update(
+            cloturee_le=timezone.now()
+            - timedelta(days=settings.DELAI_DECISION_JOURS, minutes=-1)
+        )
+        reponse = connecte(manquee.groupeur).post(
+            f"/api/groupeur/campagnes/{manquee.id}/maintenir/", {}, format="json"
+        )
+        assert reponse.status_code == 200, reponse.data
+        assert reponse.data["statut"] == "financee"
+
+    def test_maintenir_est_refuse_des_le_septieme_jour_sans_attendre_la_tache(
+        self, connecte, manquee, ama, settings
+    ):
+        Campagne.objects.filter(pk=manquee.pk).update(
+            cloturee_le=timezone.now() - timedelta(days=settings.DELAI_DECISION_JOURS)
+        )
+        avant = Notification.objects.count()
+        reponse = connecte(manquee.groupeur).post(
+            f"/api/groupeur/campagnes/{manquee.id}/maintenir/", {}, format="json"
+        )
+        assert reponse.status_code == 400
+        assert "délai" in reponse.data["detail"]
+        manquee.refresh_from_db()
+        assert manquee.statut == Campagne.Statut.MINIMUM_NON_ATTEINT
+        assert Notification.objects.count() == avant
+
+    def test_annuler_reste_permis_apres_le_delai(self, connecte, manquee, settings):
+        """C'est l'issue que la tâche appliquerait : la devancer ne lèse personne."""
+        Campagne.objects.filter(pk=manquee.pk).update(
+            cloturee_le=timezone.now() - timedelta(days=settings.DELAI_DECISION_JOURS + 1)
+        )
+        reponse = connecte(manquee.groupeur).post(
+            f"/api/groupeur/campagnes/{manquee.id}/annuler/", {}, format="json"
+        )
+        assert reponse.status_code == 200
+
+    def test_un_delai_nul_laisse_maintenir_sans_limite(
+        self, connecte, manquee, settings
+    ):
+        settings.DELAI_DECISION_JOURS = 0
+        Campagne.objects.filter(pk=manquee.pk).update(
+            cloturee_le=timezone.now() - timedelta(days=365)
+        )
+        assert connecte(manquee.groupeur).post(
+            f"/api/groupeur/campagnes/{manquee.id}/maintenir/", {}, format="json"
+        ).status_code == 200
+
+    def test_la_tache_ne_rembourse_pas_une_campagne_maintenue(
+        self, connecte, manquee, ama, settings
+    ):
+        """La tâche a sélectionné la campagne avant que le groupeur ne maintienne."""
+        connecte(manquee.groupeur).post(
+            f"/api/groupeur/campagnes/{manquee.id}/maintenir/", {}, format="json"
+        )
+        Campagne.objects.filter(pk=manquee.pk).update(
+            cloturee_le=timezone.now() - timedelta(days=settings.DELAI_DECISION_JOURS + 1)
+        )
+        assert rembourser_les_indecis() == []
+        assert Participation.objects.get(acheteur=ama).statut == (
+            Participation.Statut.PAYEE
+        )
+
+    def test_la_tache_enregistre_le_motif_du_silence(self, manquee, settings):
+        Campagne.objects.filter(pk=manquee.pk).update(
+            cloturee_le=timezone.now() - timedelta(days=settings.DELAI_DECISION_JOURS + 1)
+        )
+        rembourser_les_indecis()
+        manquee.refresh_from_db()
+        assert manquee.motif_annulation == (
+            "Sans décision du groupeur 7 jours après la clôture."
+        )
+        assert Sequestre.objects.get(campagne=manquee).solde == 0
 
 
 class TestCatalogueEtHistorique:

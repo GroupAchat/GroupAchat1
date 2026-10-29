@@ -9,7 +9,10 @@ dépend :
   encore des participations ;
 - sans elle, les acheteurs d'un groupage manqué ne sont jamais prévenus ;
 - sans elle, un groupeur qui disparaît laisse l'argent consigné pour
-  toujours.
+  toujours ;
+- sans elle, un colis non retiré bloque la campagne en distribution pour
+  toujours : elle relance les acheteurs à J+3 et J+7, puis réputé livrée la
+  part non retirée à J+14 et termine la campagne (F-031).
 
     python manage.py cloturer_les_campagnes_echues
 
@@ -22,11 +25,24 @@ from __future__ import annotations
 from django.conf import settings
 from django.core.management.base import BaseCommand
 
+from groupachat.paiements.retraits import (
+    CLOTURE_BLOQUEE,
+    CLOTURE_DUE,
+    CLOTURE_PREAVIS,
+    CLOTURE_RATTRAPAGE,
+    etape_de_relance,
+    relancer_les_retraits,
+    reputer_livrees_les_echues,
+    situation_a_j_plus_14,
+)
 from groupachat.paiements.services import cloturer_les_echus, rembourser_les_indecis
 
 
 class Command(BaseCommand):
-    help = "Clôture les campagnes échues et rembourse celles laissées sans décision."
+    help = (
+        "Clôture les campagnes échues, rembourse celles laissées sans décision, "
+        "relance les retraits et clôt à J+14."
+    )
 
     def add_arguments(self, analyseur):
         analyseur.add_argument(
@@ -53,9 +69,21 @@ class Command(BaseCommand):
                 f"sans décision depuis {settings.DELAI_DECISION_JOURS} jours"
             )
 
+        relances = relancer_les_retraits()
+        for identifiant, etape in relances:
+            self.stdout.write(f"  campagne {identifiant} → relance {etape}")
+
+        closes = reputer_livrees_les_echues()
+        for identifiant in closes:
+            self.stdout.write(
+                f"  campagne {identifiant} → terminée, colis non retirés réputés livrés"
+            )
+
         self.stdout.write(
             self.style.SUCCESS(
-                f"\n{len(fermees)} clôture(s), {len(rendues)} remboursement(s)."
+                f"\n{len(fermees)} clôture(s), {len(rendues)} remboursement(s), "
+                f"{len(relances)} relance(s), "
+                f"{len(closes)} campagne(s) close(s) à J+14."
             )
         )
 
@@ -86,6 +114,7 @@ class Command(BaseCommand):
 
         if settings.DELAI_DECISION_JOURS <= 0:
             self.stdout.write("Remboursement automatique désactivé.")
+            self._annoncer_retraits()
             return
 
         limite = timezone.now() - timedelta(days=settings.DELAI_DECISION_JOURS)
@@ -95,3 +124,36 @@ class Command(BaseCommand):
         self.stdout.write(f"À rembourser faute de décision : {oubliees.count()}")
         for campagne in oubliees:
             self.stdout.write(f"  {campagne.id} · {campagne.titre[:44]}")
+        self._annoncer_retraits()
+
+    def _annoncer_retraits(self) -> None:
+        """Les relances et clôtures à J+14 que la tâche ferait, sans les faire."""
+        from django.utils import timezone
+
+        from groupachat.catalogue.models import Campagne
+        from groupachat.commandes.models import Participation
+
+        maintenant = timezone.now()
+        en_distribution = Campagne.objects.filter(
+            statut=Campagne.Statut.DISTRIBUTION
+        ).order_by("id")
+        lignes = []
+        for campagne in en_distribution:
+            etape = etape_de_relance(campagne, maintenant)
+            if etape:
+                lignes.append(f"  {campagne.id} · {campagne.titre[:44]} → relance {etape}")
+            situation = situation_a_j_plus_14(campagne, maintenant)
+            non_retires = campagne.participations.filter(
+                statut=Participation.Statut.PRETE
+            ).count()
+            texte = {
+                CLOTURE_DUE: f"clôture à J+14 ({non_retires} colis non retirés)",
+                CLOTURE_RATTRAPAGE: "relance de rattrapage avant la clôture à J+14",
+                CLOTURE_PREAVIS: "clôture à J+14 après le préavis de 72 h",
+                CLOTURE_BLOQUEE: "bloquée : fonds consignés",
+            }.get(situation)
+            if texte:
+                lignes.append(f"  {campagne.id} · {campagne.titre[:44]} → {texte}")
+        self.stdout.write(f"Retraits à relancer ou à clore : {len(lignes)}")
+        for ligne in lignes:
+            self.stdout.write(ligne)

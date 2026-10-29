@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
+import { Eye, EyeOff } from "lucide-react";
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from "react";
-import { forwardRef } from "react";
+import { forwardRef, useState } from "react";
 
 import { initiales, teinteDe } from "@commun/outils/formats";
 
@@ -93,10 +94,16 @@ interface ProprietesChamp extends InputHTMLAttributes<HTMLInputElement> {
 }
 
 export const Champ = forwardRef<HTMLInputElement, ProprietesChamp>(function Champ(
-  { etiquette, erreur, aide, prefixe, className, id, ...reste },
+  { etiquette, erreur, aide, prefixe, className, id, type, ...reste },
   ref,
 ) {
   const identifiant = id ?? `champ-${etiquette.replace(/\W+/g, "-").toLowerCase()}`;
+  // Un mot de passe tapé à l'aveugle sur un clavier de téléphone se trompe
+  // souvent, et l'erreur ne se voit qu'au refus du serveur. L'œil le rend
+  // relisible avant l'envoi ; il vit ici pour servir les trois formulaires
+  // (inscription, connexion boutique, connexion console) d'un seul coup.
+  const estMotDePasse = type === "password";
+  const [visible, setVisible] = useState(false);
   return (
     <div className="space-y-1.5">
       <label htmlFor={identifiant} className="block text-sm font-medium">
@@ -114,6 +121,7 @@ export const Champ = forwardRef<HTMLInputElement, ProprietesChamp>(function Cham
         {prefixe && <span className="texte-doux text-sm">{prefixe}</span>}
         <input
           {...reste}
+          type={estMotDePasse && visible ? "text" : type}
           ref={ref}
           id={identifiant}
           aria-invalid={Boolean(erreur)}
@@ -124,6 +132,22 @@ export const Champ = forwardRef<HTMLInputElement, ProprietesChamp>(function Cham
             className,
           )}
         />
+        {estMotDePasse && (
+          <button
+            type="button"
+            onClick={() => setVisible((v) => !v)}
+            aria-label={visible ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+            aria-pressed={visible}
+            aria-controls={identifiant}
+            className={fusionner(
+              "texte-doux -mr-2 grid h-10 w-10 shrink-0 place-items-center rounded-full",
+              "transition-colors hover:text-[color:var(--color-accent)]",
+              "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--color-accent)]",
+            )}
+          >
+            {visible ? <EyeOff className="h-5 w-5" aria-hidden /> : <Eye className="h-5 w-5" aria-hidden />}
+          </button>
+        )}
       </div>
       {erreur ? (
         <p id={`${identifiant}-erreur`} className="text-sm text-red-600">

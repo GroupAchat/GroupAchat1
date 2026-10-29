@@ -134,7 +134,11 @@ Sans elle :
 
 - une campagne dépassée **reste au catalogue** et accepte des participations ;
 - les acheteurs d'un groupage manqué **ne sont jamais prévenus** ;
-- un groupeur qui disparaît laisse l'argent consigné **pour toujours**.
+- un groupeur qui disparaît laisse l'argent consigné **pour toujours** ;
+- un colis non retiré **bloque la campagne en distribution pour toujours** :
+  la tâche relance les acheteurs à J+3 et J+7 après la mise à disposition,
+  puis, à J+14, déclare les colis restants réputés livrés et termine la
+  campagne.
 
 Le délai laissé au groupeur après une collecte manquée se règle par
 `DELAI_DECISION_JOURS` (7 par défaut ; `0` désactive le remboursement
@@ -145,6 +149,10 @@ Pour voir ce que la tâche ferait sans rien changer :
 ```bash
 python manage.py cloturer_les_campagnes_echues --a-blanc
 ```
+
+Avant le premier passage réel en production, lancer ce mode à blanc : il
+liste les campagnes à relancer, celles à clore à J+14, et celles qu'un solde
+de séquestre encore consigné bloque (à trancher par l'administrateur).
 
 ## 5. Ce qui est figé à la construction
 
@@ -235,6 +243,29 @@ redéploiement ne le touche jamais :
 ```bash
 docker compose down -v        # ⚠️ détruit la base et les fichiers téléversés
 ```
+
+### Avant un déploiement qui ajoute une contrainte sur l'argent
+
+La migration `paiements/0002` interdit qu'un séquestre ait libéré plus
+remboursé que consigné. PostgreSQL vérifie les lignes existantes : si une
+campagne porte déjà ce défaut (la panne F-024, un retrait exécuté après une
+annulation), la migration échoue, et comme `entrypoint.sh` tourne sous
+`set -e` **le conteneur ne démarre pas** et le déploiement échoue.
+
+**Avant de fusionner dans `master`**, lancez ceci dans le terminal du
+conteneur de l'API actuel (le code déployé n'a pas encore la commande de
+contrôle) :
+
+```bash
+python manage.py shell -c "from django.db.models import F; from groupachat.paiements.models import Sequestre, Decaissement; from groupachat.catalogue.models import Campagne; print('C-006', list(Sequestre.objects.filter(montant_consigne__lt=F('montant_libere')+F('montant_rembourse')).values_list('campagne_id', flat=True))); print('demande hors financee', list(Decaissement.objects.filter(statut='demande').exclude(campagne__statut='financee').values_list('id', 'campagne__statut'))); print('decaissee', Campagne.objects.filter(statut='decaissee').count())"
+```
+
+La ligne `C-006` doit être une liste vide ; sinon on ne déploie pas et on
+corrige les montants à la main. Les deux autres lignes listent des
+décaissements en attente sur une campagne non financée et les campagnes au
+statut `decaissee`, à trancher aussi. Une fois ce déploiement passé,
+`python manage.py controler_les_sequestres` fait le même contrôle (et un
+quatrième), en lecture seule.
 
 ## 9. Essayer la pile en local
 

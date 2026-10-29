@@ -86,7 +86,9 @@ class DossierKYCAdminVueEnsemble(
                 if valide
                 else f"Votre dossier a été refusé — {dossier.motif_rejet}"
             ),
-            lien="/groupeur",
+            # Un refus mène à l'écran où l'on renvoie ses pièces ; « /groupeur »
+            # est fermé tant que le dossier n'est pas validé (C-038).
+            lien="/groupeur" if valide else "/profil/devenir-groupeur",
         )
         return Response(DossierKYCSerialiseur(dossier).data)
 
@@ -130,9 +132,10 @@ class DecaissementAdminVueEnsemble(
     @action(detail=True, methods=["post"])
     def executer(self, requete, pk=None):
         """Libère les fonds vers le groupeur."""
-        decaissement = self.get_object()
+        # get_object ne sert qu'au 404 et à la permission : l'objet lu ici
+        # peut être périmé, le service relit sous verrou et rend l'état réel.
         try:
-            executer_decaissement(decaissement, requete.user)
+            decaissement = executer_decaissement(self.get_object(), requete.user)
         except ErreurPaiement as erreur:
             return Response({"detail": str(erreur)},
                             status=status.HTTP_400_BAD_REQUEST)

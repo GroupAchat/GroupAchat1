@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import pytest
+from django.core.files.base import ContentFile
 
 from groupachat.comptes.models import DossierKYC, Reputation
 from groupachat.echanges.models import Commentaire, Notification
@@ -79,6 +80,24 @@ class TestDecisionKYC:
             destinataire=groupeur_en_attente,
             genre=Notification.Genre.KYC_DECIDE,
         ).exists()
+
+    def test_l_administrateur_lit_les_pieces_deposees(
+        self, connecte, client, administrateur, groupeur_en_attente, settings, tmp_path
+    ):
+        settings.MEDIA_ROOT = tmp_path
+        dossier = DossierKYC.objects.get(utilisateur=groupeur_en_attente)
+        dossier.piece_recto.save("r.png", ContentFile(b"octets-recto"), save=False)
+        dossier.piece_verso.save("v.png", ContentFile(b"octets-verso"), save=False)
+        dossier.save()
+
+        ligne = connecte(administrateur).get("/api/admin/dossiers/").data["results"][0]
+        assert ligne["lien_recto"] and ligne["lien_verso"]
+        assert "piece_recto" not in ligne and "piece_verso" not in ligne
+
+        client.force_login(administrateur)
+        pieces = client.get(f"/pieces/{dossier.pk}/recto/")
+        assert pieces.status_code == 200
+        assert b"".join(pieces.streaming_content) == b"octets-recto"
 
     def test_un_dossier_deja_tranche_ne_se_rejuge_pas(
         self, connecte, administrateur, groupeur_en_attente

@@ -194,7 +194,7 @@ export default function NouvelleCampagne() {
               value={offre.quantite_minimale}
               onChange={(e) => setOffre({ ...offre, quantite_minimale: e.target.value })}
               erreur={creation.erreur?.pourChamp("quantite_minimale")}
-              aide="En dessous, tout le monde est remboursé."
+              aide="En dessous, vous déciderez de maintenir la commande ou de rembourser."
             />
           </div>
 

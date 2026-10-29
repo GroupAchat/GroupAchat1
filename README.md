@@ -64,6 +64,23 @@ réglage CORS particulier.
 La configuration vient d'**un seul `.env`**, à la racine — le même que lisent
 Django et Docker Compose.
 
+## Démarrer avec make
+
+Un `Makefile` à la racine enchaîne les commandes ci-dessous. `make` seul liste les cibles.
+
+```bash
+make preparer-presentation   # installe, migre, charge la démo, compile les deux interfaces
+make lancer                  # compile puis sert Django seul sur le port 8000 (PORT=8100 pour un autre)
+make servir                  # le jour J : sert les builds existants, sans recompiler
+```
+
+`make lancer` sert la boutique sur `http://localhost:8000/` et la console sur
+`http://admin.localhost:8000/` : comme en production, le domaine décide de
+l'interface. Il utilise SQLite et `DJANGO_DEBUG=1` sans toucher au `.env`
+(`SQLITE=0` pour suivre la `DATABASE_URL` du `.env`). `make dev` lance Django et
+les deux serveurs Vite (port 8000 obligatoire) ; `make tests`, `make verifier-rapide`
+et `make verifier` complètent le tout.
+
 ## Comptes de démonstration
 
 Mot de passe commun : `demo2026Groupe`

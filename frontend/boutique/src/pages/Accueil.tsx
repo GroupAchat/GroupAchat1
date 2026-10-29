@@ -176,7 +176,7 @@ function Banniere() {
     {
       icone: ShieldCheck,
       titre: "Argent consigné",
-      texte: "Bloqué jusqu'à la livraison.",
+      texte: "Remis au groupeur une fois la collecte réussie.",
     },
     {
       icone: QrCode,
@@ -185,8 +185,8 @@ function Banniere() {
     },
     {
       icone: Wallet,
-      titre: "Livré ou remboursé",
-      texte: "Minimum non atteint, vous êtes remboursé.",
+      titre: "Remboursé si le groupage échoue",
+      texte: "Minimum non atteint : sans décision du groupeur sous 7 jours, vous êtes remboursé.",
     },
   ];
 
@@ -212,7 +212,7 @@ function Banniere() {
           </h1>
           <p className="mt-2.5 text-sm text-white/85 lg:text-base">
             Rejoignez une campagne, réglez votre part par Mobile Money.
-            L'argent reste consigné jusqu'à ce que vous ayez votre colis.
+            Votre part reste consignée tant que la collecte n'est pas acquise ; votre code de retrait prouve ensuite la remise du colis.
           </p>
           <div className="mt-5 flex flex-wrap gap-3">
             <Link to="/catalogue">

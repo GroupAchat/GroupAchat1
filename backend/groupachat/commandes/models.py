@@ -14,7 +14,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 
-from groupachat.catalogue.models import Campagne
+from groupachat.catalogue.models import DELAI_RETRAIT_JOURS, Campagne
 
 # Alphabet du code de retrait : chiffres et majuscules, sans les caractères
 # qu'on confond à l'oral ou sur un écran fissuré (0/O, 1/I/L, 2/Z, 5/S, 8/B).
@@ -34,12 +34,21 @@ class Participation(models.Model):
         PAYEE = "payee", "Payée, fonds consignés"
         PRETE = "prete", "Prête à être retirée"
         RETIREE = "retiree", "Retirée"
+        REPUTEE_LIVREE = "reputee_livree", "Non retirée — réputée livrée"
         REMBOURSEE = "remboursee", "Remboursée"
         ANNULEE = "annulee", "Annulée"
 
     # Participations dont l'argent est effectivement consigné : ce sont les
     # seules qui comptent dans la jauge et dans le montant collecté.
-    STATUTS_PAYES = (Statut.PAYEE, Statut.PRETE, Statut.RETIREE)
+    # Une part réputée livrée en fait partie : son argent a bien été payé puis
+    # versé au groupeur. Sans elle, la jauge et le montant collecté baisseraient
+    # le jour où le délai de retrait s'écoule.
+    STATUTS_PAYES = (
+        Statut.PAYEE,
+        Statut.PRETE,
+        Statut.RETIREE,
+        Statut.REPUTEE_LIVREE,
+    )
 
     campagne = models.ForeignKey(
         Campagne,
@@ -76,6 +85,12 @@ class Participation(models.Model):
     cree_le = models.DateTimeField("commandée le", default=timezone.now)
     payee_le = models.DateTimeField("payée le", null=True, blank=True)
     retiree_le = models.DateTimeField("retirée le", null=True, blank=True)
+    # Distinct de `retiree_le`, qui veut dire « remise prouvée par le code » :
+    # c'est précisément ce qui manque à une part réputée livrée. La date reste
+    # en trace si le code est présenté plus tard.
+    reputee_livree_le = models.DateTimeField(
+        "réputée livrée le", null=True, blank=True
+    )
     remise_par = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -93,6 +108,15 @@ class Participation(models.Model):
         indexes = [
             models.Index(fields=["campagne", "statut"]),
             models.Index(fields=["acheteur", "statut"]),
+        ]
+        constraints = [
+            # À sens unique, exprès : une part devenue `retiree` après
+            # l'échéance garde sa date de réputation comme trace.
+            models.CheckConstraint(
+                condition=~models.Q(statut="reputee_livree")
+                | models.Q(reputee_livree_le__isnull=False),
+                name="participation_reputee_livree_datee",
+            ),
         ]
 
     def __str__(self) -> str:
@@ -150,7 +174,7 @@ class Participation(models.Model):
         depuis = self.campagne.mise_a_disposition_le
         if depuis is None or self.statut != self.Statut.PRETE:
             return False
-        return (timezone.now() - depuis).days >= 14
+        return (timezone.now() - depuis).days >= DELAI_RETRAIT_JOURS
 
 
 class Avis(models.Model):
@@ -198,6 +222,16 @@ class Avis(models.Model):
 
     def __str__(self) -> str:
         return f"{self.note}/5 — {self.participation}"
+
+    @property
+    def auteur_id(self) -> int:
+        """L'acheteur qui a écrit l'avis.
+
+        Sans cet attribut, la permission d'auteur du noyau (qui ne connaît
+        aucun sujet) ne saurait pas lire le propriétaire d'un avis : il vit
+        sur la participation, pas sur l'avis.
+        """
+        return self.participation.acheteur_id
 
     @property
     def groupeur(self):

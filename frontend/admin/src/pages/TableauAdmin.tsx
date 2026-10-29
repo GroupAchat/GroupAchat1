@@ -77,7 +77,7 @@ export default function TableauAdmin() {
           animate={{ opacity: 1, y: 0 }}
           className="lg:col-span-2"
         >
-          <Carte className="relative overflow-hidden border-transparent text-white">
+          <Carte className="relative isolate overflow-hidden border-transparent text-white">
             <span className="degrade-accent absolute inset-0 -z-10" />
             <span className="absolute -right-12 -top-16 size-56 rounded-full bg-white/12 blur-3xl" />
             <Vault className="size-6" />

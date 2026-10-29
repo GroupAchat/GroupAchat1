@@ -22,6 +22,8 @@ from django.core.validators import RegexValidator
 from django.db import models
 from django.utils import timezone
 
+from groupachat.comptes.pieces_kyc import chemin_piece
+
 # Numéros togolais : 8 chiffres, éventuellement précédés de l'indicatif +228.
 # Volontairement permissif — la vérification par SMS tranche pour de bon.
 validateur_telephone = RegexValidator(
@@ -246,11 +248,12 @@ class DossierKYC(models.Model):
     )
     type_piece = models.CharField("type de pièce", max_length=20, choices=TypePiece.choices)
     numero_piece = models.CharField("numéro de la pièce", max_length=50)
-    # Facultatives au niveau du modèle : la démonstration doit pouvoir
-    # dérouler un parcours KYC sans qu'on téléverse une vraie pièce
-    # d'identité. L'interface, elle, les réclame.
-    piece_recto = models.ImageField("pièce (recto)", upload_to="kyc/", blank=True)
-    piece_verso = models.ImageField("pièce (verso)", upload_to="kyc/", blank=True)
+    # Obligatoires au dépôt (sérialiseur), mais `blank=True` ici : les
+    # dossiers déjà enregistrés sans pièce, dont des dossiers validés, restent
+    # valides au lieu d'être rejetés ou purgés par une migration. Le nom de
+    # stockage est aléatoire (`chemin_piece`), pas celui du téléphone.
+    piece_recto = models.ImageField("pièce (recto)", upload_to=chemin_piece, blank=True)
+    piece_verso = models.ImageField("pièce (verso)", upload_to=chemin_piece, blank=True)
 
     # Le numéro qui recevra les décaissements. Souvent différent du numéro de
     # connexion, d'où un champ à part plutôt qu'une réutilisation.

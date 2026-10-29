@@ -247,6 +247,8 @@ class Notification(models.Model):
         NOUVEAU_COMMENTAIRE = "nouveau_commentaire", "Nouveau message sur votre campagne"
         NOUVEL_AVIS = "nouvel_avis", "Un acheteur vous a noté"
         REPONSE_COMMENTAIRE = "reponse_commentaire", "Réponse à votre message"
+        LIVRAISON_REPUTEE = "livraison_reputee", "Livraison réputée acquise"
+        CAMPAGNE_TERMINEE = "campagne_terminee", "Campagne terminée"
 
     destinataire = models.ForeignKey(
         settings.AUTH_USER_MODEL,

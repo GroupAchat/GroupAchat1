@@ -3,6 +3,7 @@ import {
   Bell,
   BellRing,
   CheckCheck,
+  Clock,
   PackageCheck,
   ShieldCheck,
   Undo2,
@@ -27,6 +28,8 @@ const ICONES: Record<string, typeof Bell> = {
   remboursement: Undo2,
   kyc_decide: ShieldCheck,
   relance_retrait: PackageCheck,
+  livraison_reputee: Clock,
+  campagne_terminee: CheckCheck,
   nouveau_commentaire: BellRing,
   reponse_commentaire: BellRing,
 };
@@ -117,7 +120,7 @@ function LigneNotification({
       transition={{ delay: Math.min(index, 8) * 0.04 }}
       className={fusionner(
         "flex gap-3 rounded-2xl border p-4 transition-colors",
-        lue ? "surface" : "bg-accent-doux border-transparent",
+        lue ? "surface" : "bg-fond-message border-transparent",
       )}
     >
       <span
@@ -130,7 +133,7 @@ function LigneNotification({
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
-          <p className={fusionner("font-semibold", !lue && "text-[color:var(--color-accent-fort)]")}>
+          <p className="font-semibold">
             {notification.titre}
           </p>
           <span className="texte-doux shrink-0 text-xs">{depuis(notification.cree_le)}</span>

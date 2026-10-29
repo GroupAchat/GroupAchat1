@@ -196,15 +196,26 @@ function FeuilleDecision({
             <Ligne libelle="Déposé le" valeur={dateLongue(dossier.depose_le)} />
           </dl>
 
-          {dossier.lien_recto ? (
-            <img
-              src={dossier.lien_recto}
-              alt="Pièce d'identité"
-              className="w-full rounded-2xl border"
-            />
+          {dossier.lien_recto || dossier.lien_verso ? (
+            <div className="space-y-2">
+              {dossier.lien_recto && (
+                <img
+                  src={dossier.lien_recto}
+                  alt="Pièce d'identité : recto"
+                  className="w-full rounded-2xl border"
+                />
+              )}
+              {dossier.lien_verso && (
+                <img
+                  src={dossier.lien_verso}
+                  alt="Pièce d'identité : verso"
+                  className="w-full rounded-2xl border"
+                />
+              )}
+            </div>
           ) : (
             <p className="surface-douce rounded-xl px-3 py-2 text-xs texte-doux">
-              Démonstration : aucune pièce n'a été téléversée dans cette version.
+              Aucune pièce jointe : dossier déposé avant que les photos soient exigées.
             </p>
           )}
 

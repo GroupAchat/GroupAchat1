@@ -12,6 +12,7 @@ import {
   EtatVide,
   Squelette,
 } from "@commun/composants/ui";
+import { Confirmation } from "@commun/composants/Confirmation";
 import { dateLongue, depuis, francs, telephoneLisible } from "@commun/outils/formats";
 import { api, useAction, useRequete } from "@commun/outils/requetes";
 
@@ -23,18 +24,24 @@ import { api, useAction, useRequete } from "@commun/outils/requetes";
  * auteur.
  */
 export default function Decaissements() {
-  const { donnees, chargement, recharger } = useRequete<Page<Decaissement>>(
+  const { donnees, chargement, erreur, recharger } = useRequete<Page<Decaissement>>(
     "/admin/decaissements/",
   );
   const [encours, setEncours] = useState<number | null>(null);
+  // La demande dont on attend la confirmation : rien n'est versé tant qu'elle
+  // n'est pas confirmée.
+  const [aConfirmer, setAConfirmer] = useState<Decaissement | null>(null);
 
   const executer = useAction(async (identifiant: number) => {
     setEncours(identifiant);
     try {
       await api.post(`/admin/decaissements/${identifiant}/executer/`);
-      await recharger();
     } finally {
       setEncours(null);
+      // Rechargée même après un refus : le serveur a pu changer l'état de la
+      // demande (campagne annulée entre-temps). Sans cela, la ligne restait à
+      // libérer avec un bouton qui redonnait la même erreur.
+      await recharger();
     }
   });
 
@@ -51,7 +58,7 @@ export default function Decaissements() {
         </p>
       </header>
 
-      <Alerte>{executer.erreur?.message}</Alerte>
+      <Alerte>{erreur?.message}</Alerte>
 
       {chargement ? (
         <div className="space-y-3">
@@ -59,11 +66,14 @@ export default function Decaissements() {
           <Squelette className="h-28" />
         </div>
       ) : demandes.length === 0 ? (
-        <EtatVide
-          icone={<Banknote className="size-7" />}
-          titre="Aucune demande"
-          texte="Les groupeurs demandent leurs fonds une fois leur campagne financée."
-        />
+        // Un échec de chargement n'est pas « aucune demande » : l'alerte parle.
+        erreur ? null : (
+          <EtatVide
+            icone={<Banknote className="size-7" />}
+            titre="Aucune demande"
+            texte="Les groupeurs demandent leurs fonds une fois leur campagne financée."
+          />
+        )
       ) : (
         <>
           {aTraiter.length > 0 && (
@@ -77,7 +87,10 @@ export default function Decaissements() {
                   action={
                     <Bouton
                       chargement={encours === demande.id}
-                      onClick={() => void executer.lancer(demande.id)}
+                      onClick={() => {
+                        executer.effacerErreur();
+                        setAConfirmer(demande);
+                      }}
                     >
                       Libérer {francs(demande.montant_net)}
                     </Bouton>
@@ -97,6 +110,32 @@ export default function Decaissements() {
           )}
         </>
       )}
+
+      <Confirmation
+        ouverte={aConfirmer !== null}
+        titre="Libérer les fonds ?"
+        texte={
+          aConfirmer
+            ? `Libérer ${francs(aConfirmer.montant_net)} à ${aConfirmer.groupeur} pour la campagne « ${aConfirmer.campagne_titre} » ? Le versement ne peut pas être annulé.`
+            : ""
+        }
+        libelleAction={aConfirmer ? `Libérer ${francs(aConfirmer.montant_net)}` : "Libérer"}
+        ton="danger"
+        envoi={executer.envoi}
+        erreur={executer.erreur?.message}
+        surConfirmation={() => {
+          if (!aConfirmer) return;
+          // `null` = refus du serveur : la feuille reste ouverte avec le message.
+          void executer.lancer(aConfirmer.id).then((resultat) => {
+            if (resultat !== null) setAConfirmer(null);
+          });
+        }}
+        surFermeture={() => {
+          if (executer.envoi) return;
+          executer.effacerErreur();
+          setAConfirmer(null);
+        }}
+      />
     </div>
   );
 }
@@ -126,6 +165,9 @@ function LigneDecaissement({
             Demandé le {dateLongue(demande.demande_le)}
             {demande.execute_le && ` · versé le ${dateLongue(demande.execute_le)}`}
           </p>
+          {demande.statut === "refuse" && demande.motif_refus && (
+            <p className="texte-doux text-xs">{demande.motif_refus}</p>
+          )}
         </div>
 
         <div className="tabulaire text-right text-sm">

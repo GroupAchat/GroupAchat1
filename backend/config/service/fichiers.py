@@ -30,14 +30,24 @@ DOSSIER_PRIVE = "kyc"
 def media_publique(requete: HttpRequest, chemin: str) -> HttpResponse:
     """Sert un fichier téléversé public.
 
-    ⚠️ Le refus de ``kyc/`` est répété ici **en plus** de l'expression de
-    route : une route se réécrit en deux secondes, et une faute de frappe y
-    exposerait des pièces d'identité sans que rien ne le signale.
+    ⚠️ Le refus se fait sur le chemin **résolu** (liens symboliques suivis,
+    `..` effacés, relatif à `MEDIA_ROOT`), jamais sur le texte reçu. Tester
+    le premier segment du texte brut laissait passer `x/%2e%2e/kyc/…` : le
+    serveur décode `%2e%2e`, puis `serve()` normalise et atterrit dans
+    `kyc/`. Tout ce qui sort de `MEDIA_ROOT` est refusé pour la même raison.
     """
-    premier = Path(chemin).parts[0] if chemin else ""
-    if premier == DOSSIER_PRIVE:
+    racine = Path(settings.MEDIA_ROOT).resolve()
+    try:
+        # `os.path.realpath` suit les liens : un lien « catalogue/lien » vers
+        # « kyc/ » est vu pour ce qu'il est. L'octet nul lève ValueError.
+        cible = (racine / chemin).resolve()
+        relatif = cible.relative_to(racine)
+    except (ValueError, OSError):
         raise Http404("Fichier introuvable.")
-    return serve(requete, chemin, document_root=settings.MEDIA_ROOT)
+
+    if not relatif.parts or relatif.parts[0].casefold() == DOSSIER_PRIVE:
+        raise Http404("Fichier introuvable.")
+    return serve(requete, relatif.as_posix(), document_root=racine)
 
 
 def piece_kyc(requete: HttpRequest, dossier_id: int, cote: str) -> HttpResponse:

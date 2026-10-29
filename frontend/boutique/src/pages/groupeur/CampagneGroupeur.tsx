@@ -5,6 +5,7 @@ import {
   Banknote,
   Check,
   CircleCheck,
+  Clock,
   Megaphone,
   PackageCheck,
   Phone,
@@ -19,6 +20,7 @@ import { Link, useParams } from "react-router-dom";
 
 import type { Campagne, Participant } from "@commun/api/types";
 import { PhotosDuLot } from "@/composants/PhotosDuLot";
+import { Confirmation } from "@commun/composants/Confirmation";
 import { Feuille } from "@commun/composants/Feuille";
 import { Jauge } from "@/composants/Jauge";
 import {
@@ -32,7 +34,7 @@ import {
   fusionner,
   Squelette,
 } from "@commun/composants/ui";
-import { codeLisible, dateLongue, francs, telephoneLisible } from "@commun/outils/formats";
+import { codeLisible, dateLongue, francs, pluriel, telephoneLisible } from "@commun/outils/formats";
 import { api, useAction, useRequete } from "@commun/outils/requetes";
 
 /**
@@ -45,7 +47,7 @@ import { api, useAction, useRequete } from "@commun/outils/requetes";
  */
 export default function CampagneGroupeur() {
   const { id } = useParams();
-  const { donnees: campagne, chargement, recharger } = useRequete<Campagne>(
+  const { donnees: campagne, chargement, erreur, recharger } = useRequete<Campagne>(
     `/groupeur/campagnes/${id}/`,
   );
   const { donnees: participants, recharger: rechargerParticipants } = useRequete<
@@ -53,6 +55,10 @@ export default function CampagneGroupeur() {
   >(`/groupeur/campagnes/${id}/participants/`);
   const [feuilleRetrait, setFeuilleRetrait] = useState(false);
   const [feuilleScan, setFeuilleScan] = useState(false);
+  // Les gestes qui déplacent de l'argent ou préviennent des tiers attendent
+  // une confirmation : `pointAPrevenir` porte le point saisi jusque-là.
+  const [confirmerRenoncement, setConfirmerRenoncement] = useState(false);
+  const [pointAPrevenir, setPointAPrevenir] = useState<string | null>(null);
 
   const tout = async () => {
     await Promise.all([recharger(), rechargerParticipants()]);
@@ -67,11 +73,11 @@ export default function CampagneGroupeur() {
     await tout();
   });
   const maintenir = useAction(async () => {
-    await api.post(`/api/groupeur/campagnes/${id}/maintenir/`);
+    await api.post(`/groupeur/campagnes/${id}/maintenir/`);
     await tout();
   });
   const annuler = useAction(async (motif: string) => {
-    await api.post(`/api/groupeur/campagnes/${id}/annuler/`, { motif });
+    await api.post(`/groupeur/campagnes/${id}/annuler/`, { motif });
     await tout();
   });
   const miseADisposition = useAction(async (point: string) => {
@@ -96,7 +102,13 @@ export default function CampagneGroupeur() {
 
   const payes = (participants ?? []).filter((p) => p.statut !== "en_attente_paiement");
   const retires = payes.filter((p) => p.statut === "retiree").length;
+  // Les parts non retirées à J+14 : le groupeur peut encore les remettre, le
+  // code de l'acheteur restant valable.
+  const reputes = payes.filter((p) => p.statut === "reputee_livree").length;
+  // Le rechargement qui suit une action peut échouer alors que l'action a
+  // réussi : la page reste affichée, l'alerte dit que les chiffres sont périmés.
   const erreurAction =
+    erreur?.message ??
     publier.erreur?.message ??
     cloturer.erreur?.message ??
     maintenir.erreur?.message ??
@@ -164,7 +176,7 @@ export default function CampagneGroupeur() {
             texte={
               campagne.minimum_atteint
                 ? "Clôturez pour figer la collecte et demander vos fonds."
-                : `Encore ${campagne.quantite_minimale - campagne.quantite_reservee} pièces avant le minimum. Au-delà de la date limite, la campagne est annulée et tout le monde est remboursé.`
+                : `Encore ${campagne.quantite_minimale - campagne.quantite_reservee} pièces avant le minimum. À la date limite, vous déciderez de maintenir la commande ou d'y renoncer (remboursement). Sans réponse sous 7 jours, les participants sont remboursés.`
             }
             action={
               <Bouton
@@ -194,7 +206,10 @@ export default function CampagneGroupeur() {
                 <Bouton
                   ton="contour"
                   chargement={annuler.envoi}
-                  onClick={() => void annuler.lancer("")}
+                  onClick={() => {
+                    annuler.effacerErreur();
+                    setConfirmerRenoncement(true);
+                  }}
                 >
                   Renoncer et rembourser
                 </Bouton>
@@ -212,7 +227,7 @@ export default function CampagneGroupeur() {
           />
         )}
 
-        {["decaissee", "approvisionnement"].includes(campagne.statut) && (
+        {campagne.statut === "approvisionnement" && (
           <Etape
             icone={Megaphone}
             titre="Annoncez l'arrivée de la marchandise"
@@ -221,7 +236,10 @@ export default function CampagneGroupeur() {
               <FormulaireDisposition
                 defaut={campagne.point_remise}
                 envoi={miseADisposition.envoi}
-                surEnvoi={(point) => void miseADisposition.lancer(point)}
+                surEnvoi={(point) => {
+                  miseADisposition.effacerErreur();
+                  setPointAPrevenir(point);
+                }}
               />
             }
           />
@@ -240,8 +258,16 @@ export default function CampagneGroupeur() {
           <Etape
             icone={CircleCheck}
             titre="Campagne terminée"
-            texte="Tous les colis ont été remis. Cette campagne compte désormais dans votre réputation."
-            action={null}
+            texte={
+              reputes > 0
+                ? `${retires} / ${payes.length} colis remis, ${reputes} réputé(s) livré(s) : le délai de retrait de 14 jours est écoulé. Cette campagne compte dans votre réputation. Si vous avez encore un colis, validez le code de l'acheteur.`
+                : "Tous les colis ont été remis. Cette campagne compte désormais dans votre réputation."
+            }
+            action={
+              reputes > 0 ? (
+                <Bouton onClick={() => setFeuilleScan(true)}>Valider un retrait tardif</Bouton>
+              ) : null
+            }
           />
         )}
 
@@ -290,6 +316,11 @@ export default function CampagneGroupeur() {
                       <Phone className="size-3" />
                       {telephoneLisible(participant.telephone)}
                     </a>
+                    {participant.statut === "reputee_livree" && (
+                      <p className="texte-doux text-xs font-semibold">
+                        {participant.statut_libelle}
+                      </p>
+                    )}
                   </div>
                   <div className="shrink-0 text-right">
                     <p className="tabulaire font-bold">
@@ -302,6 +333,10 @@ export default function CampagneGroupeur() {
                   {participant.statut === "retiree" ? (
                     <span className="grid size-8 shrink-0 place-items-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
                       <Check className="size-4" strokeWidth={3} />
+                    </span>
+                  ) : participant.statut === "reputee_livree" ? (
+                    <span className="texte-doux grid size-8 shrink-0 place-items-center rounded-full bg-[color:var(--fond-doux)]">
+                      <Clock className="size-4" />
                     </span>
                   ) : (
                     <span className="grid size-8 shrink-0 place-items-center rounded-full bg-accent-doux text-[color:var(--color-accent)]">
@@ -332,6 +367,44 @@ export default function CampagneGroupeur() {
 
       </div>
 
+      <Confirmation
+        ouverte={confirmerRenoncement}
+        titre="Renoncer et rembourser ?"
+        texte={`Rembourser les ${pluriel(payes.length, "participant")} ? Le montant consigné leur est rendu et la campagne est annulée.`}
+        libelleAction="Renoncer et rembourser"
+        ton="danger"
+        envoi={annuler.envoi}
+        erreur={annuler.erreur?.message}
+        surConfirmation={() =>
+          void annuler.lancer("").then((resultat) => {
+            if (resultat !== null) setConfirmerRenoncement(false);
+          })
+        }
+        surFermeture={() => {
+          if (annuler.envoi) return;
+          annuler.effacerErreur();
+          setConfirmerRenoncement(false);
+        }}
+      />
+      <Confirmation
+        ouverte={pointAPrevenir !== null}
+        titre="Prévenir les participants ?"
+        texte={`Prévenir ${pluriel(payes.length, "participant")} que leur commande est à retirer à ${pointAPrevenir ?? ""} ? Chacun reçoit une notification.`}
+        libelleAction="Prévenir"
+        envoi={miseADisposition.envoi}
+        erreur={miseADisposition.erreur?.message}
+        surConfirmation={() => {
+          if (pointAPrevenir === null) return;
+          void miseADisposition.lancer(pointAPrevenir).then((resultat) => {
+            if (resultat !== null) setPointAPrevenir(null);
+          });
+        }}
+        surFermeture={() => {
+          if (miseADisposition.envoi) return;
+          miseADisposition.effacerErreur();
+          setPointAPrevenir(null);
+        }}
+      />
       <FeuilleRetrait
         ouverte={feuilleRetrait}
         surFermeture={() => setFeuilleRetrait(false)}
@@ -442,8 +515,11 @@ function FormulaireDisposition({
       />
       <Bouton
         chargement={envoi}
+        // Un point vide serait annoncé tel quel aux participants : refusé
+        // avant même de demander confirmation.
+        disabled={point.trim() === ""}
         icone={<Send className="size-4" />}
-        onClick={() => surEnvoi(point)}
+        onClick={() => surEnvoi(point.trim())}
       >
         Prévenir les participants
       </Bouton>

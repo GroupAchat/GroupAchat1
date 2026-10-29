@@ -295,6 +295,10 @@ REST_FRAMEWORK = {
         # derrière la traduction d'adresses d'un opérateur : large.
         "connexion": os.environ.get("LIMITE_CONNEXION", "60/hour"),
         "inscription": os.environ.get("LIMITE_INSCRIPTION", "20/hour"),
+        # Par compte : dépôts de pièces d'identité (plusieurs Mo chacun).
+        "depot_kyc": os.environ.get("LIMITE_DEPOT_KYC", "5/day"),
+        # Par compte : toutes les tentatives de dépôt, y compris refusées.
+        "essais_kyc": os.environ.get("LIMITE_ESSAIS_KYC", "30/day"),
     },
 }
 

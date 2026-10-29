@@ -64,6 +64,15 @@ class CommentaireSerialiseur(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "On ne répond pas à une réponse : le fil resterait illisible."
             )
+        # Sans ce contrôle, une réponse « accrochée » à un message d'une autre
+        # campagne était acceptée, et la notification renvoyait son auteur
+        # vers la mauvaise campagne. Le contexte n'a pas de campagne hors du
+        # fil (modération admin, lecture seule) : rien à comparer alors.
+        campagne_id = self.context.get("campagne_id")
+        if campagne_id is not None and parent.campagne_id != campagne_id:
+            raise serializers.ValidationError(
+                "Ce message n'appartient pas à la discussion de cette campagne."
+            )
         return parent
 
 

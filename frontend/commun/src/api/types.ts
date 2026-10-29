@@ -19,6 +19,7 @@ export type StatutParticipation =
   | "payee"
   | "prete"
   | "retiree"
+  | "reputee_livree"
   | "remboursee"
   | "annulee";
 
@@ -136,6 +137,8 @@ export interface CampagneResume {
   point_remise: string;
   statut: StatutCampagne;
   publiee_le: string | null;
+  /** Fin du délai de retrait (mise à disposition + 14 j), calculée par le serveur. */
+  fin_du_retrait_le: string | null;
 }
 
 export interface Campagne extends Omit<CampagneResume, "produit"> {
@@ -167,6 +170,7 @@ export interface Participation {
   cree_le: string;
   payee_le: string | null;
   retiree_le: string | null;
+  reputee_livree_le: string | null;
   peut_etre_notee: boolean;
   avis: Avis | null;
 }
@@ -201,6 +205,7 @@ export interface Participant {
   statut_libelle: string;
   payee_le: string | null;
   retiree_le: string | null;
+  reputee_livree_le: string | null;
 }
 
 export interface AuteurPublic {
@@ -254,7 +259,10 @@ export interface DossierKYC {
   type_piece: "cni" | "passeport" | "carte_consulaire";
   numero_piece: string;
   /** Adresses protégées, servies par une vue qui vérifie qui demande.
-   *  Les champs `piece_recto`/`piece_verso` sont en écriture seule côté API. */
+   *  Les champs `piece_recto`/`piece_verso` sont en écriture seule côté API :
+   *  le dépôt (`POST /comptes/dossier/`) est en multipart et exige les deux
+   *  (JPEG, PNG ou WebP, 8 Mo au plus). Dossier antérieur au dépôt de
+   *  pièces : liens à `null`. */
   lien_recto: string | null;
   lien_verso: string | null;
   numero_mobile_money: string;
@@ -292,7 +300,7 @@ export interface Page<T> {
 
 export interface TableauDeBordGroupeur {
   campagnes: { total: number; en_cours: number; a_distribuer: number; terminees: number };
-  collecte: { montant_consigne: number; pieces: number; participants: number };
+  collecte: { montant_detenu: number; montant_consigne: number; pieces: number; participants: number };
   decaissements: { montant_recu: number; frais_payes: number };
   reputation: { note: string; campagnes_terminees: number; participants_servis: number };
 }

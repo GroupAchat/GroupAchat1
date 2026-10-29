@@ -22,12 +22,12 @@ import {
   Bouton,
   Carte,
   Champ,
-  Etiquette,
   fusionner,
 } from "@commun/composants/ui";
 import { useSession } from "@commun/contexte/Session";
 import { dateLongue, telephoneLisible } from "@commun/outils/formats";
 import { api, useAction, useRequete } from "@commun/outils/requetes";
+import ChampPiece from "@/composants/ChampPiece";
 
 /** Le profil : identité, badge de confiance, réglages. */
 export default function Profil() {
@@ -277,9 +277,13 @@ function EspaceGroupeur() {
 export function DevenirGroupeur() {
   const naviguer = useNavigate();
   const { rafraichir, utilisateur } = useSession();
-  const { donnees: dossier } = useRequete<DossierKYC>(
+  const { donnees: dossier, chargement } = useRequete<DossierKYC>(
     utilisateur?.statut_kyc ? "/comptes/dossier/" : null,
   );
+  // Les photos ne sont jamais préremplies : après un rejet il faut les
+  // renvoyer, le serveur les exige à chaque dépôt.
+  const [recto, setRecto] = useState<File | null>(null);
+  const [verso, setVerso] = useState<File | null>(null);
   const [saisie, setSaisie] = useState({
     type_piece: "cni",
     numero_piece: "",
@@ -299,10 +303,40 @@ export function DevenirGroupeur() {
   }, [dossier]);
 
   const depot = useAction(async () => {
-    await api.post("/comptes/dossier/", saisie);
+    // Multipart : le client laisse le navigateur poser la frontière et ajoute
+    // le jeton CSRF. Les pièces ne passent jamais par Cloudinary.
+    const corps = new FormData();
+    Object.entries(saisie).forEach(([cle, valeur]) => corps.append(cle, valeur));
+    if (recto) corps.append("piece_recto", recto);
+    if (verso) corps.append("piece_verso", verso);
+    await api.post("/comptes/dossier/", corps);
     await rafraichir();
     naviguer("/profil");
   });
+
+  if (chargement) {
+    return <p className="texte-doux px-4 py-10 text-center text-sm">Chargement…</p>;
+  }
+
+  // Un dépôt de plus renverrait 409 : on renvoie vers le statut plutôt que de
+  // montrer un formulaire voué à l'échec.
+  if (dossier && dossier.statut !== "rejete") {
+    return (
+      <div className="mx-auto w-full max-w-xl space-y-4 px-4 py-6 lg:py-10">
+        <Carte className="space-y-2 text-sm">
+          <p className="font-bold">
+            {dossier.statut === "valide"
+              ? "Votre dossier est déjà validé."
+              : "Votre dossier est en cours d'examen."}
+          </p>
+          <p className="texte-doux">Aucun nouveau dépôt n'est nécessaire.</p>
+        </Carte>
+        <Link to="/profil" className="block">
+          <Bouton pleineLargeur>Retour au profil</Bouton>
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto w-full max-w-xl space-y-5 px-4 py-6 lg:py-10">
@@ -358,6 +392,19 @@ export function DevenirGroupeur() {
           erreur={depot.erreur?.pourChamp("numero_piece")}
         />
 
+        <ChampPiece
+          etiquette="Pièce d'identité : recto"
+          fichier={recto}
+          onChoisir={setRecto}
+          erreur={depot.erreur?.pourChamp("piece_recto")}
+        />
+        <ChampPiece
+          etiquette="Pièce d'identité : verso"
+          fichier={verso}
+          onChoisir={setVerso}
+          erreur={depot.erreur?.pourChamp("piece_verso")}
+        />
+
         <Champ
           etiquette="Numéro Mobile Money"
           type="tel"
@@ -393,12 +440,8 @@ export function DevenirGroupeur() {
         <Alerte>{depot.erreur?.message}</Alerte>
 
         <Bouton type="submit" pleineLargeur taille="lg" chargement={depot.envoi}>
-          Déposer mon dossier
+          {depot.envoi ? "Envoi en cours…" : "Déposer mon dossier"}
         </Bouton>
-        <p className="texte-doux text-center text-xs">
-          <Etiquette>Démonstration</Etiquette> Les pièces justificatives ne sont
-          pas téléversées dans cette version.
-        </p>
       </form>
     </div>
   );

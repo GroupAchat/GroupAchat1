@@ -26,6 +26,7 @@ const TONS: Record<StatutParticipation, "neutre" | "accent" | "succes" | "alerte
   payee: "accent",
   prete: "succes",
   retiree: "neutre",
+  reputee_livree: "neutre",
   remboursee: "neutre",
   annulee: "danger",
 };
@@ -56,7 +57,7 @@ export default function MesAchats() {
         <EtatVide
           icone={<ShoppingBag className="size-7" />}
           titre="Aucun achat pour l'instant"
-          texte="Rejoignez une campagne : votre argent reste consigné jusqu'à la livraison."
+          texte="Rejoignez une campagne : votre part est consignée tant que la collecte n'est pas acquise."
           action={
             <Link to="/catalogue">
               <Bouton>Voir les campagnes</Bouton>
@@ -156,6 +157,11 @@ function LigneAchat({
                   Code : {codeLisible(participation.code_retrait ?? "")}
                 </p>
               )}
+              {participation.statut === "prete" && campagne.fin_du_retrait_le && (
+                <p className="texte-doux text-xs">
+                  À retirer avant le {dateLongue(campagne.fin_du_retrait_le)}
+                </p>
+              )}
             </div>
           </div>
         </Carte>
@@ -204,6 +210,9 @@ export function DetailAchat() {
 
   const { campagne } = participation;
   const retirable = participation.statut === "prete";
+  // Passé le délai, le code reste valable : le groupeur qui a encore le colis
+  // peut le remettre, et ce code est alors la seule preuve de la livraison.
+  const reputeeLivree = participation.statut === "reputee_livree";
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-5 px-4 py-6 lg:py-9">
@@ -250,7 +259,9 @@ export function DetailAchat() {
             <p className="texte-doux text-sm">
               {retirable
                 ? "Présentez ce code au point de remise. Il ne sert qu'une fois."
-                : "Ce code deviendra actif dès que la marchandise sera à disposition."}
+                : reputeeLivree
+                  ? "Si le groupeur a encore votre colis, présentez ce code."
+                  : "Ce code deviendra actif dès que la marchandise sera à disposition."}
             </p>
           </Carte>
         </motion.div>
@@ -262,6 +273,11 @@ export function DetailAchat() {
           <div className="text-sm text-emerald-900 dark:text-emerald-200">
             <p className="font-semibold">Point de remise</p>
             <p>{campagne.point_remise}</p>
+            {campagne.fin_du_retrait_le && (
+              <p className="mt-1">
+                À retirer avant le {dateLongue(campagne.fin_du_retrait_le)}
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -299,7 +315,7 @@ export function DetailAchat() {
           <Jauge pourcentage={campagne.pourcentage} atteint={campagne.minimum_atteint} />
           <p className="texte-doux tabulaire text-xs">
             {campagne.quantite_reservee} / {campagne.quantite_minimale} pièces — votre
-            argent reste consigné jusqu'à la livraison.
+            part est consignée tant que la collecte n'est pas acquise.
           </p>
         </Carte>
       )}
@@ -311,6 +327,17 @@ export function DetailAchat() {
             Cette campagne n'a pas atteint son minimum.{" "}
             {francs(participation.montant_total)} vous ont été intégralement
             remboursés.
+          </p>
+        </div>
+      )}
+
+      {reputeeLivree && participation.reputee_livree_le && (
+        <div className="flex gap-3 rounded-2xl border p-4 text-sm">
+          <Clock className="size-5 shrink-0 text-[color:var(--color-accent)]" />
+          <p>
+            Délai de retrait écoulé le {dateLongue(participation.reputee_livree_le)} :
+            la remise est réputée faite. Si le groupeur a encore votre colis,
+            présentez ce code.
           </p>
         </div>
       )}

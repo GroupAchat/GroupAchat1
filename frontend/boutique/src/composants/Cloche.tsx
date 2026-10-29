@@ -3,6 +3,7 @@ import {
   Bell,
   BellRing,
   CheckCheck,
+  Clock,
   PackageCheck,
   ShieldCheck,
   Undo2,
@@ -36,6 +37,8 @@ const ICONES: Record<string, typeof Bell> = {
   remboursement: Undo2,
   kyc_decide: ShieldCheck,
   relance_retrait: PackageCheck,
+  livraison_reputee: Clock,
+  campagne_terminee: CheckCheck,
   nouveau_commentaire: BellRing,
   reponse_commentaire: BellRing,
 };
@@ -218,7 +221,7 @@ export function Cloche() {
                       <div
                         className={fusionner(
                           "flex gap-3 border-b px-4 py-3 transition-colors last:border-0",
-                          lue ? "hover:surface-douce" : "bg-accent-doux/60",
+                          lue ? "hover:surface-douce" : "bg-fond-message/60",
                         )}
                       >
                         <span

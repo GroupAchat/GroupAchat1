@@ -14,16 +14,29 @@ import type { Utilisateur } from "@commun/api/types";
 /**
  * Qui est connecté, et de quelle couleur est son univers.
  *
- * La teinte dominante suit le profil — orange pour l'acheteur, bleu pour le
- * groupeur. Elle est posée ici, sur `<html>`, une seule fois : aucun composant
- * n'a donc à savoir qui le regarde pour s'habiller correctement.
+ * La teinte dominante suit **le lieu, pas le compte** : l'orange de la
+ * boutique, le bleu de l'espace OAG. Un OAG qui revient faire ses courses
+ * doit retrouver la boutique telle qu'il l'a quittée ; lui peindre le
+ * catalogue en bleu parce qu'il organise des groupages par ailleurs
+ * reviendrait à lui dire qu'il n'est plus chez lui.
+ *
+ * Par défaut la teinte suit quand même le compte — c'est ce dont la console
+ * d'administration a besoin, elle n'a qu'un seul univers. Une application à
+ * plusieurs lieux appelle `imposerTeinte()` et reprend la main.
+ *
+ * L'attribut est posé ici, sur `<html>`, **à un seul endroit** : deux effets
+ * qui écrivent le même attribut finiraient par se contredire au rechargement
+ * d'une page, et la couleur dépendrait de l'ordre des rendus.
  */
 
 export type Profil = "visiteur" | "acheteur" | "groupeur" | "administrateur";
 
 interface ValeurSession {
   utilisateur: Utilisateur | null;
+  /** Le profil du **compte**, indépendamment de la page affichée. */
   profil: Profil;
+  /** Impose la teinte du lieu ; `null` rend la main au profil du compte. */
+  imposerTeinte: (profil: Profil | null) => void;
   chargement: boolean;
   connecte: boolean;
   /** Vrai seulement si le numéro est vérifié : c'est le seuil pour agir. */
@@ -40,7 +53,7 @@ function profilDe(utilisateur: Utilisateur | null): Profil {
   if (utilisateur.est_equipe || utilisateur.role === "administrateur") {
     return "administrateur";
   }
-  // Le bleu du groupeur n'arrive qu'avec le badge : tant que le dossier est en
+  // Le bleu de l'OAG n'arrive qu'avec le badge : tant que le dossier est en
   // examen, la personne n'a pas accès à l'espace, autant ne pas lui en
   // promettre les couleurs.
   if (utilisateur.role === "groupeur" && utilisateur.est_groupeur_valide) {
@@ -77,10 +90,11 @@ export function FournisseurSession({ children }: { children: ReactNode }) {
   }, [rafraichir]);
 
   const profil = profilDe(utilisateur);
+  const [teinteImposee, imposerTeinte] = useState<Profil | null>(null);
 
   useEffect(() => {
-    document.documentElement.dataset.profil = profil;
-  }, [profil]);
+    document.documentElement.dataset.profil = teinteImposee ?? profil;
+  }, [profil, teinteImposee]);
 
   const deconnecter = useCallback(async () => {
     await api.post("/comptes/deconnexion/");
@@ -91,6 +105,7 @@ export function FournisseurSession({ children }: { children: ReactNode }) {
     () => ({
       utilisateur,
       profil,
+      imposerTeinte,
       chargement,
       connecte: utilisateur !== null,
       peutAgir: Boolean(utilisateur?.telephone_verifie),

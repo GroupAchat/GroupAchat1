@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from "react";
 import { forwardRef } from "react";
 
-import { initiales, teinteDe } from "@commun/outils/formats";
+import { teinteDe } from "@commun/outils/formats";
 
 /** La petite trousse de composants partagée par les deux applications. */
 
@@ -191,28 +191,51 @@ export function Etiquette({
 
 export function Avatar({
   nom,
+  source,
   taille = 40,
   className,
 }: {
   nom: string;
+  source?: string | null;
   taille?: number;
   className?: string;
 }) {
+  if (source) {
+    return (
+      <img
+        src={source}
+        alt={nom}
+        className={fusionner("inline-block shrink-0 rounded-full object-cover shadow-xs", className)}
+        style={{ width: taille, height: taille }}
+      />
+    );
+  }
+
+  const dimIcone = Math.round(taille * 0.58);
+
   return (
     <span
       className={fusionner(
-        "inline-grid shrink-0 place-items-center rounded-full font-bold text-white",
+        "inline-grid shrink-0 place-items-center rounded-full text-white shadow-xs overflow-hidden select-none",
         className,
       )}
       style={{
         width: taille,
         height: taille,
-        fontSize: taille * 0.38,
         background: teinteDe(nom),
       }}
       aria-hidden
+      title={nom}
     >
-      {initiales(nom)}
+      <svg
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        className="text-white drop-shadow-2xs"
+        style={{ width: dimIcone, height: dimIcone }}
+        aria-hidden="true"
+      >
+        <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" />
+      </svg>
     </span>
   );
 }

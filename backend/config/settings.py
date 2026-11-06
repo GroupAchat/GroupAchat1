@@ -300,8 +300,10 @@ REST_FRAMEWORK = {
 
 # ── Règles métier ───────────────────────────────────────────────────────────
 #
-# Prélevés une seule fois, au décaissement, sur le total collecté.
-FRAIS_PLATEFORME_FCFA = int(os.environ.get("FRAIS_PLATEFORME_FCFA", "1500"))
+# La commission n'est plus un forfait : elle vaut un pourcentage du collecté,
+# et ce pourcentage dépend du grade du groupeur. Le barème vit dans
+# `groupachat/comptes/grades.py`, pas ici — il va de pair avec les seuils de
+# points, et les séparer garantirait qu'ils finissent par ne plus concorder.
 
 # ── Le délai laissé au groupeur après une collecte manquée ─────────────────
 #

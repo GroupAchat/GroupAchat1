@@ -4,9 +4,10 @@
 from __future__ import annotations
 
 import pytest
+from django.utils import timezone
 
 from groupachat.comptes.models import DossierKYC, Reputation
-from groupachat.echanges.models import Commentaire, Notification
+from groupachat.echanges.models import Conversation, Message, Notification
 
 pytestmark = pytest.mark.django_db
 
@@ -99,41 +100,62 @@ class TestDecisionKYC:
 
 
 class TestModeration:
-    def test_masquer_retire_du_fil_sans_effacer(
-        self, connecte, administrateur, campagne, ama
-    ):
-        message = Commentaire.objects.create(
-            campagne=campagne, auteur=ama, texte="Propos déplacés"
+    """Masquer n'efface pas : un message effacé sans trace empêcherait
+    d'instruire le signalement suivant venant du même compte."""
+
+    def _fil_avec_message(self, conversation, auteur, texte):
+        return Message.objects.create(
+            conversation=conversation, auteur=auteur, texte=texte,
+            signale_le=timezone.now(),
         )
+
+    def test_masquer_retire_du_fil_sans_effacer(
+        self, connecte, administrateur, campagne, groupeur, ama
+    ):
+        fil = Conversation.objects.create(acheteur=ama, groupeur=groupeur,
+                                          campagne_initiale=campagne)
+        message = self._fil_avec_message(fil, ama, "Propos déplacés")
+
         reponse = connecte(administrateur).post(
-            f"/api/admin/commentaires/{message.id}/masquer/",
+            f"/api/admin/messages/{message.id}/masquer/",
             {"motif": "Propos diffamatoires"}, format="json",
         )
         assert reponse.status_code == 200
 
         message.refresh_from_db()
-        assert message.est_visible is False
-        assert message.masque_par == administrateur
+        assert message.masque_le is not None
         assert message.motif_masquage == "Propos diffamatoires"
+        assert Message.objects.filter(id=message.id).exists()
 
-        public = connecte(ama).get(f"/api/campagnes/{campagne.id}/commentaires/")
-        assert public.data["count"] == 0
-        assert Commentaire.objects.filter(id=message.id).exists()
+    def test_un_message_masque_disparait_du_fil_de_ses_deux_parties(
+        self, connecte, administrateur, campagne, groupeur, ama
+    ):
+        fil = Conversation.objects.create(acheteur=ama, groupeur=groupeur,
+                                          campagne_initiale=campagne)
+        message = self._fil_avec_message(fil, ama, "Propos déplacés")
+        connecte(administrateur).post(
+            f"/api/admin/messages/{message.id}/masquer/", {}, format="json"
+        )
+
+        vu = connecte(groupeur).get(f"/api/conversations/{fil.id}/messages/")
+        assert vu.status_code == 200
+        assert vu.data["messages"] == []
 
     def test_retablir_le_remet_dans_le_fil(
-        self, connecte, administrateur, campagne, ama
+        self, connecte, administrateur, campagne, groupeur, ama
     ):
-        message = Commentaire.objects.create(campagne=campagne, auteur=ama,
-                                             texte="Malentendu")
+        fil = Conversation.objects.create(acheteur=ama, groupeur=groupeur,
+                                          campagne_initiale=campagne)
+        message = self._fil_avec_message(fil, ama, "Malentendu")
         api = connecte(administrateur)
-        api.post(f"/api/admin/commentaires/{message.id}/masquer/", {}, format="json")
-        api.post(f"/api/admin/commentaires/{message.id}/retablir/", {}, format="json")
+        api.post(f"/api/admin/messages/{message.id}/masquer/", {}, format="json")
+        api.post(f"/api/admin/messages/{message.id}/retablir/", {}, format="json")
 
         message.refresh_from_db()
-        assert message.est_visible is True
-        assert connecte(ama).get(
-            f"/api/campagnes/{campagne.id}/commentaires/"
-        ).data["count"] == 1
+        assert message.masque_le is None
+        assert len(connecte(groupeur).get(
+            f"/api/conversations/{fil.id}/messages/"
+        ).data["messages"]) == 1
 
 
 class TestTableauDeBord:
@@ -150,7 +172,7 @@ class TestTableauDeBord:
     ):
         api = connecte(ama)
         identifiant = api.post("/api/participations/",
-                               {"campagne": campagne.id, "quantite": 5},
+                               {"campagne": campagne.id, "quantite": 5, "bureau_poste": "Bureau de poste de Tokoin"},
                                format="json").data["id"]
         api.post(f"/api/participations/{identifiant}/payer/", {}, format="json")
 
@@ -164,7 +186,7 @@ class TestTableauDeBord:
     ):
         api = connecte(ama)
         identifiant = api.post("/api/participations/",
-                               {"campagne": campagne.id, "quantite": 10},
+                               {"campagne": campagne.id, "quantite": 10, "bureau_poste": "Bureau de poste de Tokoin"},
                                format="json").data["id"]
         api.post(f"/api/participations/{identifiant}/payer/", {}, format="json")
 
@@ -180,5 +202,17 @@ class TestTableauDeBord:
                        {}, format="json")
 
         donnees = admin_api.get("/api/admin/tableau-de-bord/").data
-        assert donnees["revenus"]["frais_encaisses"] == 1500
+        assert donnees["revenus"]["frais_encaisses"] == 6300
         assert donnees["sequestre"]["montant_detenu"] == 0
+
+        # Les deux sources de revenu se lisent separement : un tableau qui
+        # n'afficherait que la commission laisserait croire que l'abonnement
+        # de publication ne rapporte rien.
+        connecte(campagne.groupeur).post("/api/groupeur/publication/pack/", {},
+                                         format="json")
+        connecte(campagne.groupeur).post(
+            "/api/groupeur/publication/abonnement/", {}, format="json"
+        )
+        donnees = connecte(administrateur).get("/api/admin/tableau-de-bord/").data
+        assert donnees["revenus"]["publications"] == 2500
+        assert donnees["revenus"]["total"] == 6300 + 2500

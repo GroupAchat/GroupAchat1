@@ -22,6 +22,8 @@ from django.core.validators import RegexValidator
 from django.db import models
 from django.utils import timezone
 
+from . import grades, noms
+
 # Numéros togolais : 8 chiffres, éventuellement précédés de l'indicatif +228.
 # Volontairement permissif — la vérification par SMS tranche pour de bon.
 validateur_telephone = RegexValidator(
@@ -75,7 +77,16 @@ class Utilisateur(AbstractBaseUser, PermissionsMixin):
     class Role(models.TextChoices):
         ACHETEUR = "acheteur", "Acheteur"
         GROUPEUR = "groupeur", "Groupeur"
+        # Le partenaire qui porte les colis — La Poste, Gozem. C'est lui qui
+        # scanne le code de retrait, et personne d'autre : l'OAG remet le lot
+        # en bloc à l'agence et ne rencontre jamais ses acheteurs.
+        LIVREUR = "livreur", "Livreur partenaire"
         ADMINISTRATEUR = "administrateur", "Administrateur"
+
+    class Transporteur(models.TextChoices):
+        POSTE = "poste", "La Poste"
+        GOZEM = "gozem", "Gozem"
+        AUTRE = "autre", "Autre partenaire"
 
     telephone = models.CharField(
         "téléphone",
@@ -87,6 +98,45 @@ class Utilisateur(AbstractBaseUser, PermissionsMixin):
     prenom = models.CharField("prénom", max_length=80)
     email = models.EmailField("adresse e-mail", blank=True)
     role = models.CharField("rôle", max_length=20, choices=Role.choices, default=Role.ACHETEUR)
+
+    # ── Le nom sous lequel on existe pour l'autre partie ──────────────────
+    #
+    # Obligatoire pour un groupeur, facultatif pour un acheteur. `null` et non
+    # chaîne vide : la contrainte d'unicité doit laisser passer plusieurs
+    # acheteurs sans nom, et seul NULL échappe à l'unicité en SQL.
+    nom_utilisateur = models.CharField(
+        "nom d'utilisateur",
+        max_length=noms.LONGUEUR_MAX,
+        null=True,
+        blank=True,
+        unique=True,
+        validators=[noms.valider],
+    )
+    # La forme comparable, tenue à jour par `save()`. Sans elle, « Faya-02 »
+    # et « faya02 » passeraient pour deux noms différents alors qu'aucun
+    # acheteur ne les distinguerait.
+    # Attribué au premier partage, pas à l'inscription : la plupart des
+    # comptes ne parraineront jamais (voir `parrainage.code_de`).
+    # Rempli pour les seuls livreurs : c'est ce que lit l'acheteur quand son
+    # colis est remis — « remis par La Poste » dit quelque chose, le nom d'un
+    # livreur inconnu ne dit rien.
+    transporteur = models.CharField(
+        "transporteur",
+        max_length=10,
+        choices=Transporteur.choices,
+        blank=True,
+    )
+    code_parrainage = models.CharField(
+        "code de parrainage", max_length=12, null=True, blank=True, unique=True
+    )
+    nom_utilisateur_repere = models.CharField(
+        "forme comparable du nom d'utilisateur",
+        max_length=noms.LONGUEUR_MAX,
+        null=True,
+        blank=True,
+        unique=True,
+        editable=False,
+    )
 
     # Tant que le numéro n'est pas vérifié, le compte existe mais ne peut
     # ni commander ni déposer de dossier KYC.
@@ -125,12 +175,36 @@ class Utilisateur(AbstractBaseUser, PermissionsMixin):
         verbose_name_plural = "utilisateurs"
         ordering = ["-date_inscription"]
 
+    def save(self, *args, **kwargs):
+        # La forme comparable n'est jamais saisie : elle se déduit, toujours,
+        # sinon deux enregistrements finiraient par ne plus se correspondre.
+        nu = (self.nom_utilisateur or "").strip() or None
+        self.nom_utilisateur = nu
+        self.nom_utilisateur_repere = noms.normaliser(nu) if nu else None
+        return super().save(*args, **kwargs)
+
     def __str__(self) -> str:
         return f"{self.prenom} {self.nom} ({self.telephone})"
 
     @property
     def nom_complet(self) -> str:
+        """Le nom civil. **Réservé à l'intéressé, à l'équipe et au Contact Privé.**
+
+        Il ne doit jamais partir dans une réponse publique : c'est
+        `nom_public` qui sert partout ailleurs.
+        """
         return f"{self.prenom} {self.nom}".strip()
+
+    @property
+    def nom_public(self) -> str:
+        """Ce sous quoi on apparaît pour tout le monde.
+
+        Un groupeur a toujours un nom d'utilisateur, validé avec son dossier.
+        Un acheteur qui n'en a pas choisi retombe sur son prénom et une
+        initiale — assez pour qu'on sache à qui on répond, pas assez pour le
+        retrouver.
+        """
+        return self.nom_utilisateur or noms.nom_de_repli(self.prenom, self.nom)
 
     @property
     def est_groupeur_valide(self) -> bool:
@@ -316,3 +390,151 @@ class Reputation(models.Model):
 
     def __str__(self) -> str:
         return f"{self.groupeur.nom_complet} — {self.note}/5"
+
+
+class ChangementNomUtilisateur(models.Model):
+    """Trace d'un nom d'utilisateur abandonné.
+
+    Le nom d'utilisateur **ne change pas** une fois validé : la note, les avis
+    et le nombre de groupages aboutis y sont attachés, et le laisser changer
+    offrirait à un groupeur un moyen simple d'effacer un mauvais historique.
+    Un administrateur peut malgré tout le modifier — homonymie, nom retenu par
+    erreur, demande justifiée —, et c'est précisément pour ces cas qu'il faut
+    pouvoir remonter à l'ancien.
+    """
+
+    utilisateur = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="anciens_noms",
+        verbose_name="utilisateur",
+    )
+    ancien_nom = models.CharField("ancien nom d'utilisateur", max_length=noms.LONGUEUR_MAX)
+    nouveau_nom = models.CharField("nouveau nom d'utilisateur", max_length=noms.LONGUEUR_MAX)
+    motif = models.CharField("motif", max_length=200)
+    decide_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="changements_de_nom_decides",
+        verbose_name="décidé par",
+    )
+    decide_le = models.DateTimeField("décidé le", default=timezone.now)
+
+    class Meta:
+        verbose_name = "changement de nom d'utilisateur"
+        verbose_name_plural = "changements de nom d'utilisateur"
+        ordering = ["-decide_le"]
+
+    def __str__(self) -> str:
+        return f"{self.ancien_nom} → {self.nouveau_nom}"
+
+
+class CompteurPoints(models.Model):
+    """Les points d'un compte, tenus sur **deux compteurs et non un seul**.
+
+    Les points servent à deux choses qui ne peuvent pas partager le même
+    solde : ils **mesurent** un parcours — c'est le grade du groupeur, c'est
+    l'accès de l'acheteur au Contact Privé — et ils **s'échangent** contre des
+    avantages. Avec un compteur unique, dépenser ses points ferait perdre son
+    grade, et personne ne dépenserait jamais rien.
+
+    D'où la même séparation que les compagnies aériennes font entre les miles
+    de statut et les miles à dépenser :
+
+    - `cumules` ne descend jamais et décide du grade ;
+    - `solde` monte aux mêmes occasions et baisse à chaque dépense.
+    """
+
+    utilisateur = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="points",
+        verbose_name="utilisateur",
+    )
+    cumules = models.PositiveIntegerField("points cumulés", default=0)
+    solde = models.PositiveIntegerField("solde de points", default=0)
+    mise_a_jour_le = models.DateTimeField("mise à jour le", auto_now=True)
+
+    class Meta:
+        verbose_name = "compteur de points"
+        verbose_name_plural = "compteurs de points"
+        constraints = [
+            # Le solde ne peut pas dépasser le cumul : il n'existe aucun
+            # chemin légitime pour ça, et une telle ligne signalerait un bug
+            # d'attribution plutôt qu'un cas métier.
+            models.CheckConstraint(
+                condition=models.Q(solde__lte=models.F("cumules")),
+                name="solde_jamais_superieur_au_cumul",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.utilisateur.nom_public} — {self.solde}/{self.cumules} points"
+
+    @property
+    def grade(self) -> str:
+        """Le grade que donnent les points cumulés."""
+        return grades.grade_pour(self.cumules)
+
+    @property
+    def commission_centiemes(self) -> int:
+        return grades.commission_centiemes(self.grade)
+
+
+class MouvementPoints(models.Model):
+    """Une attribution ou une dépense de points, et sa cause.
+
+    Chaque mouvement porte **l'événement qui l'a produit**, et une contrainte
+    d'unicité interdit qu'un même événement en produise deux. Sans elle, un
+    double appel — une requête rejouée, une tâche relancée — doublerait les
+    points, et un groupeur pourrait monter en grade en faisant échouer puis
+    rejouer un paiement.
+    """
+
+    class Motif(models.TextChoices):
+        ACHAT = "achat", "Achat payé"
+        GROUPAGE_ABOUTI = "groupage_abouti", "Groupage mené à son terme"
+        PARRAINAGE = "parrainage", "Parrainage validé"
+        ABONNEMENT_PUBLICATION = "abonnement_publication", "Mois de publication payé"
+        PACK_PUBLICATION = "pack_publication", "Pack de publication payé"
+        CONTACT_PRIVE = "contact_prive", "Mois de Contact Privé payé"
+        DEPENSE = "depense", "Dépense de points"
+        CORRECTION = "correction", "Correction administrative"
+
+    compteur = models.ForeignKey(
+        CompteurPoints,
+        on_delete=models.CASCADE,
+        related_name="mouvements",
+        verbose_name="compteur",
+    )
+    motif = models.CharField("motif", max_length=30, choices=Motif.choices)
+    # Négatif pour une dépense : le signe porte le sens, et la somme des
+    # mouvements doit pouvoir se recouper avec le solde.
+    points = models.IntegerField("points")
+
+    # L'événement d'origine : « participation », « campagne », « abonnement »…
+    # et son identifiant. Deux colonnes plutôt qu'une clé étrangère, parce
+    # qu'elles désignent des tables différentes.
+    origine_genre = models.CharField("genre de l'origine", max_length=30)
+    origine_id = models.PositiveIntegerField("identifiant de l'origine")
+
+    cree_le = models.DateTimeField("enregistré le", default=timezone.now)
+
+    class Meta:
+        verbose_name = "mouvement de points"
+        verbose_name_plural = "mouvements de points"
+        ordering = ["-cree_le"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["compteur", "motif", "origine_genre", "origine_id"],
+                name="un_evenement_n_attribue_qu_une_fois",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.points:+d} points — {self.get_motif_display()}"
+
+
+# Déclaré à part — le parrainage est un sujet à lui seul — mais réexporté
+# ici, parce que c'est `models` que Django inspecte.
+from groupachat.comptes.parrainage import Parrainage  # noqa: E402

@@ -162,10 +162,26 @@ DOSSIER = {
     "numero_piece": "CNI-9087",
     "numero_mobile_money": "+228 91 00 22 33",
     "nom_commerce": "Ama Import",
+    # Obligatoire : un groupeur sans nom choisi retomberait sur « Prénom I. »,
+    # soit exactement l'identité que l'anonymat protège.
+    "nom_utilisateur": "Sika-04",
 }
 
 
 class TestDossierKYC:
+    def test_le_dossier_exige_un_nom_d_utilisateur(self, client_verifie):
+        """Sans nom choisi, le groupeur apparaîtrait sous son prénom."""
+        sans_nom = {k: v for k, v in DOSSIER.items() if k != "nom_utilisateur"}
+        reponse = client_verifie.post("/api/comptes/dossier/", sans_nom, format="json")
+        assert reponse.status_code == 400
+        assert "nom_utilisateur" in reponse.data
+
+    def test_le_nom_choisi_atterrit_sur_le_compte(self, client_verifie):
+        client_verifie.post("/api/comptes/dossier/", DOSSIER, format="json")
+        moi = client_verifie.get("/api/comptes/moi/").data
+        assert moi["nom_utilisateur"] == "Sika-04"
+        assert moi["nom_public"] == "Sika-04"
+
     def test_un_numero_non_verifie_ne_peut_pas_deposer(self, client):
         inscrire(client)
         client.post("/api/comptes/connexion/",

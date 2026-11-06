@@ -69,13 +69,26 @@ class ProduitResumeSerialiseur(serializers.ModelSerializer):
     """Ce qu'il faut du produit pour une vignette de campagne."""
 
     image = serializers.SerializerMethodField()
+    video = serializers.SerializerMethodField()
     categorie_nom = serializers.CharField(source="categorie.nom", read_only=True)
     categorie_slug = serializers.CharField(source="categorie.slug", read_only=True)
 
     class Meta:
         model = Produit
-        fields = ["id", "nom", "slug", "marque", "image",
+        fields = ["id", "nom", "slug", "marque", "image", "video",
                   "categorie", "categorie_nom", "categorie_slug"]
+
+    def get_video(self, produit) -> str | None:
+        v = produit.medias.filter(genre="video").first()
+        if not v:
+            return None
+        if v.public_id:
+            return hebergement.url_video(v.public_id)
+        if v.fichier:
+            url = v.fichier.url
+            requete = self.context.get("request")
+            return requete.build_absolute_uri(url) if requete else url
+        return None
 
     def get_image(self, produit) -> str | None:
         """La vignette carrée du produit dans les listes.
@@ -110,7 +123,7 @@ class ProduitSerialiseur(serializers.ModelSerializer):
 class PalierPrixSerialiseur(serializers.ModelSerializer):
     class Meta:
         model = PalierPrix
-        fields = ["id", "quantite_min", "prix_unitaire"]
+        fields = ["id", "quantite_min", "participants_min", "prix_unitaire"]
 
 
 class MediaCampagneSerialiseur(serializers.ModelSerializer):
@@ -175,7 +188,23 @@ class _AvancementMixin:
         return self._pieces(campagne) >= campagne.quantite_minimale
 
     def get_prix_courant(self, campagne) -> int:
-        return campagne.prix_pour_quantite(self._pieces(campagne))
+        """Le meilleur prix atteignable aujourd'hui, toutes tranches confondues.
+
+        C'est le « à partir de » des vignettes : ce que paie celui qui prend
+        la plus grosse tranche, au nombre de participants du moment. Montrer
+        le prix de la pièce seule rendrait la campagne plus chère qu'elle
+        n'est ; montrer une chute non atteinte serait un mensonge.
+
+        Calculé sur ``all()`` et non par un ``filter()`` : les paliers sont
+        préchargés, un filtre repartirait en base à chaque vignette.
+        """
+        participants = self.get_nombre_participants(campagne)
+        ouverts = [
+            palier.prix_unitaire
+            for palier in campagne.paliers.all()
+            if palier.participants_min <= participants
+        ]
+        return min(ouverts, default=campagne.prix_unitaire)
 
     def get_jours_restants(self, campagne) -> int:
         reste = campagne.date_limite - timezone.now()
@@ -205,7 +234,7 @@ class CampagneResumeSerialiseur(_AvancementMixin, serializers.ModelSerializer):
         fields = ["id", "titre", "produit", "groupeur", "prix_unitaire", "prix_courant",
                   "quantite_minimale", "quantite_reservee", "nombre_participants",
                   "pourcentage", "minimum_atteint", "date_limite", "jours_restants",
-                  "point_remise", "statut", "publiee_le"]
+                  "statut", "publiee_le"]
 
 
 class CampagneDetailSerialiseur(CampagneResumeSerialiseur):
@@ -216,14 +245,13 @@ class CampagneDetailSerialiseur(CampagneResumeSerialiseur):
     produit = ProduitSerialiseur(read_only=True)
     montant_collecte = serializers.SerializerMethodField()
     collecte_ouverte = serializers.BooleanField(read_only=True)
-    nombre_commentaires = serializers.IntegerField(read_only=True, default=0)
 
     class Meta(CampagneResumeSerialiseur.Meta):
         fields = CampagneResumeSerialiseur.Meta.fields + [
             "description", "caracteristiques_offre", "quantite_maximale",
             "objectif_participants", "paliers", "medias", "montant_collecte",
             "collecte_ouverte", "mise_a_disposition_le", "motif_annulation",
-            "nombre_commentaires", "cree_le",
+            "cree_le",
         ]
 
     caracteristiques_offre = serializers.SerializerMethodField()
@@ -241,7 +269,7 @@ class CampagneEcritureSerialiseur(serializers.ModelSerializer):
         model = Campagne
         fields = ["id", "produit", "titre", "description", "prix_unitaire",
                   "quantite_minimale", "quantite_maximale", "objectif_participants",
-                  "date_limite", "point_remise", "paliers", "statut"]
+                  "date_limite", "paliers", "statut"]
         read_only_fields = ["statut"]
 
     def validate_date_limite(self, valeur):
@@ -258,13 +286,44 @@ class CampagneEcritureSerialiseur(serializers.ModelSerializer):
             )
 
         # Un palier qui coûte plus cher que le prix affiché n'est pas un
-        # palier : l'acheteur verrait le prix monter avec le nombre de
-        # participants, soit l'inverse de ce qu'on lui promet.
+        # palier : l'acheteur verrait le prix monter en prenant plus, soit
+        # l'inverse de ce qu'on lui promet.
         prix = donnees.get("prix_unitaire", getattr(self.instance, "prix_unitaire", 0))
-        for palier in donnees.get("paliers", []):
+        paliers = donnees.get("paliers", [])
+        for palier in paliers:
             if palier["prix_unitaire"] >= prix:
                 raise serializers.ValidationError(
                     {"paliers": "Un palier doit être moins cher que le prix affiché."}
+                )
+
+        # Le barème est une grille : une case par couple (tranche, seuil de
+        # participants). Deux lignes au même endroit feraient échouer
+        # l'enregistrement sur la contrainte d'unicité, avec un message que
+        # personne ne peut corriger depuis le formulaire.
+        cases = [(p["quantite_min"], p.get("participants_min", 0)) for p in paliers]
+        if len(cases) != len(set(cases)):
+            raise serializers.ValidationError(
+                {"paliers": "Deux paliers se superposent sur la même case du barème."}
+            )
+
+        # Une chute doit faire **descendre** la tranche qu'elle vise, sinon
+        # elle ne sert à rien : le calcul retient le meilleur prix et
+        # l'ignorerait en silence.
+        depart = {
+            p["quantite_min"]: p["prix_unitaire"]
+            for p in paliers
+            if not p.get("participants_min", 0)
+        }
+        depart.setdefault(1, prix)
+        for palier in paliers:
+            seuil = palier.get("participants_min", 0)
+            base = depart.get(palier["quantite_min"])
+            if seuil and base is not None and palier["prix_unitaire"] >= base:
+                raise serializers.ValidationError(
+                    {
+                        "paliers": f"La chute à {seuil} participants doit être "
+                        f"sous le prix de départ de cette tranche."
+                    }
                 )
         return donnees
 

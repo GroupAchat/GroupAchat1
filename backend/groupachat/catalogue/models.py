@@ -171,7 +171,7 @@ class MediaProduit(models.Model):
         VIDEO = "video", "Vidéo"
 
     MAX_IMAGES = 3
-    MAX_VIDEOS = 2
+    MAX_VIDEOS = 1
 
     produit = models.ForeignKey(
         Produit, on_delete=models.CASCADE, related_name="medias", verbose_name="produit"
@@ -270,6 +270,10 @@ class Campagne(models.Model):
 
     class Statut(models.TextChoices):
         BROUILLON = "brouillon", "Brouillon"
+        # Mise en ligne demandée, relue avant d'apparaître. Qui y passe
+        # dépend du grade (`catalogue/verification.py`) : systématique en
+        # Bronze, une sur quatre en Argent, jamais en Or.
+        EN_VERIFICATION = "en_verification", "En vérification"
         EN_COURS = "en_cours", "Collecte en cours"
         # La date limite est passée sans que le minimum soit atteint.
         # La campagne n'est pas morte pour autant : le groupeur peut
@@ -278,7 +282,7 @@ class Campagne(models.Model):
         # seul, c'est une règle du produit.
         MINIMUM_NON_ATTEINT = "minimum_non_atteint", "Minimum non atteint"
         FINANCEE = "financee", "Financée"
-        DECAISSEE = "decaissee", "Fonds remis au groupeur"
+        DECAISSEE = "decaissee", "Fonds remis à l'OAG"
         APPROVISIONNEMENT = "approvisionnement", "Approvisionnement"
         DISTRIBUTION = "distribution", "Distribution en cours"
         TERMINEE = "terminee", "Terminée"
@@ -315,7 +319,7 @@ class Campagne(models.Model):
     description = models.TextField(
         "conditions de l'offre",
         blank=True,
-        help_text="Provenance, état, garantie, modalités de remise.",
+        help_text="Provenance, état, garantie, délais.",
     )
 
     prix_unitaire = models.PositiveIntegerField("prix unitaire affiché (FCFA)")
@@ -331,7 +335,13 @@ class Campagne(models.Model):
     )
 
     date_limite = models.DateTimeField("date limite de la collecte")
-    point_remise = models.CharField("point de remise", max_length=200)
+
+    # Il n'y a **pas** de point de remise sur la campagne : c'est l'acheteur
+    # qui choisit, part par part, entre le bureau de poste le plus proche de
+    # chez lui et la livraison à son adresse. Un lieu unique imposé par l'OAG
+    # obligeait la moitié de la ville à traverser Lomé pour un sac de riz, et
+    # ne disait rien à celui qui voulait être livré. Le choix vit donc sur la
+    # participation (`Participation.mode_retrait`).
 
     statut = models.CharField(
         "statut", max_length=25, choices=Statut.choices, default=Statut.BROUILLON
@@ -387,6 +397,20 @@ class Campagne(models.Model):
         )
 
     @property
+    def nombre_participants(self) -> int:
+        """Combien de personnes ont payé — pas combien de pièces.
+
+        C'est ce nombre qui déclenche la chute de prix, et non le volume :
+        le but est que chacun partage la campagne autour de lui. Dix pièces
+        prises par une seule personne ne font pas connaître la campagne.
+        """
+        from groupachat.commandes.models import Participation
+
+        return self.participations.filter(
+            statut__in=Participation.STATUTS_PAYES
+        ).count()
+
+    @property
     def montant_collecte(self) -> int:
         from groupachat.commandes.models import Participation
 
@@ -410,48 +434,109 @@ class Campagne(models.Model):
     def collecte_ouverte(self) -> bool:
         return self.statut == self.Statut.EN_COURS and timezone.now() < self.date_limite
 
-    def prix_pour_quantite(self, quantite_totale: int) -> int:
-        """Prix unitaire applicable une fois ce volume atteint.
+    def prix_pour(self, quantite: int, participants: int | None = None) -> int:
+        """Prix unitaire pour **un acheteur** qui prend cette quantité.
 
-        Le palier le plus avantageux dont le seuil est franchi l'emporte ;
-        sans palier franchi, c'est le prix affiché.
+        Deux axes, et il faut les distinguer pour comprendre le produit :
+
+        - **la tranche**, décidée par l'acheteur seul. « La pièce à 25 000,
+          à partir de 12 pièces 22 000 » : celui qui en prend 14 paie 22 000,
+          celui qui en prend une paie 25 000. Personne d'autre n'y change
+          rien.
+        - **la chute**, décidée par le nombre de participants. Passé un
+          seuil, le groupeur a prévu que chaque tranche descende encore —
+          la pièce seule à 23 000, la tranche des douze à 20 000. C'est ce
+          qui donne à chacun une raison de faire venir ses amis : la baisse
+          profite aussi à ceux qui ont déjà payé.
+
+        On retient **le meilleur prix** parmi les lignes auxquelles l'acheteur
+        a droit, et non la dernière franchie. Un groupeur qui saisit ses
+        paliers dans le désordre, ou qui donne à la tranche basse une chute
+        plus forte qu'à la haute, obtient quand même un barème cohérent :
+        l'acheteur n'a jamais à payer plus cher parce qu'il a pris plus.
 
         Le tri se fait **en mémoire, sur ``all()``**, et non par un ``filter()``
         en base : la vue précharge les paliers, et un filtre repartirait en
         base en ignorant ce préchargement — une requête de plus par vignette
         du catalogue.
         """
-        franchis = [p for p in self.paliers.all() if p.quantite_min <= quantite_totale]
-        if not franchis:
-            return self.prix_unitaire
-        return max(franchis, key=lambda p: p.quantite_min).prix_unitaire
+        if participants is None:
+            participants = self.nombre_participants
+        ouverts = [
+            palier.prix_unitaire
+            for palier in self.paliers.all()
+            if palier.quantite_min <= quantite
+            and palier.participants_min <= participants
+        ]
+        return min(ouverts, default=self.prix_unitaire)
+
+    @property
+    def prix_courant(self) -> int:
+        """Le meilleur prix atteignable aujourd'hui, toutes tranches confondues.
+
+        C'est le « à partir de » des vignettes du catalogue : ce que paierait
+        quelqu'un qui prend la plus grosse tranche, au nombre de participants
+        du moment. Montrer le prix de la pièce seule donnerait une campagne
+        plus chère qu'elle ne l'est ; montrer la chute non atteinte serait un
+        mensonge.
+        """
+        participants = self.nombre_participants
+        ouverts = [
+            palier.prix_unitaire
+            for palier in self.paliers.all()
+            if palier.participants_min <= participants
+        ]
+        return min(ouverts, default=self.prix_unitaire)
 
 
 class PalierPrix(models.Model):
-    """Prix dégressif accordé à partir d'un certain volume.
+    """Une case du barème : une tranche, un seuil de participants, un prix.
 
-    C'est l'argument qui fait venir les acheteurs : plus on est nombreux,
-    moins chacun paie.
+    **Une seule table pour les deux axes**, et non deux. Le barème est une
+    grille — « la pièce seule » et « à partir de 12 » en lignes, « au départ »
+    et « à partir de 30 participants » en colonnes — et une grille se range
+    dans une table à deux clés. Séparer les tranches des chutes aurait obligé
+    à recoller les deux à chaque calcul de prix, et à inventer une règle pour
+    les croisements manquants.
+
+    La case « pièce seule, au départ » n'est pas stockée : c'est
+    ``Campagne.prix_unitaire``, le prix affiché. Le reste se déclare ici.
     """
 
     campagne = models.ForeignKey(
         Campagne, on_delete=models.CASCADE, related_name="paliers", verbose_name="campagne"
     )
-    quantite_min = models.PositiveIntegerField("à partir de (pièces)")
+    quantite_min = models.PositiveIntegerField(
+        "à partir de (pièces commandées)",
+        help_text="La quantité que prend **un seul** acheteur, pas le total "
+                  "de la campagne.",
+    )
+    participants_min = models.PositiveIntegerField(
+        "à partir de (participants)",
+        default=0,
+        help_text="0 : ce prix s'applique dès le départ. Au-delà, c'est une "
+                  "chute : le prix ne descend qu'une fois ce nombre de "
+                  "participants atteint, **y compris pour ceux qui ont déjà "
+                  "payé**.",
+    )
     prix_unitaire = models.PositiveIntegerField("prix unitaire (FCFA)")
 
     class Meta:
         verbose_name = "palier de prix"
         verbose_name_plural = "paliers de prix"
-        ordering = ["quantite_min"]
+        ordering = ["participants_min", "quantite_min"]
         constraints = [
             models.UniqueConstraint(
-                fields=["campagne", "quantite_min"], name="palier_unique_par_seuil"
+                fields=["campagne", "quantite_min", "participants_min"],
+                name="palier_unique_par_case",
             )
         ]
 
     def __str__(self) -> str:
-        return f"≥ {self.quantite_min} pièces : {self.prix_unitaire} FCFA"
+        tranche = f"≥ {self.quantite_min} pièces"
+        if self.participants_min:
+            tranche += f", à {self.participants_min} participants"
+        return f"{tranche} : {self.prix_unitaire} FCFA"
 
 
 class MediaCampagne(models.Model):
@@ -543,3 +628,23 @@ class EtatDemonstration(models.Model):
 
     def __str__(self) -> str:
         return f"Jeu de démonstration {self.version}"
+
+
+# Déclarés dans un module à part — le droit de publier est un sujet à lui
+# seul — mais réexportés ici, parce que c'est `models` que Django inspecte.
+from groupachat.catalogue.publication import (  # noqa: E402
+    AbonnementPublication,
+    PackPublication,
+)
+
+__all__ = [
+    "Categorie",
+    "Produit",
+    "MediaProduit",
+    "Campagne",
+    "MediaCampagne",
+    "PalierPrix",
+    "EtatDemonstration",
+    "AbonnementPublication",
+    "PackPublication",
+]

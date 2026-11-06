@@ -63,6 +63,16 @@
    disent à chacun où il se trouve sans avoir à lire un titre.
    Le visiteur sans compte voit l'orange : c'est la couleur de l'envie, et
    c'est un acheteur qui s'ignore.                                           */
+:root {
+  /* Hauteur de la barre d'onglets du téléphone, zone sûre non comprise.
+     Déclarée ici parce que trois endroits en dépendent : la barre elle-même,
+     tout ce qui se colle au-dessus — la barre « Participer » de la fiche
+     campagne — et le creux à laisser en bas des pages. Un nombre recopié
+     trois fois aurait fini par diverger, et c'est ce qui masque un bouton. */
+  --hauteur-onglets: 3.6rem;
+  --onglets-et-zone-sure: calc(var(--hauteur-onglets) + env(safe-area-inset-bottom));
+}
+
 :root,
 :root[data-profil="acheteur"],
 :root[data-profil="visiteur"] {
@@ -94,28 +104,6 @@
   --texte: #1a1714;
   --texte-doux: #6d6558;
   color-scheme: light;
-}
-
-:root:not([data-theme="light"]) {
-  @media (prefers-color-scheme: dark) {
-    --fond: #110f0d;
-    --fond-carte: #1a1714;
-    --fond-doux: #221e1a;
-    --bordure: #322c26;
-    --texte: #f6f3ef;
-    --texte-doux: #a79d90;
-    color-scheme: dark;
-  }
-}
-
-:root[data-theme="dark"] {
-  --fond: #110f0d;
-  --fond-carte: #1a1714;
-  --fond-doux: #221e1a;
-  --bordure: #322c26;
-  --texte: #f6f3ef;
-  --texte-doux: #a79d90;
-  color-scheme: dark;
 }
 
 @layer base {

@@ -59,7 +59,6 @@ def creer_campagne(groupeur, categorie, nom, prix, minimum=10, **extra):
         "produit": produit, "groupeur": groupeur, "prix_unitaire": prix,
         "quantite_minimale": minimum,
         "date_limite": timezone.now() + timedelta(days=10),
-        "point_remise": "Adawlato, Lomé",
         "statut": Campagne.Statut.EN_COURS, "publiee_le": timezone.now(),
     }
     defauts.update(extra)
@@ -101,8 +100,11 @@ class TestCatalogueSansCompte:
         creer_campagne(groupeur, rayons["alimentation"], "Riz", 18000)
         vignette = client.get("/api/catalogue/campagnes/").data["results"][0]
         assert vignette["groupeur"]["badge_confiance"] is True
-        assert vignette["groupeur"]["nom_commerce"] == "Abalo Import"
         assert vignette["groupeur"]["reputation"]["note"] == "4.50"
+        # L'enseigne a disparu volontairement : la donner permettrait de se
+        # rendre à la boutique et de court-circuiter la plateforme, là où ni
+        # le séquestre ni l'assurance ne jouent.
+        assert "nom_commerce" not in vignette["groupeur"]
 
     def test_le_numero_du_groupeur_ne_fuite_pas(self, client, groupeur, rayons):
         creer_campagne(groupeur, rayons["alimentation"], "Riz", 18000)
@@ -142,7 +144,7 @@ class TestFiltres:
         Campagne.objects.create(
             produit=premiere.produit, groupeur=autre, prix_unitaire=16000,
             quantite_minimale=20, date_limite=timezone.now() + timedelta(days=5),
-            point_remise="Bè", statut=Campagne.Statut.EN_COURS,
+            statut=Campagne.Statut.EN_COURS,
             publiee_le=timezone.now(),
         )
         reponse = client.get(f"/api/catalogue/produits/{premiere.produit.slug}/campagnes/")
@@ -159,6 +161,7 @@ class TestJauge:
         Participation.objects.create(
             campagne=campagne, acheteur=acheteur, quantite=4,
             prix_unitaire_applique=18000, montant_total=72000,
+            bureau_poste="Bureau de poste de Tokoin",
         )
         vignette = client.get("/api/catalogue/campagnes/").data["results"][0]
         assert vignette["quantite_reservee"] == 0
@@ -174,6 +177,7 @@ class TestJauge:
                 campagne=campagne, acheteur=acheteur, quantite=quantite,
                 prix_unitaire_applique=18000, montant_total=quantite * 18000,
                 statut=Participation.Statut.PAYEE, code_retrait=f"CODE{numero[:4]}",
+                bureau_poste="Bureau de poste de Tokoin",
             )
         vignette = client.get("/api/catalogue/campagnes/").data["results"][0]
         assert vignette["quantite_reservee"] == 7
@@ -190,6 +194,7 @@ class TestJauge:
             campagne=campagne, acheteur=acheteur, quantite=20,
             prix_unitaire_applique=18000, montant_total=360000,
             statut=Participation.Statut.PAYEE, code_retrait="CODE0001",
+            bureau_poste="Bureau de poste de Tokoin",
         )
         vignette = client.get("/api/catalogue/campagnes/").data["results"][0]
         assert vignette["pourcentage"] == 100
@@ -205,6 +210,7 @@ class TestJauge:
             campagne=campagne, acheteur=acheteur, quantite=12,
             prix_unitaire_applique=18000, montant_total=216000,
             statut=Participation.Statut.PAYEE, code_retrait="CODE0002",
+            bureau_poste="Bureau de poste de Tokoin",
         )
         fiche = client.get(f"/api/catalogue/campagnes/{campagne.id}/").data
         assert fiche["prix_courant"] == 16500
@@ -535,3 +541,135 @@ class TestPhotosDuLot:
         fiche = client.get(f"/api/catalogue/campagnes/{campagne.id}/").data
         assert len(fiche["medias"]) == 1
         assert "res.cloudinary.com/essai" in fiche["medias"][0]["adresse"]
+
+
+class TestBaremeADeuxAxes:
+    """La tranche qu'on choisit, et la chute qui dépend des autres.
+
+    Le barème de l'exemple, celui qu'on montre pour expliquer le produit :
+    la pièce à 25 000, la tranche des douze à 22 000 ; à 30 participants la
+    pièce tombe à 23 000 et la tranche des douze à 20 000.
+    """
+
+    @pytest.fixture
+    def bareme(self, campagne):
+        campagne.prix_unitaire = 25000
+        campagne.save(update_fields=["prix_unitaire"])
+        for quantite, participants, prix in (
+            (12, 0, 22000),
+            (1, 30, 23000),
+            (12, 30, 20000),
+        ):
+            PalierPrix.objects.create(
+                campagne=campagne, quantite_min=quantite,
+                participants_min=participants, prix_unitaire=prix,
+            )
+        return campagne
+
+    def test_la_tranche_depend_de_ce_que_prend_l_acheteur(self, bareme):
+        """Et non du volume déjà collecté : c'est lui qui décide d'en prendre
+        douze pour passer dans la tranche basse."""
+        assert bareme.prix_pour(1, participants=0) == 25000
+        assert bareme.prix_pour(11, participants=0) == 25000
+        assert bareme.prix_pour(12, participants=0) == 22000
+        # La tranche n'est pas un palier exact : au-delà, on y reste.
+        assert bareme.prix_pour(14, participants=0) == 22000
+        assert bareme.prix_pour(20, participants=0) == 22000
+
+    def test_la_chute_depend_du_nombre_de_participants(self, bareme):
+        assert bareme.prix_pour(1, participants=29) == 25000
+        assert bareme.prix_pour(1, participants=30) == 23000
+        assert bareme.prix_pour(12, participants=30) == 20000
+        assert bareme.prix_pour(14, participants=45) == 20000
+
+    def test_une_tranche_non_atteinte_ne_profite_pas_de_sa_chute(self, bareme):
+        """Onze pièces à trente participants : la chute de la pièce seule
+        s'applique, pas celle des douze."""
+        assert bareme.prix_pour(11, participants=30) == 23000
+
+    def test_on_retient_toujours_le_meilleur_prix(self, campagne):
+        """Un barème saisi de travers ne doit pas punir celui qui prend plus.
+
+        Ici la chute de la pièce seule descend plus bas que la tranche des
+        douze au départ. Celui qui prend douze pièces a droit aux deux : il
+        paie le moins cher des deux, et non le dernier palier franchi.
+        """
+        campagne.prix_unitaire = 25000
+        campagne.save(update_fields=["prix_unitaire"])
+        PalierPrix.objects.create(
+            campagne=campagne, quantite_min=12, participants_min=0,
+            prix_unitaire=22000,
+        )
+        PalierPrix.objects.create(
+            campagne=campagne, quantite_min=1, participants_min=30,
+            prix_unitaire=20000,
+        )
+        assert campagne.prix_pour(12, participants=30) == 20000
+
+    def test_le_prix_courant_est_le_meilleur_atteignable_aujourd_hui(
+        self, client, bareme
+    ):
+        """Le « à partir de » des vignettes : la meilleure tranche, au nombre
+        de participants du moment — jamais une chute non atteinte."""
+        fiche = client.get(f"/api/catalogue/campagnes/{bareme.id}/").data
+        assert fiche["prix_courant"] == 22000
+        assert fiche["prix_unitaire"] == 25000
+
+
+class TestSaisieDuBareme:
+    """Ce que le groupeur a le droit de déclarer."""
+
+    def base(self, produit, **extra):
+        donnees = {
+            "produit": produit.id,
+            "titre": "Essai de barème",
+            "prix_unitaire": 25000,
+            "quantite_minimale": 10,
+            "date_limite": (timezone.now() + timedelta(days=7)).isoformat(),
+        }
+        donnees.update(extra)
+        return donnees
+
+    def test_deux_paliers_sur_la_meme_case_sont_refuses(
+        self, client, groupeur, produit
+    ):
+        client.force_authenticate(user=groupeur)
+        reponse = client.post(
+            "/api/groupeur/campagnes/",
+            self.base(produit, paliers=[
+                {"quantite_min": 12, "participants_min": 0, "prix_unitaire": 22000},
+                {"quantite_min": 12, "participants_min": 0, "prix_unitaire": 21000},
+            ]),
+            format="json",
+        )
+        assert reponse.status_code == 400
+        assert "superposent" in str(reponse.data)
+
+    def test_une_chute_doit_faire_descendre_sa_tranche(
+        self, client, groupeur, produit
+    ):
+        client.force_authenticate(user=groupeur)
+        reponse = client.post(
+            "/api/groupeur/campagnes/",
+            self.base(produit, paliers=[
+                {"quantite_min": 12, "participants_min": 0, "prix_unitaire": 22000},
+                {"quantite_min": 12, "participants_min": 30, "prix_unitaire": 22000},
+            ]),
+            format="json",
+        )
+        assert reponse.status_code == 400
+        assert "chute" in str(reponse.data)
+
+    def test_un_bareme_complet_passe(self, client, groupeur, produit):
+        client.force_authenticate(user=groupeur)
+        reponse = client.post(
+            "/api/groupeur/campagnes/",
+            self.base(produit, paliers=[
+                {"quantite_min": 12, "participants_min": 0, "prix_unitaire": 22000},
+                {"quantite_min": 1, "participants_min": 30, "prix_unitaire": 23000},
+                {"quantite_min": 12, "participants_min": 30, "prix_unitaire": 20000},
+            ]),
+            format="json",
+        )
+        assert reponse.status_code == 201, reponse.data
+        assert len(reponse.data["paliers"]) == 3

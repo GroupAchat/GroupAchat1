@@ -3,18 +3,21 @@
 
 from __future__ import annotations
 
+from django.db import models
 from django.utils import timezone
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from groupachat.commandes.models import Avis, Participation
+from groupachat.commandes.models import Avis, Participation, Reclamation
 from groupachat.commandes.serialiseurs import (
     CreationParticipationSerialiseur,
     AvisSerialiseur,
     ReponseAvisSerialiseur,
     PaiementSerialiseur,
     ParticipationSerialiseur,
+    ReclamationSerialiseur,
+    CreationReclamationSerialiseur,
 )
 from groupachat.paiements.services import ErreurPaiement, encaisser
 from groupachat.echanges.models import Notification
@@ -161,7 +164,7 @@ class AvisVueEnsemble(viewsets.ModelViewSet):
         avis = self.get_object()
         if avis.groupeur != requete.user:
             return Response(
-                {"detail": "Seul le groupeur concerné peut répondre."},
+                {"detail": "Seul l'OAG concerné peut répondre."},
                 status=status.HTTP_403_FORBIDDEN,
             )
         serialiseur = ReponseAvisSerialiseur(data=requete.data)
@@ -171,3 +174,106 @@ class AvisVueEnsemble(viewsets.ModelViewSet):
         avis.repondu_le = timezone.now()
         avis.save(update_fields=["reponse", "repondu_le"])
         return Response(AvisSerialiseur(avis, context=self.get_serializer_context()).data)
+
+
+class ReclamationVueEnsemble(viewsets.ModelViewSet):
+    """/api/reclamations/ — gestion des réclamations en 5 étapes selon le nouveau cahier des charges."""
+
+    permission_classes = [NumeroVerifie]
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = Reclamation.objects.select_related(
+            "participation",
+            "participation__campagne",
+            "participation__acheteur",
+            "auteur",
+        )
+        if user.is_staff or getattr(user, "est_equipe", False):
+            return qs
+        # Si c'est un OAG, il voit les réclamations sur ses campagnes + celles qu'il a éventuellement ouvertes
+        if getattr(user, "est_groupeur_valide", False):
+            return qs.filter(
+                models.Q(auteur=user) | models.Q(participation__campagne__groupeur=user)
+            )
+        # Sinon l'acheteur ne voit que les siennes
+        return qs.filter(auteur=user)
+
+    def get_serializer_class(self):
+        if self.action == "create":
+            return CreationReclamationSerialiseur
+        return ReclamationSerialiseur
+
+    def create(self, requete, *args, **kwargs):
+        serialiseur = self.get_serializer(data=requete.data)
+        serialiseur.is_valid(raise_exception=True)
+        participation = serialiseur.validated_data["participation"]
+        numero = Reclamation.engendrer_numero(participation.id)
+        reclamation = serialiseur.save(
+            auteur=self.request.user,
+            numero_dossier=numero,
+            etape=Reclamation.Etape.ACCUSE_RECEPTION,
+        )
+        # Notifier l'acheteur (accusé de réception)
+        Notification.objects.create(
+            destinataire=self.request.user,
+            genre=Notification.Genre.SYSTEME,
+            titre=f"Dossier {numero} ouvert",
+            message=f"Votre réclamation pour « {participation.campagne.titre} » a été enregistrée. Elle est en cours d'examen.",
+            campagne=participation.campagne,
+            lien=f"/mes-achats/{participation.id}",
+        )
+        # Notifier l'OAG (phase contradictoire)
+        Notification.objects.create(
+            destinataire=participation.campagne.groupeur,
+            genre=Notification.Genre.SYSTEME,
+            titre=f"Réclamation ouverte : {numero}",
+            message=f"Une réclamation ({reclamation.get_motif_display()}) a été déposée sur votre commande. Vous pouvez apporter vos explications.",
+            campagne=participation.campagne,
+            lien=f"/groupeur/campagnes/{participation.campagne.id}",
+        )
+        return Response(
+            ReclamationSerialiseur(
+                reclamation, context=self.get_serializer_context()
+            ).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["post"])
+    def repondre_oag(self, requete, pk=None):
+        """L'OAG apporte ses éléments contradictoires."""
+        reclamation = self.get_object()
+        if reclamation.participation.campagne.groupeur != requete.user and not requete.user.is_staff:
+            return Response({"detail": "Non autorisé."}, status=status.HTTP_403_FORBIDDEN)
+        reponse = requete.data.get("reponse_oag", "").strip()
+        if not reponse:
+            return Response({"detail": "La réponse ne peut pas être vide."}, status=status.HTTP_400_BAD_REQUEST)
+        reclamation.reponse_oag = reponse
+        reclamation.etape = Reclamation.Etape.ANALYSE
+        reclamation.save(update_fields=["reponse_oag", "etape", "mis_a_jour_le"])
+        return Response(ReclamationSerialiseur(reclamation, context=self.get_serializer_context()).data)
+
+    @action(detail=True, methods=["post"])
+    def trancher(self, requete, pk=None):
+        """L'administrateur ou gestionnaire litiges rend sa décision motivée et accorde un éventuel remboursement."""
+        if not requete.user.is_staff and not getattr(requete.user, "est_equipe", False):
+            return Response({"detail": "Réservé à l'équipe."}, status=status.HTTP_403_FORBIDDEN)
+        reclamation = self.get_object()
+        decision = requete.data.get("decision", "").strip()
+        remboursement = int(requete.data.get("remboursement_accorde", 0))
+        reclamation.decision = decision
+        reclamation.remboursement_accorde = max(0, remboursement)
+        reclamation.etape = Reclamation.Etape.DECISION
+        reclamation.save(update_fields=["decision", "remboursement_accorde", "etape", "mis_a_jour_le"])
+
+        # Notifier l'acheteur
+        Notification.objects.create(
+            destinataire=reclamation.auteur,
+            genre=Notification.Genre.SYSTEME,
+            titre=f"Décision rendue : {reclamation.numero_dossier}",
+            message=f"Décision : {decision}" + (f" Remboursement de {remboursement} FCFA accordé." if remboursement > 0 else ""),
+            campagne=reclamation.participation.campagne,
+            lien=f"/mes-achats/{reclamation.participation.id}",
+        )
+        return Response(ReclamationSerialiseur(reclamation, context=self.get_serializer_context()).data)
+

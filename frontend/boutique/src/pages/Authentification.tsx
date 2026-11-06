@@ -1,7 +1,12 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, MessageSquareCode, ShieldCheck } from "lucide-react";
+import {
+  ArrowLeft,
+  MessageSquareCode,
+  PackageCheck,
+  ShieldCheck,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import type { Utilisateur } from "@commun/api/types";
 import { Marque } from "@commun/composants/Marque";
@@ -15,7 +20,6 @@ interface ReponseVerification {
   code_affiche?: string;
 }
 
-/** Enveloppe commune aux écrans d'entrée. */
 function Cadre({
   titre,
   sousTitre,
@@ -28,31 +32,50 @@ function Cadre({
   children: React.ReactNode;
 }) {
   return (
-    <div className="relative mx-auto flex min-h-[calc(100dvh-4rem)] max-w-md flex-col justify-center px-5 py-10">
-      <span className="pointer-events-none absolute -right-24 -top-10 size-72 rounded-full bg-[color:var(--color-accent)]/12 blur-3xl" />
+    <div className="relative min-h-[calc(100dvh-5rem)] flex flex-col justify-center px-4 py-8">
       <motion.div
-        initial={{ opacity: 0, y: 18 }}
+        initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-        className="relative space-y-6"
+        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+        className="w-full space-y-5"
       >
         {retour && (
           <button
             onClick={retour}
-            className="texte-doux flex items-center gap-1.5 text-sm font-semibold"
+            className="texte-doux flex items-center gap-1.5 text-sm font-semibold transition active:scale-95"
           >
             <ArrowLeft className="size-4" />
             Retour
           </button>
         )}
         <div className="space-y-3">
-          <Marque taille="grande" />
-          <div>
-            <h1 className="text-2xl font-extrabold">{titre}</h1>
-            {sousTitre && <p className="texte-doux mt-1 text-sm">{sousTitre}</p>}
+          <div className="flex justify-center py-1">
+            <Marque taille="grande" />
+          </div>
+          <div className="text-center">
+            <h1 className="text-2xl font-extrabold text-slate-900">{titre}</h1>
+            {sousTitre && (
+              <p className="texte-doux mt-1.5 text-sm max-w-xs mx-auto">
+                {sousTitre}
+              </p>
+            )}
           </div>
         </div>
-        {children}
+
+        <div className="rounded-3xl p-5 shadow-sm border border-slate-200/80 bg-white">
+          {children}
+        </div>
+
+        <div className="flex items-center justify-center gap-5 text-xs text-slate-500 pt-1">
+          <span className="inline-flex items-center gap-1 font-medium">
+            <ShieldCheck className="size-3.5 text-emerald-600" />
+            Paiements consignés
+          </span>
+          <span className="inline-flex items-center gap-1 font-medium">
+            <PackageCheck className="size-3.5 text-orange-600" />
+            Retrait sécurisé
+          </span>
+        </div>
       </motion.div>
     </div>
   );
@@ -62,6 +85,8 @@ function Cadre({
 
 export function Inscription() {
   const naviguer = useNavigate();
+  const [params] = useSearchParams();
+  const retour = params.get("retour");
   const { definir } = useSession();
   const [etape, setEtape] = useState<"formulaire" | "code">("formulaire");
   const [telephone, setTelephone] = useState("");
@@ -69,6 +94,7 @@ export function Inscription() {
   const [saisie, setSaisie] = useState({
     prenom: "",
     nom: "",
+    nom_utilisateur: "",
     telephone: "",
     mot_de_passe: "",
     email: "",
@@ -93,7 +119,8 @@ export function Inscription() {
         surRetour={() => setEtape("formulaire")}
         surSucces={(compte) => {
           definir(compte);
-          naviguer("/", { replace: true });
+          const cible = retour && retour.startsWith("/") ? retour : destinationApres(compte);
+          naviguer(cible, { replace: true });
         }}
       />
     );
@@ -129,6 +156,20 @@ export function Inscription() {
             erreur={inscription.erreur?.pourChamp("nom")}
           />
         </div>
+
+        {/* Sur la plateforme, l'acheteur et l'OAG ne se connaissent pas.
+            Ce nom est la seule chose que l'autre partie verra — d'où le fait
+            de le demander ici, et non enfoui dans le profil. */}
+        <Champ
+          etiquette="Nom d'utilisateur (facultatif)"
+          value={saisie.nom_utilisateur}
+          autoComplete="username"
+          maxLength={24}
+          placeholder="Ama K."
+          onChange={(e) => setSaisie({ ...saisie, nom_utilisateur: e.target.value })}
+          erreur={inscription.erreur?.pourChamp("nom_utilisateur")}
+          aide="C'est sous ce nom que les vendeurs vous verront. Sans choix, ce sera votre prénom et l'initiale de votre nom."
+        />
 
         <Champ
           etiquette="Numéro de téléphone"
@@ -188,8 +229,17 @@ export function Inscription() {
 
 // ── Connexion ──────────────────────────────────────────────────────────────
 
+/** Où l'on atterrit après s'être connecté, selon ce qu'on est. */
+function destinationApres(utilisateur: Utilisateur): string {
+  if (utilisateur.role === "livreur") return "/livraison";
+  if (utilisateur.est_groupeur_valide) return "/groupeur";
+  return "/";
+}
+
 export function Connexion() {
   const naviguer = useNavigate();
+  const [params] = useSearchParams();
+  const retour = params.get("retour");
   const { definir } = useSession();
   const [telephone, setTelephone] = useState("");
   const [motDePasse, setMotDePasse] = useState("");
@@ -211,7 +261,9 @@ export function Connexion() {
       return reponse;
     }
     definir(reponse.utilisateur);
-    naviguer(reponse.utilisateur.est_groupeur_valide ? "/groupeur" : "/", { replace: true });
+    // Redirige vers le retour demandé (ex: retour sur l'offre) ou vers son espace dédié
+    const cible = retour && retour.startsWith("/") ? retour : destinationApres(reponse.utilisateur);
+    naviguer(cible, { replace: true });
     return reponse;
   });
 
@@ -223,7 +275,8 @@ export function Connexion() {
         surRetour={() => setAVerifier(null)}
         surSucces={(compte) => {
           definir(compte);
-          naviguer("/", { replace: true });
+          const cible = retour && retour.startsWith("/") ? retour : destinationApres(compte);
+          naviguer(cible, { replace: true });
         }}
       />
     );

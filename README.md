@@ -78,7 +78,7 @@ Mot de passe commun : `demo2026Groupe`
 ## Tests
 
 ```bash
-cd backend && python -m pytest        # 110 tests
+cd backend && python -m pytest        # la suite complète
 ```
 
 ## En production

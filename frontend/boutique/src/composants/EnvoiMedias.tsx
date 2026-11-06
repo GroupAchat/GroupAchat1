@@ -13,7 +13,7 @@ import {
 } from "@commun/outils/televersement";
 
 /**
- * La galerie d'un produit, remplie depuis le téléphone du groupeur.
+ * La galerie d'un produit, remplie depuis le téléphone de l'OAG.
  *
  * **Les fichiers partent chez Cloudinary tout de suite**, sans attendre
  * l'enregistrement du formulaire : une vidéo met une minute à monter sur un
@@ -22,12 +22,12 @@ import {
  * n'est qu'une liste d'identifiants.
  *
  * Trois photos et deux vidéos : le plafond est tenu côté serveur, mais il
- * faut le dire ici aussi, sinon le groupeur envoie quatre photos avant
+ * faut le dire ici aussi, sinon l'OAG envoie quatre photos avant
  * d'apprendre que la dernière est refusée.
  */
 
 export const MAX_IMAGES = 3;
-export const MAX_VIDEOS = 2;
+export const MAX_VIDEOS = 1;
 
 export interface MediaEnAttente {
   /** Identifiant local, le temps de l'envoi : la liste doit se rendre. */

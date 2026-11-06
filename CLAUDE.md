@@ -33,6 +33,7 @@ frontend/             les interfaces web
 |---|---|
 | [README.md](README.md) | l'architecture, comment démarrer, les comptes de démonstration |
 | [CAHIER_DES_CHARGES.md](CAHIER_DES_CHARGES.md) | les règles métier : séquestre, KYC, frais, codes de retrait |
+| [MANUEL_EXPLOITATION.md](MANUEL_EXPLOITATION.md) | l'exploitation : recrutement des OAG, contrats, conformité, rôles, modèle économique |
 | [COOLIFY.md](COOLIFY.md) | le déploiement sur `achatgr.com`, les variables, la sécurité |
 | [frontend/commun/README.md](frontend/commun/README.md) | ce que le socle contient **et ne doit pas contenir** |
 
@@ -55,11 +56,50 @@ décimal n'apporterait que des arrondis.
 **Le téléphone est l'identifiant**, normalisé à huit chiffres. Sans ça,
 `+22890001122` et `90001122` créeraient deux comptes pour la même personne.
 
-**Le prix est figé à la commande.** Un palier franchi plus tard ne réécrit
-pas ce qui a déjà été payé.
+**Le barème a deux axes.** La **tranche** dépend de ce que prend un seul
+acheteur — « à partir de 12 pièces, 22 000 » — et reste **figée à la
+commande** : elle ne peut jamais remonter. La **chute** dépend du nombre de
+participants et s'applique **rétroactivement**, à ceux qui ont déjà payé
+comme aux derniers venus ; la différence leur est rendue à la clôture. Une
+chute réservée aux derniers arrivés punirait celui qui a fait venir du
+monde, et c'est précisément lui qu'on veut récompenser.
+
+Les deux vivent dans **une seule table** : le barème est une grille, et une
+grille se range dans une table à deux clés. `PalierPrix.prix_pour()` retient
+toujours **le meilleur prix auquel l'acheteur a droit**, jamais le dernier
+palier franchi — un barème saisi de travers ne doit pas faire payer plus
+cher celui qui prend plus.
 
 **Le séquestre est par campagne**, avec des contraintes en base qui
 interdisent de libérer ou rembourser plus que le consigné.
+
+**Publier se paie, et la publication se consomme à la mise en ligne.**
+Abonnement au mois (illimité) ou pack de cinq, les deux compteurs
+indépendants : un abonnement qui s'achève ne prend pas les publications déjà
+payées. Un brouillon ne coûte rien ; un groupage qui échoue ne rend rien —
+elle paie la mise en ligne, pas la réussite. Un **refus de l'équipe**, lui,
+la rend : la mise en ligne n'a pas eu lieu.
+
+**La relecture avant vitrine dépend du grade** — systématique en Bronze, une
+sur quatre en Argent, jamais en Or. Le sondage est déterministe et compté sur
+les mises en ligne demandées : un tirage au sort ne s'audite pas. Une
+campagne `en_verification` n'est ni listée ni ouvrable, et n'ouvre pas de
+séquestre.
+
+**Le retrait du colis appartient à l'acheteur, pas à l'OAG** : bureau de
+poste de son choix ou livraison à son adresse, part par part. Il n'y a aucun
+point de remise sur la campagne. **L'adresse de livraison ne sort jamais vers
+l'OAG** — un bureau de poste est un lieu public, une adresse désigne un
+domicile.
+
+**C'est le livreur partenaire qui scanne le code de retrait**, jamais l'OAG :
+celui-ci confie le lot à l'agence et ne rencontre pas ses acheteurs. S'il
+validait lui-même, celui qui doit livrer signerait sa propre livraison. Le
+livreur est aussi le seul à voir l'adresse et le numéro de l'acheteur.
+
+**Le parrainage ne se valide qu'au paiement du filleul.** Un clic ou une
+inscription ne valent rien, un filleul n'a qu'un parrain — le premier qui
+l'amène —, et le parrain voit le nombre, jamais les noms.
 
 **Les pièces d'identité ne sont jamais servies publiquement** : `/medias/`
 refuse le dossier `kyc/`, et une vue séparée vérifie qui demande. Elles ne
@@ -83,7 +123,7 @@ cd backend
 python manage.py migrate
 python manage.py charger_demo      # jeu de démonstration, tous états couverts
 python manage.py runserver
-python -m pytest                   # 110 tests
+python -m pytest                   # la suite complète
 ```
 
 ⚠️ **La configuration vient d'un seul `.env`, à la racine** — celui que

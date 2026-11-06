@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Search, SlidersHorizontal, X } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
@@ -21,7 +21,6 @@ export default function Catalogue() {
   const [params, setParams] = useSearchParams();
   const [recherche, setRecherche] = useState(params.get("recherche") ?? "");
   const [differee, setDifferee] = useState(recherche);
-  const [filtresOuverts, setFiltresOuverts] = useState(false);
   const champ = useRef<HTMLInputElement>(null);
 
   const categorie = params.get("categorie") ?? "";
@@ -43,7 +42,7 @@ export default function Catalogue() {
       recherche: differee,
       categorie,
       tri,
-      page_size: 24,
+      page_size: 50,
     })}`,
     [differee, categorie, tri],
   );
@@ -61,45 +60,26 @@ export default function Catalogue() {
   const rayonsPlats = (rayons ?? []).flatMap((rayon) => [rayon, ...rayon.sous_categories]);
 
   return (
-    <div className="mx-auto w-full max-w-[90rem] px-4 py-6 lg:px-8">
-      <div className="verre sticky top-16 z-30 -mx-4 space-y-3 px-4 py-3">
-        <div className="flex gap-2">
-          <div className="surface flex h-12 flex-1 items-center gap-2 rounded-2xl px-4 focus-within:border-[color:var(--color-accent)]">
-            <Search className="texte-doux size-4 shrink-0" />
-            <input
-              ref={champ}
-              value={recherche}
-              onChange={(evenement) => setRecherche(evenement.target.value)}
-              placeholder="Riz, smartphone, ciment…"
-              className="w-full bg-transparent text-[0.95rem] outline-none"
-              aria-label="Rechercher une campagne"
-            />
-            {recherche && (
-              <button onClick={() => setRecherche("")} aria-label="Effacer">
-                <X className="texte-doux size-4" />
-              </button>
-            )}
-          </div>
-          <button
-            onClick={() => setFiltresOuverts((ouvert) => !ouvert)}
-            className={fusionner(
-              "grid size-12 shrink-0 place-items-center rounded-2xl transition-colors sm:hidden",
-              filtresOuverts
-                ? "degrade-accent text-white"
-                : "surface",
-            )}
-            aria-label="Filtres"
-          >
-            <SlidersHorizontal className="size-4" />
-          </button>
+    <div className="w-full space-y-4 px-4 py-4 pb-12">
+      <div className="space-y-3">
+        <div className="surface flex h-11 items-center gap-2 rounded-2xl border border-slate-200/90 px-3.5 focus-within:border-[color:var(--color-accent)] shadow-2xs">
+          <Search className="texte-doux size-4 shrink-0 text-slate-400" />
+          <input
+            ref={champ}
+            value={recherche}
+            onChange={(evenement) => setRecherche(evenement.target.value)}
+            placeholder="Rechercher (riz, ciment, smartphone…)"
+            className="w-full bg-transparent text-xs outline-none"
+            aria-label="Rechercher une campagne"
+          />
+          {recherche && (
+            <button onClick={() => setRecherche("")} aria-label="Effacer">
+              <X className="texte-doux size-4" />
+            </button>
+          )}
         </div>
 
-        <div
-          className={fusionner(
-            "sans-barre flex gap-2 overflow-x-auto pb-1",
-            !filtresOuverts && "hidden sm:flex",
-          )}
-        >
+        <div className="sans-barre -mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1">
           <Pastille actif={!categorie} surClic={() => definir("categorie", "")}>
             Tous
           </Pastille>
@@ -114,21 +94,16 @@ export default function Catalogue() {
           ))}
         </div>
 
-        <div
-          className={fusionner(
-            "sans-barre flex gap-2 overflow-x-auto",
-            !filtresOuverts && "hidden sm:flex",
-          )}
-        >
+        <div className="sans-barre -mx-4 flex gap-1.5 overflow-x-auto px-4">
           {TRIS.map((option) => (
             <button
               key={option.cle}
               onClick={() => definir("tri", option.cle)}
               className={fusionner(
-                "shrink-0 rounded-full px-3 py-1 text-xs font-semibold transition-colors",
+                "shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors",
                 tri === option.cle
                   ? "bg-accent-doux text-[color:var(--color-accent-fort)]"
-                  : "texte-doux",
+                  : "surface text-slate-500",
               )}
             >
               {option.libelle}
@@ -143,7 +118,7 @@ export default function Catalogue() {
           : `${donnees?.count ?? 0} campagne${(donnees?.count ?? 0) > 1 ? "s" : ""}`}
       </p>
 
-      <motion.div layout className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+      <motion.div layout className="mt-4 grid gap-4 grid-cols-1">
         {chargement
           ? Array.from({ length: 6 }, (_, rang) => <SqueletteCarte key={rang} />)
           : campagnes.map((campagne, rang) => (
@@ -155,7 +130,7 @@ export default function Catalogue() {
         <EtatVide
           icone={<Search className="size-7" />}
           titre="Rien ne correspond"
-          texte="Essayez un autre mot, ou publiez une demande : un groupeur peut s'en saisir."
+          texte="Essayez un autre mot, ou publiez une demande : un OAG peut s'en saisir."
         />
       )}
     </div>

@@ -22,7 +22,7 @@ import { api, useAction, useRequete } from "@commun/outils/requetes";
  *
  * C'est la décision la plus engageante de la console : valider un dossier
  * autorise quelqu'un à collecter l'argent d'inconnus. Le rejet exige un
- * motif, faute de quoi le groupeur redéposerait le même dossier sans savoir
+ * motif, faute de quoi l'OAG redéposerait le même dossier sans savoir
  * quoi corriger.
  */
 export default function Dossiers() {
@@ -42,7 +42,7 @@ export default function Dossiers() {
       <header>
         <h1 className="text-2xl font-extrabold">Dossiers de confiance</h1>
         <p className="texte-doux text-sm">
-          Vérifiez l'identité des groupeurs avant de leur ouvrir l'espace.
+          Vérifiez l'identité des OAG avant de leur ouvrir l'espace.
         </p>
       </header>
 
@@ -239,7 +239,7 @@ function FeuilleDecision({
           </div>
 
           <p className="texte-doux text-xs">
-            Valider ouvre l'espace groupeur et affiche le badge de confiance sur
+            Valider ouvre l'espace OAG et affiche le badge de confiance sur
             toutes ses campagnes.
           </p>
         </div>

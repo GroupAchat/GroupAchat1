@@ -1,11 +1,11 @@
 import { motion } from "framer-motion";
 import {
   Compass,
-  Home,
-  LayoutDashboard,
-  MessagesSquare,
+  Clapperboard,
+  MessageSquare,
   Search,
   ShoppingBag,
+  Store,
   User,
 } from "lucide-react";
 import { useEffect } from "react";
@@ -17,143 +17,158 @@ import { Avatar, fusionner } from "@commun/composants/ui";
 import { useSession } from "@commun/contexte/Session";
 
 /**
- * L'ossature de la boutique : barre du haut, onglets du bas.
- *
- * Les onglets du bas sont la navigation principale **sur téléphone**, où le
- * haut de l'écran est hors de portée du pouce. Sur grand écran ils cèdent la
- * place à une barre horizontale classique.
+ * L'ossature mobile acheteur : 4 onglets dédiés.
+ * Accueil (Fil vidéo immersif), Catalogue, Commandes, Profil (accès OAG).
  */
 
 const ONGLETS = [
-  { vers: "/", libelle: "Accueil", icone: Home, exact: true },
+  { vers: "/", libelle: "Accueil", icone: Clapperboard, exact: true },
   { vers: "/catalogue", libelle: "Catalogue", icone: Compass },
-  { vers: "/communaute", libelle: "Demandes", icone: MessagesSquare },
-  { vers: "/mes-achats", libelle: "Mes achats", icone: ShoppingBag },
+  { vers: "/mes-achats", libelle: "Commandes", icone: ShoppingBag },
   { vers: "/profil", libelle: "Profil", icone: User },
 ];
 
 export function EnTete() {
   const { utilisateur, connecte } = useSession();
   const naviguer = useNavigate();
+
   return (
-    <header className="verre sticky top-0 z-40 border-b">
-      {/* La barre va chercher les bords de l'écran, au lieu de s'aligner
-          sur la colonne de contenu : le logo se cale ainsi à gauche et les
-          actions à droite, là où l'œil et le pouce les attendent. Un
-          plafond très large évite seulement qu'ils s'éloignent à l'absurde
-          sur un écran panoramique. */}
-      <div className="mx-auto flex h-[4.5rem] w-full max-w-[110rem] items-center gap-3 px-3 sm:px-6">
+    <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/95 backdrop-blur-md px-3 py-2.5 shadow-xs">
+      <div className="flex items-center justify-between gap-2">
         <Link to="/" className="flex shrink-0 items-center" aria-label="Accueil">
-          <Marque />
+          <Marque taille="moyenne" />
         </Link>
 
-        {/* Onglets et recherche forment un bloc centré entre le logo et les
-            actions : collés au logo ils laissaient un vide au milieu de la
-            barre sur les grands écrans. */}
-        <div className="flex min-w-0 flex-1 items-center justify-center gap-4">
-          <nav className="hidden shrink-0 items-center gap-1.5 md:flex">
-            {ONGLETS.slice(0, 3).map((onglet) => (
-              <NavLink
-                key={onglet.vers}
-                to={onglet.vers}
-                end={onglet.exact}
-                className={({ isActive }) =>
-                  fusionner(
-                    "rounded-full px-5 py-2.5 text-[0.95rem] font-semibold transition-colors",
-                    isActive
-                      ? "bg-accent-doux text-[color:var(--color-accent-fort)]"
-                      : "texte-doux hover:surface-douce",
-                  )
-                }
-              >
-                {onglet.libelle}
-              </NavLink>
-            ))}
-          </nav>
-
+        <div className="flex items-center gap-1.5">
           <button
             onClick={() => naviguer("/catalogue?focus=1")}
-            className="surface-douce flex h-12 w-full max-w-md items-center gap-2.5 rounded-full px-5 text-[0.95rem] transition-colors hover:brightness-97"
+            className="surface-douce grid size-9 place-items-center rounded-full transition-colors hover:brightness-95"
             aria-label="Rechercher"
           >
-            <Search className="size-[1.15rem] shrink-0" />
-            <span className="texte-doux hidden truncate sm:inline">
-              Rechercher un produit…
-            </span>
+            <Search className="size-4" />
           </button>
+
+          {connecte && (
+            <Link
+              to="/messages"
+              className="surface-douce grid size-9 place-items-center rounded-full transition-colors hover:brightness-95"
+              aria-label="Mes messages"
+            >
+              <MessageSquare className="size-4" />
+            </Link>
+          )}
+
+          <Cloche />
+
+          {connecte ? (
+            <Link to="/profil" className="shrink-0 pl-1" aria-label="Mon profil">
+              <Avatar nom={utilisateur?.nom_complet ?? "?"} taille={32} />
+            </Link>
+          ) : (
+            <Link
+              to="/connexion"
+              className="degrade-accent shrink-0 rounded-full px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-transform active:scale-95"
+            >
+              Connexion
+            </Link>
+          )}
         </div>
+      </div>
+    </header>
+  );
+}
 
-        <Cloche />
+export function EnTeteGroupeur({ livraison }: { livraison?: boolean } = {}) {
+  const { utilisateur, deconnecter } = useSession();
+  const naviguer = useNavigate();
 
-        {utilisateur?.est_groupeur_valide && (
+  if (livraison) {
+    return (
+      <header className="sticky top-0 z-40 border-b bg-[color:var(--color-marine-950)] px-3 py-2.5 text-white">
+        <div className="flex items-center justify-between gap-2">
+          <Marque variante="blanc" />
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-white/70">
+              {utilisateur?.transporteur === "poste"
+                ? "La Poste"
+                : utilisateur?.transporteur === "gozem"
+                  ? "Gozem"
+                  : "Livraison"}
+            </span>
+            <button
+              onClick={async () => {
+                await deconnecter();
+                naviguer("/");
+              }}
+              className="rounded-full bg-white/10 px-2.5 py-1 text-xs font-semibold hover:bg-white/20"
+            >
+              Quitter
+            </button>
+          </div>
+        </div>
+      </header>
+    );
+  }
+
+  return (
+    <header className="sticky top-0 z-40 border-b bg-[color:var(--color-marine-950)] px-3 py-2.5 text-white">
+      <div className="flex items-center justify-between gap-2">
+        <Link to="/groupeur" className="flex items-center" aria-label="Tableau de bord OAG">
+          <Marque variante="blanc" />
+        </Link>
+        <div className="flex items-center gap-2">
           <Link
-            to="/groupeur"
-            className="hidden items-center gap-1.5 rounded-full bg-[color:var(--color-marine-800)] px-3.5 py-2 text-sm font-semibold text-white transition-transform hover:scale-[1.03] sm:flex"
+            to="/"
+            className="flex items-center gap-1.5 rounded-full bg-amber-400/20 px-2.5 py-1 text-xs font-bold text-amber-300 hover:bg-amber-400/30 transition-colors"
+            aria-label="Mode Acheteur"
           >
-            <LayoutDashboard className="size-4" />
-            Espace groupeur
+            <Store className="size-3.5" />
+            <span>Acheteur</span>
           </Link>
-        )}
-
-        {connecte ? (
-          <Link to="/profil" className="shrink-0" aria-label="Mon profil">
-            <Avatar nom={utilisateur?.nom_complet ?? "?"} taille={36} />
+          <Link to="/groupeur/profil" aria-label="Mon compte OAG">
+            <Avatar nom={utilisateur?.nom_complet ?? "?"} taille={28} />
           </Link>
-        ) : (
-          <Link
-            to="/connexion"
-            className="degrade-accent shrink-0 rounded-full px-4 py-2 text-sm font-semibold text-white transition-transform hover:scale-[1.03]"
-          >
-            Connexion
-          </Link>
-        )}
+        </div>
       </div>
     </header>
   );
 }
 
 export function BarreOnglets() {
-  const { utilisateur } = useSession();
-  const onglets = utilisateur?.est_groupeur_valide
-    ? [...ONGLETS.slice(0, 2),
-       { vers: "/groupeur", libelle: "Groupeur", icone: LayoutDashboard },
-       ...ONGLETS.slice(3)]
-    : ONGLETS;
-
   return (
     <nav
-      className="verre fixed inset-x-0 bottom-0 z-40 border-t md:hidden"
+      className="fixed bottom-0 left-1/2 -translate-x-1/2 z-40 w-full max-w-md border-t border-slate-200/80 bg-white/95 backdrop-blur-md shadow-[0_-4px_16px_rgba(0,0,0,0.06)]"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      <ul className="mx-auto flex max-w-lg">
-        {onglets.map((onglet) => (
+      <ul className="flex h-[var(--hauteur-onglets)] w-full items-center">
+        {ONGLETS.map((onglet) => (
           <li key={onglet.vers} className="flex-1">
             <NavLink
               to={onglet.vers}
               end={onglet.exact}
               className={({ isActive }) =>
                 fusionner(
-                  "relative flex flex-col items-center gap-0.5 py-2.5 text-[0.62rem] font-semibold transition-colors",
-                  isActive ? "text-[color:var(--color-accent)]" : "texte-doux",
+                  "relative flex flex-col items-center justify-center gap-0.5 py-1 text-[0.65rem] font-bold transition-colors",
+                  isActive
+                    ? "text-[color:var(--color-accent,#ff6a00)]"
+                    : "texte-doux hover:text-slate-800",
                 )
               }
             >
               {({ isActive }) => (
                 <>
                   {isActive && (
-                    // Le curseur glisse d'un onglet à l'autre plutôt que de
-                    // sauter : c'est ce qui rend la navigation continue.
                     <motion.span
                       layoutId="curseur-onglets"
-                      className="absolute -top-px h-0.5 w-8 rounded-full bg-[color:var(--color-accent)]"
+                      className="absolute -top-px h-0.5 w-7 rounded-full bg-[color:var(--color-accent,#ff6a00)]"
                       transition={{ type: "spring", stiffness: 420, damping: 34 }}
                     />
                   )}
                   <onglet.icone
-                    className="size-[1.35rem]"
-                    strokeWidth={isActive ? 2.4 : 1.8}
+                    className="size-5"
+                    strokeWidth={isActive ? 2.5 : 1.8}
                   />
-                  {onglet.libelle}
+                  <span>{onglet.libelle}</span>
                 </>
               )}
             </NavLink>

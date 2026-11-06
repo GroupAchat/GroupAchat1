@@ -8,6 +8,7 @@ est tracé avec son auteur.
 
 from __future__ import annotations
 
+from django.db import transaction
 from django.db.models import Count, Q, Sum
 from django.utils import timezone
 from rest_framework import mixins, status, viewsets
@@ -16,19 +17,26 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from groupachat.catalogue.models import Campagne
+from groupachat.catalogue.publication import (
+    AbonnementPublication,
+    PackPublication,
+    rendre_une_publication,
+)
+from groupachat.catalogue.serialiseurs import CampagneDetailSerialiseur
 from groupachat.commandes.models import Participation
 from groupachat.comptes.models import DossierKYC, Reputation, Utilisateur
 from groupachat.comptes.serialiseurs import (
     DecisionKYCSerialiseur,
     DossierKYCSerialiseur,
 )
-from groupachat.echanges.models import Commentaire, Notification
-from groupachat.echanges.serialiseurs import CommentaireSerialiseur
+from groupachat.echanges.models import Message, Notification
+from groupachat.echanges.serialiseurs_contact import MessageSerialiseur
 from groupachat.paiements.models import Decaissement, Sequestre, Transaction
 from groupachat.paiements.services import (
     ErreurPaiement,
     cloturer,
     executer_decaissement,
+    sequestre_de,
 )
 from groupachat.noyau.permissions import EstAdministrateur
 
@@ -142,44 +150,51 @@ class DecaissementAdminVueEnsemble(
 class ModerationVueEnsemble(
     mixins.ListModelMixin, viewsets.GenericViewSet
 ):
-    """/api/admin/commentaires/ — modération du fil."""
+    """/api/admin/messages/ — modération des messages privés signalés.
+
+    **Par défaut, la liste ne montre que ce qui a été signalé.** Les
+    conversations sont privées ; les parcourir sans motif reviendrait à lire
+    le courrier de tout le monde. Un signalement est ce motif, et la vue
+    complète d'un fil reste accessible par son identifiant quand il faut
+    instruire.
+
+    Masquer n'efface pas : un message effacé sans trace empêcherait
+    d'instruire le signalement suivant du même compte.
+    """
 
     permission_classes = [EstAdministrateur]
-    serializer_class = CommentaireSerialiseur
+    serializer_class = MessageSerialiseur
 
     def get_queryset(self):
-        commentaires = Commentaire.objects.select_related("auteur", "campagne")
+        messages = Message.objects.select_related(
+            "auteur", "conversation", "conversation__acheteur",
+            "conversation__groupeur",
+        )
         # Même raison que pour les dossiers : filtrer hors de la liste
         # rendrait « rétablir » impossible, puisqu'un message masqué ne
         # serait plus trouvable par son identifiant.
         if self.action != "list":
-            return commentaires
+            return messages
         if self.request.query_params.get("masques"):
-            return commentaires.filter(masque_le__isnull=False)
-        return commentaires.filter(masque_le__isnull=True)
+            return messages.filter(masque_le__isnull=False)
+        return messages.filter(signale_le__isnull=False, masque_le__isnull=True)
 
     @action(detail=True, methods=["post"])
     def masquer(self, requete, pk=None):
         """Retire un message du fil sans l'effacer."""
-        commentaire = self.get_object()
-        commentaire.masque_le = timezone.now()
-        commentaire.masque_par = requete.user
-        commentaire.motif_masquage = requete.data.get("motif", "")[:200]
-        commentaire.save(
-            update_fields=["masque_le", "masque_par", "motif_masquage"]
-        )
-        return Response({"detail": "Message masqué.", "id": commentaire.id})
+        message = self.get_object()
+        message.masque_le = timezone.now()
+        message.motif_masquage = requete.data.get("motif", "")[:200]
+        message.save(update_fields=["masque_le", "motif_masquage"])
+        return Response({"detail": "Message masqué.", "id": message.id})
 
     @action(detail=True, methods=["post"])
     def retablir(self, requete, pk=None):
-        commentaire = self.get_object()
-        commentaire.masque_le = None
-        commentaire.masque_par = None
-        commentaire.motif_masquage = ""
-        commentaire.save(
-            update_fields=["masque_le", "masque_par", "motif_masquage"]
-        )
-        return Response({"detail": "Message rétabli.", "id": commentaire.id})
+        message = self.get_object()
+        message.masque_le = None
+        message.motif_masquage = ""
+        message.save(update_fields=["masque_le", "motif_masquage"])
+        return Response({"detail": "Message rétabli.", "id": message.id})
 
 
 class CampagneAdminVue(APIView):
@@ -192,6 +207,92 @@ class CampagneAdminVue(APIView):
         if campagne is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
         return Response({"statut": cloturer(campagne)})
+
+
+class VerificationCampagnesVue(APIView):
+    """La file des groupages à relire avant vitrine.
+
+    GET  /api/admin/campagnes/a-verifier/
+    POST /api/admin/campagnes/<id>/verification/ — `decision` et `motif`.
+
+    **Un refus rend la publication consommée.** Elle paie la mise en ligne ;
+    si la plateforme la refuse, la mise en ligne n'a pas eu lieu, et la
+    facturer serait indéfendable. Ce n'est pas le cas d'un groupage qui
+    échoue après coup : celui-là est bien allé en vitrine.
+    """
+
+    permission_classes = [EstAdministrateur]
+
+    def get(self, requete):
+        a_verifier = (
+            Campagne.objects.filter(statut=Campagne.Statut.EN_VERIFICATION)
+            .select_related("produit", "groupeur", "groupeur__points")
+            .prefetch_related("paliers", "medias")
+            .order_by("cree_le")
+        )
+        return Response(
+            CampagneDetailSerialiseur(a_verifier, many=True).data
+        )
+
+    @transaction.atomic
+    def post(self, requete, pk):
+        campagne = Campagne.objects.filter(
+            pk=pk, statut=Campagne.Statut.EN_VERIFICATION
+        ).first()
+        if campagne is None:
+            return Response(
+                {"detail": "Ce groupage n'est pas en vérification."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        decision = requete.data.get("decision")
+        if decision not in ("valider", "refuser"):
+            return Response(
+                {"decision": "Valider ou refuser, il n'y a pas d'autre issue."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if decision == "valider":
+            if campagne.date_limite <= timezone.now():
+                return Response(
+                    {"detail": "La date limite est passée pendant l'examen : "
+                               "l'OAG doit la repousser."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            campagne.statut = Campagne.Statut.EN_COURS
+            campagne.publiee_le = timezone.now()
+            campagne.save(update_fields=["statut", "publiee_le"])
+            sequestre_de(campagne)
+            titre = "Groupage publié"
+            message = f"« {campagne.titre} » est au catalogue."
+        else:
+            motif = (requete.data.get("motif") or "").strip()
+            if not motif:
+                return Response(
+                    {"motif": "Un refus sans motif ne se corrige pas."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            campagne.statut = Campagne.Statut.BROUILLON
+            campagne.motif_annulation = motif
+            campagne.save(update_fields=["statut", "motif_annulation"])
+            rendre_une_publication(campagne.groupeur)
+            titre = "Groupage à corriger"
+            message = (
+                f"« {campagne.titre} » n'est pas passé : {motif} "
+                "Votre publication vous est rendue."
+            )
+
+        Notification.objects.create(
+            destinataire=campagne.groupeur,
+            genre=Notification.Genre.SYSTEME,
+            titre=titre,
+            message=message,
+            campagne=campagne,
+            lien=f"/groupeur/campagnes/{campagne.id}",
+        )
+        return Response(
+            {"statut": campagne.statut, "motif": campagne.motif_annulation}
+        )
 
 
 class TableauDeBordAdminVue(APIView):
@@ -208,6 +309,16 @@ class TableauDeBordAdminVue(APIView):
         detenu = (
             sequestres["consigne"] - sequestres["libere"] - sequestres["rembourse"]
         )
+        commissions = Decaissement.objects.filter(
+            statut=Decaissement.Statut.EXECUTE
+        ).aggregate(total=Sum("frais", default=0))["total"]
+        abonnements = AbonnementPublication.objects.aggregate(
+            total=Sum("montant", default=0)
+        )["total"]
+        packs = PackPublication.objects.aggregate(
+            total=Sum("montant", default=0)
+        )["total"]
+
         return Response(
             {
                 "comptes": {
@@ -222,6 +333,9 @@ class TableauDeBordAdminVue(APIView):
                     ).count(),
                 },
                 "a_traiter": {
+                    "campagnes_a_verifier": Campagne.objects.filter(
+                        statut=Campagne.Statut.EN_VERIFICATION
+                    ).count(),
                     "dossiers_kyc": DossierKYC.objects.filter(
                         statut=DossierKYC.Statut.EN_ATTENTE
                     ).count(),
@@ -241,10 +355,14 @@ class TableauDeBordAdminVue(APIView):
                     "total_libere": sequestres["libere"],
                     "total_rembourse": sequestres["rembourse"],
                 },
+                # Deux sources, et non une seule : la commission sur les
+                # groupages aboutis **et** le droit de publier. Un tableau de
+                # bord qui n'affiche que la commission laisse croire que
+                # l'abonnement ne rapporte rien.
                 "revenus": {
-                    "frais_encaisses": Decaissement.objects.filter(
-                        statut=Decaissement.Statut.EXECUTE
-                    ).aggregate(total=Sum("frais", default=0))["total"],
+                    "frais_encaisses": commissions,
+                    "publications": abonnements + packs,
+                    "total": commissions + abonnements + packs,
                 },
                 "transactions_simulees": Transaction.objects.filter(
                     simulee=True

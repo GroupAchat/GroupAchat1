@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
-"""Sérialiseurs du fil de discussion, des demandes et des notifications."""
+"""Sérialiseurs des demandes communautaires et des notifications."""
 
 from __future__ import annotations
 
 from rest_framework import serializers
 
 from groupachat.echanges.models import (
-    Commentaire,
     DemandeProduit,
     InteretDemande,
     Notification,
@@ -24,47 +23,7 @@ class AuteurSerialiseur(serializers.Serializer):
     nom_affiche = serializers.SerializerMethodField()
 
     def get_nom_affiche(self, utilisateur) -> str:
-        initiale = f"{utilisateur.nom[:1]}." if utilisateur.nom else ""
-        return f"{utilisateur.prenom} {initiale}".strip()
-
-
-class CommentaireSerialiseur(serializers.ModelSerializer):
-    """Un message du fil, avec ses réponses."""
-
-    auteur = AuteurSerialiseur(read_only=True)
-    est_du_groupeur = serializers.BooleanField(read_only=True)
-    reponses = serializers.SerializerMethodField()
-    jaime_par_moi = serializers.SerializerMethodField()
-
-    class Meta:
-        model = Commentaire
-        fields = ["id", "campagne", "auteur", "texte", "reponse_a", "reponses",
-                  "nombre_jaime", "jaime_par_moi", "est_du_groupeur", "cree_le"]
-        read_only_fields = ["nombre_jaime", "campagne"]
-
-    def get_reponses(self, commentaire) -> list:
-        # Un seul niveau : on ne redescend pas dans les réponses des réponses.
-        if commentaire.reponse_a_id is not None:
-            return []
-        visibles = [r for r in commentaire.reponses.all() if r.masque_le is None]
-        return CommentaireSerialiseur(
-            visibles, many=True, context=self.context
-        ).data
-
-    def get_jaime_par_moi(self, commentaire) -> bool:
-        aimes = self.context.get("commentaires_aimes")
-        if aimes is None:
-            return False
-        return commentaire.id in aimes
-
-    def validate_reponse_a(self, parent):
-        if parent is None:
-            return parent
-        if parent.reponse_a_id is not None:
-            raise serializers.ValidationError(
-                "On ne répond pas à une réponse : le fil resterait illisible."
-            )
-        return parent
+        return utilisateur.nom_public
 
 
 class DemandeProduitSerialiseur(serializers.ModelSerializer):

@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { BadgeCheck, Clock, MapPin, Users } from "lucide-react";
+import { BadgeCheck, Clock, Truck, Users } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import type { CampagneResume } from "@commun/api/types";
@@ -34,9 +34,9 @@ export function CarteCampagne({
       className="group surface overflow-hidden rounded-[var(--radius-carte)] transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-black/8"
     >
       <Link to={`/campagnes/${campagne.id}`} className="block">
-        <div className="relative aspect-[4/3] overflow-hidden">
-          <div className="size-full transition-transform duration-500 group-hover:scale-105">
-            <Visuel source={campagne.produit.image} nom={campagne.produit.nom} />
+        <div className="relative aspect-[4/3] overflow-hidden bg-slate-50/80 p-2 flex items-center justify-center">
+          <div className="size-full transition-transform duration-500 group-hover:scale-105 flex items-center justify-center">
+            <Visuel source={campagne.produit.image} nom={campagne.produit.nom} mode="contain" />
           </div>
 
           <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
@@ -99,11 +99,14 @@ export function CarteCampagne({
               <BadgeCheck className="size-4 shrink-0 text-[color:var(--color-accent)]" />
             )}
             <span className="truncate font-medium">
-              {campagne.groupeur.nom_commerce || campagne.groupeur.nom_complet}
+              {campagne.groupeur.nom_utilisateur}
             </span>
+            {/* Plus de lieu imposé : chaque acheteur choisit son bureau de
+                poste ou se fait livrer. Annoncer un dépôt unique faisait
+                renoncer celui qui habitait à l'autre bout de Lomé. */}
             <span className="texte-doux ml-auto flex shrink-0 items-center gap-1">
-              <MapPin className="size-3" />
-              {campagne.point_remise.split(",")[0]}
+              <Truck className="size-3" />
+              Poste ou livraison
             </span>
           </div>
         </div>

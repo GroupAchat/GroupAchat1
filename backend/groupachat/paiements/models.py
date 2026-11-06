@@ -16,6 +16,7 @@ from django.db import models
 from django.utils import timezone
 
 from groupachat.catalogue.models import Campagne
+from groupachat.comptes import grades
 from groupachat.commandes.models import Participation
 
 
@@ -35,7 +36,7 @@ class Sequestre(models.Model):
     class Statut(models.TextChoices):
         OUVERT = "ouvert", "Ouvert, collecte en cours"
         BLOQUE = "bloque", "Bloqué, collecte close"
-        LIBERE = "libere", "Libéré au groupeur"
+        LIBERE = "libere", "Libéré à l'OAG"
         REMBOURSE = "rembourse", "Remboursé aux participants"
 
     campagne = models.OneToOneField(
@@ -138,13 +139,18 @@ class Decaissement(models.Model):
     """Remise des fonds d'une campagne au groupeur.
 
     Un seul décaissement par campagne : le groupeur retire **100 % en une
-    fois**, moins les frais fixes. Les frais sont recopiés ici plutôt que lus
-    dans les réglages à l'affichage, pour qu'un changement de tarif ne
-    réécrive pas l'histoire des retraits déjà faits.
+    fois**, moins la commission de la plateforme.
+
+    **La commission dépend du grade du groupeur** — 3,5 % en Bronze, 2,5 % en
+    Argent, 1,3 % en Or — et le taux appliqué est **figé ici**, comme la
+    tranche de prix l'est à la commande. Un groupeur qui monte en grade entre
+    la collecte et le retrait ne doit pas voir recalculer un décaissement
+    déjà chiffré, et un changement de barème ne doit pas réécrire l'histoire
+    des retraits déjà faits.
     """
 
     class Statut(models.TextChoices):
-        DEMANDE = "demande", "Demandé par le groupeur"
+        DEMANDE = "demande", "Demandé par l'OAG"
         APPROUVE = "approuve", "Approuvé"
         EXECUTE = "execute", "Exécuté"
         REFUSE = "refuse", "Refusé"
@@ -156,8 +162,20 @@ class Decaissement(models.Model):
         verbose_name="campagne",
     )
     montant_brut = models.PositiveIntegerField("montant collecté (FCFA)")
-    frais = models.PositiveIntegerField("frais de plateforme (FCFA)")
+    frais = models.PositiveIntegerField("commission de la plateforme (FCFA)")
     montant_net = models.PositiveIntegerField("montant versé (FCFA)")
+
+    # En centièmes de pour-cent : 350 pour 3,5 %. Les montants sont des
+    # entiers de francs partout, et un décimal ici rouvrirait l'arrondi.
+    taux_commission = models.PositiveIntegerField(
+        "taux appliqué (centièmes de %)", default=350
+    )
+    grade_applique = models.CharField(
+        "grade de l'OAG au moment du calcul",
+        max_length=10,
+        choices=grades.Grade.choices,
+        default=grades.Grade.BRONZE,
+    )
     numero_mobile_money = models.CharField("numéro destinataire", max_length=8)
     operateur = models.CharField("opérateur", max_length=10, choices=Operateur.choices)
 
@@ -186,12 +204,11 @@ class Decaissement(models.Model):
         return f"Décaissement de « {self.campagne.titre} » — {self.montant_net} FCFA"
 
     @staticmethod
-    def calculer(montant_brut: int) -> tuple[int, int]:
-        """Rend (frais, montant net) pour un montant collecté.
+    def calculer(montant_brut: int, taux_centiemes: int) -> tuple[int, int]:
+        """Rend (commission, montant net) pour un montant collecté.
 
-        Si la collecte est inférieure aux frais — cas théorique, mais le
-        calcul ne doit pas rendre de net négatif — les frais sont ramenés au
-        montant disponible.
+        L'arrondi se fait vers le bas, en faveur du groupeur : sur un écart
+        d'un franc, autant que ce soit la plateforme qui le laisse.
         """
-        frais = min(settings.FRAIS_PLATEFORME_FCFA, montant_brut)
+        frais = min(grades.commission_sur(montant_brut, taux_centiemes), montant_brut)
         return frais, montant_brut - frais

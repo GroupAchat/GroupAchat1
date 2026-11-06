@@ -8,14 +8,14 @@ import { api, useRequete } from "@commun/outils/requetes";
 import { EnvoiMedias, mediasPrets, type MediaEnAttente } from "@/composants/EnvoiMedias";
 
 /**
- * Les photos de la marchandise réellement en main, sur la page du groupeur.
+ * Les photos de la marchandise réellement en main, sur la page de l'OAG.
  *
  * Distinctes des photos du produit : celles-là montrent la référence,
  * celles-ci montrent les cartons posés par terre. C'est souvent ce qui
  * décide un acheteur hésitant, parce qu'une photo de son propre stock ne
  * s'emprunte pas à un catalogue.
  *
- * Elles se déposent **ici et pas à la création** : le groupeur lance sa
+ * Elles se déposent **ici et pas à la création** : l'OAG lance sa
  * campagne avant d'avoir la marchandise, et ne peut donc pas la
  * photographier ce jour-là.
  */
@@ -32,7 +32,7 @@ export function PhotosDuLot({ campagneId }: { campagneId: number }) {
   const existantes = donnees?.results ?? [];
   const reste = Math.max(0, MAX_PHOTOS_LOT - existantes.length);
 
-  // Dès qu'un envoi est monté, on l'enregistre : laisser le groupeur appuyer
+  // Dès qu'un envoi est monté, on l'enregistre : laisser l'OAG appuyer
   // sur un bouton « valider » en plus donnerait une photo visible à l'écran
   // mais absente de la fiche, et il n'aurait aucun moyen de s'en rendre
   // compte.

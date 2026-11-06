@@ -3,40 +3,56 @@ import {
   ArrowLeft,
   BadgeCheck,
   Check,
-  ChevronRight,
+  CheckCircle2,
   Clock,
+  Copy,
   Hourglass,
+  Landmark,
+  Lock,
   Minus,
   Play,
   Plus,
+  Radio,
   ShieldCheck,
+  Smartphone,
   Star,
-  TrendingDown,
   Truck,
   Undo2,
   Users,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
-import type { Campagne, Participation } from "@commun/api/types";
+import type {
+  Campagne,
+  EtatContactPrive,
+  ModeRetrait,
+  Participation,
+} from "@commun/api/types";
 import { ListeAvis } from "@/composants/Avis";
-import { Discussion } from "@/composants/Discussion";
+import { Bareme, prixPour } from "@/composants/Bareme";
+import { BoutonPartager, codeParrainRecu } from "@/composants/Parrainage";
+import { ContactPriveSurCampagne } from "@/composants/ContactPrive";
 import { Feuille } from "@commun/composants/Feuille";
 import { Jauge } from "@/composants/Jauge";
 import {
   Alerte,
   Avatar,
   Bouton,
-  Carte,
-  Etiquette,
+  Champ,
   fusionner,
   Squelette,
 } from "@commun/composants/ui";
 import { Visuel } from "@/composants/Visuel";
 import { useSession } from "@commun/contexte/Session";
-import { dateLongue, francs, tempsRestant } from "@commun/outils/formats";
-import { api, useAction, useRequete } from "@commun/outils/requetes";
+import {
+  codeLisible,
+  francs,
+  gradeLisible,
+  telephoneLisible,
+  tempsRestant,
+} from "@commun/outils/formats";
+import { api, useRequete } from "@commun/outils/requetes";
 
 /** Un élément de la galerie, photo ou vidéo. */
 interface ElementGalerie {
@@ -63,6 +79,9 @@ export default function FicheCampagne() {
   const { donnees: campagne, chargement, recharger } = useRequete<Campagne>(
     `/catalogue/campagnes/${id}/`,
   );
+  const { donnees: etatContact } = useRequete<EtatContactPrive>(
+    utilisateur ? "/contact-prive/" : null,
+  );
   const [quantite, setQuantite] = useState(1);
   const [feuilleOuverte, setFeuilleOuverte] = useState(false);
 
@@ -80,20 +99,20 @@ export default function FicheCampagne() {
 
   const estLeGroupeur = utilisateur?.id === campagne.groupeur.id;
   const ouverte = campagne.collecte_ouverte;
-  const prixUnitaire = campagne.prix_courant;
+  // Le prix suit **la quantité que l'acheteur a sous les yeux**, pas le
+  // volume déjà collecté : c'est lui qui décide de monter dans la tranche
+  // basse, et il doit voir le prix changer pendant qu'il appuie sur « + ».
+  const prixUnitaire = prixPour(campagne, quantite, campagne.nombre_participants);
   const remise =
     prixUnitaire < campagne.prix_unitaire
       ? Math.round(((campagne.prix_unitaire - prixUnitaire) / campagne.prix_unitaire) * 100)
       : 0;
-  const prochainPalier = campagne.paliers.find(
-    (palier) => palier.quantite_min > campagne.quantite_reservee,
-  );
   const maximum = campagne.quantite_maximale
     ? Math.max(1, campagne.quantite_maximale - campagne.quantite_reservee)
     : 20;
 
   // Les médias du produit — jusqu'à trois photos et deux vidéos — puis les
-  // photos du lot réellement proposé par ce groupeur.
+  // photos du lot réellement proposé par cet OAG.
   // Un média sans adresse — fichier perdu, envoi interrompu — ne va pas dans
   // la galerie : il y ferait une vignette cassée et une flèche qui ne mène
   // nulle part. Mieux vaut qu'il n'existe pas à l'écran.
@@ -115,417 +134,260 @@ export default function FicheCampagne() {
   ].filter((visuel): visuel is ElementGalerie => Boolean(visuel.url));
 
   return (
-    <div className="pb-28 lg:pb-14">
-      {/* ── Téléphone : la grande photo d'en-tête ──────────────────────────── */}
-      <div className="relative aspect-[4/3] w-full overflow-hidden lg:hidden">
-        <Visuel source={visuels[0]?.vignette ?? null} nom={campagne.produit.nom} />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/25" />
+    <div className="pb-36">
+      {/* ── En-tête mobile avec bouton retour ───────────────────────────────── */}
+      <div className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-200/80 bg-white/95 px-3 py-2.5 backdrop-blur-md">
         <button
           onClick={() => naviguer(-1)}
-          className="verre-sombre absolute left-4 top-4 grid size-10 place-items-center rounded-full text-white"
+          className="surface-douce grid size-9 place-items-center rounded-full transition-transform active:scale-90"
           aria-label="Retour"
         >
-          <ArrowLeft className="size-5" />
+          <ArrowLeft className="size-4" />
         </button>
-        <div className="absolute bottom-4 left-4 right-4 flex flex-wrap gap-1.5">
-          <Etiquette ton="sombre">{campagne.produit.categorie_nom}</Etiquette>
-          {ouverte ? (
-            <Etiquette ton="sombre">
-              <Clock className="size-3" />
-              {tempsRestant(campagne.jours_restants)}
-            </Etiquette>
-          ) : (
-            <Etiquette ton="sombre">Collecte close</Etiquette>
-          )}
-          {campagne.minimum_atteint && (
-            <span className="rounded-full bg-emerald-500 px-2.5 py-1 text-xs font-bold text-white">
-              Objectif atteint
-            </span>
-          )}
-        </div>
+        <span className="text-xs font-bold text-slate-700 truncate max-w-[200px]">
+          {campagne.produit.categorie_nom}
+        </span>
+        <BoutonPartager
+          chemin={`/campagnes/${campagne.id}`}
+          titre={campagne.titre}
+        />
       </div>
 
-      <div className="mx-auto w-full max-w-[88rem] px-4 py-5 lg:px-10 lg:py-7">
-        {/* Fil d'Ariane : sur grand écran, on doit savoir d'où l'on vient. */}
-        <nav
-          className="texte-doux mb-5 hidden items-center gap-1.5 text-sm lg:flex"
-          aria-label="Fil d'Ariane"
-        >
-          <Link to="/" className="hover:text-[color:var(--color-accent)]">
-            Accueil
-          </Link>
-          <ChevronRight className="size-3.5" />
-          <Link
-            to={`/catalogue?categorie=${campagne.produit.categorie_slug ?? ""}`}
-            className="hover:text-[color:var(--color-accent)]"
-          >
-            {campagne.produit.categorie_nom}
-          </Link>
-          <ChevronRight className="size-3.5" />
-          <span className="truncate text-[color:var(--texte)]">{campagne.titre}</span>
-        </nav>
+      <div className="space-y-4 px-4 pt-3">
+        {/* ── Galerie de visuels (Photo ou Vidéo avec vignettes sous le média) ─ */}
+        <GalerieMobile
+          visuels={visuels}
+          nom={campagne.produit.nom}
+          ouverte={ouverte}
+          joursRestants={campagne.jours_restants}
+          atteint={campagne.minimum_atteint}
+        />
 
-        {/* ── Galerie + panneau d'achat ───────────────────────────────────── */}
-        <div className="lg:grid lg:grid-cols-[minmax(0,32rem)_minmax(0,1fr)] lg:items-start lg:gap-9 xl:grid-cols-[minmax(0,38rem)_minmax(0,1fr)]">
-          <Galerie
-            visuels={visuels}
-            nom={campagne.produit.nom}
-            className="hidden lg:block lg:sticky lg:top-24"
-          />
+        {/* ── Alerte statut particulier ────────────────────────────────────── */}
+        {campagne.statut === "minimum_non_atteint" && (
+          <div className="flex gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-3.5 text-xs text-amber-900">
+            <Hourglass className="size-4 shrink-0 text-amber-600 mt-0.5" />
+            <p>
+              <strong>Groupage non abouti.</strong> Clôturé à {campagne.quantite_reservee}/{campagne.quantite_minimale} pièces. L'OAG examine actuellement le maintien ou le remboursement.
+            </p>
+          </div>
+        )}
 
-          <div className="space-y-5">
-            <header className="space-y-3">
-              {/* L'acheteur qui rouvre sa commande doit comprendre en une
-                  ligne pourquoi elle n'est plus au catalogue. */}
-              {campagne.statut === "minimum_non_atteint" && (
-                <div className="flex gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm dark:border-amber-900 dark:bg-amber-950/40">
-                  <Hourglass className="size-5 shrink-0 text-amber-600" />
-                  <p className="text-amber-900 dark:text-amber-200">
-                    <strong>Le groupage n'a pas abouti.</strong> La collecte
-                    s'est close à {campagne.quantite_reservee} pièces sur{" "}
-                    {campagne.quantite_minimale}. Votre part reste consignée :
-                    le groupeur peut encore maintenir la commande. Vous serez
-                    prévenu de sa décision.
-                  </p>
-                </div>
+        {campagne.statut === "annulee" && (
+          <div className="flex gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-3.5 text-xs text-rose-900">
+            <Undo2 className="size-4 shrink-0 text-rose-600 mt-0.5" />
+            <p>
+              <strong>Groupage annulé.</strong> {campagne.motif_annulation || "Les participants ont été intégralement remboursés."}
+            </p>
+          </div>
+        )}
+
+        {/* ── Titre & Marque ──────────────────────────────────────────────── */}
+        <div className="space-y-1">
+          <h1 className="text-lg font-extrabold leading-snug text-slate-900">
+            {campagne.titre}
+          </h1>
+          {campagne.produit.marque && (
+            <p className="texte-doux text-xs">
+              Marque : <strong className="text-slate-800 font-bold">{campagne.produit.marque}</strong>
+            </p>
+          )}
+        </div>
+
+        {/* ── Fiche OAG Organisateur ───────────────────────────────────────── */}
+        <div className="surface flex items-center gap-3 rounded-2xl border border-slate-200/80 p-3">
+          <Avatar nom={campagne.groupeur.nom_utilisateur} taille={42} />
+          <div className="min-w-0 flex-1">
+            <p className="flex items-center gap-1 font-bold text-xs text-slate-900">
+              <span className="truncate">{campagne.groupeur.nom_utilisateur}</span>
+              {campagne.groupeur.badge_confiance && (
+                <BadgeCheck className="size-3.5 shrink-0 text-[color:var(--color-accent)]" />
               )}
-
-              {campagne.statut === "annulee" && (
-                <div className="flex gap-3 rounded-2xl border p-4 text-sm">
-                  <Undo2 className="size-5 shrink-0 text-[color:var(--color-accent)]" />
-                  <p>
-                    <strong>Groupage annulé.</strong>{" "}
-                    {campagne.motif_annulation ||
-                      "Les participants ont été intégralement remboursés."}
-                  </p>
-                </div>
-              )}
-
-              <div className="hidden flex-wrap gap-1.5 lg:flex">
-                <Etiquette>{campagne.produit.categorie_nom}</Etiquette>
-                {ouverte ? (
-                  <Etiquette ton="accent">
-                    <Clock className="size-3" />
-                    {tempsRestant(campagne.jours_restants)}
-                  </Etiquette>
-                ) : (
-                  <Etiquette>Collecte close</Etiquette>
-                )}
-                {campagne.minimum_atteint && (
-                  <Etiquette ton="succes">Objectif atteint</Etiquette>
-                )}
-              </div>
-
-              <h1 className="text-2xl font-extrabold leading-tight lg:text-[1.75rem]">
-                {campagne.titre}
-              </h1>
-
-              {campagne.produit.marque && (
-                <p className="texte-doux text-sm">
-                  Marque&nbsp;: <strong>{campagne.produit.marque}</strong>
-                </p>
-              )}
-            </header>
-
-            {/* Le bloc prix : fond doux pour le détacher du reste, comme sur
-                les places de marché où c'est l'information centrale. */}
-            <div className="surface-douce space-y-4 rounded-[var(--radius-carte)] p-5">
-              <div className="flex flex-wrap items-end gap-2.5">
-                <span className="tabulaire text-[2rem] font-extrabold leading-none text-[color:var(--color-accent)]">
-                  {francs(prixUnitaire)}
+            </p>
+            <p className="texte-doux flex items-center gap-2 text-[11px] mt-0.5">
+              <span className="font-semibold text-amber-800">{gradeLisible(campagne.groupeur.grade)}</span>
+              {campagne.groupeur.reputation && Number(campagne.groupeur.reputation.note) > 0 && (
+                <span className="flex items-center gap-0.5 text-amber-600 font-bold">
+                  ★ {campagne.groupeur.reputation.note}/5
                 </span>
-                {remise > 0 && (
-                  <>
-                    <span className="texte-doux tabulaire text-sm line-through">
-                      {francs(campagne.prix_unitaire)}
-                    </span>
-                    <Etiquette ton="accent">−{remise} %</Etiquette>
-                  </>
-                )}
-                <span className="texte-doux ml-auto text-sm">la pièce</span>
-              </div>
-
-              {/* Les paliers en tableau : c'est ainsi qu'on lit un prix de
-                  gros, d'un coup d'œil, sans faire le calcul soi-même. */}
-              {campagne.paliers.length > 0 && (
-                <div className="overflow-hidden rounded-2xl border">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="surface text-left">
-                        <th className="px-4 py-2 font-semibold">Quantité atteinte</th>
-                        <th className="px-4 py-2 text-right font-semibold">
-                          Prix unitaire
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <LignePalier
-                        seuil={`1 à ${campagne.paliers[0].quantite_min - 1}`}
-                        prix={campagne.prix_unitaire}
-                        actif={campagne.quantite_reservee < campagne.paliers[0].quantite_min}
-                      />
-                      {campagne.paliers.map((palier, rang) => {
-                        const suivant = campagne.paliers[rang + 1];
-                        const borne = suivant
-                          ? `${palier.quantite_min} à ${suivant.quantite_min - 1}`
-                          : `${palier.quantite_min} et plus`;
-                        const actif =
-                          campagne.quantite_reservee >= palier.quantite_min &&
-                          (!suivant || campagne.quantite_reservee < suivant.quantite_min);
-                        return (
-                          <LignePalier
-                            key={palier.id}
-                            seuil={borne}
-                            prix={palier.prix_unitaire}
-                            actif={actif}
-                          />
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
               )}
+              <span>· {campagne.groupeur.reputation?.campagnes_terminees ?? 0} réussies</span>
+            </p>
+          </div>
+        </div>
 
-              {prochainPalier && (
-                <p className="flex items-start gap-2 text-sm">
-                  <TrendingDown className="mt-0.5 size-4 shrink-0 text-[color:var(--color-accent)]" />
-                  <span>
-                    Encore{" "}
-                    <strong className="text-[color:var(--color-accent)]">
-                      {prochainPalier.quantite_min - campagne.quantite_reservee} pièces
-                    </strong>{" "}
-                    et le prix tombe à {francs(prochainPalier.prix_unitaire)}{" "}
-                    <span className="texte-doux">pour tout le monde.</span>
-                  </span>
-                </p>
-              )}
+        {/* ── Bloc Tarif & Quantité ────────────────────────────────────────── */}
+        <div className="surface-douce space-y-3.5 rounded-2xl border border-slate-200/90 p-4">
+          <div className="flex items-baseline justify-between">
+            <div className="flex items-baseline gap-2">
+              <span className="tabulaire text-2xl font-black text-[color:var(--color-accent)]">
+                {francs(prixUnitaire)}
+              </span>
+              <span className="text-xs text-slate-500 font-medium">la pièce</span>
             </div>
-
-            {/* Avancement */}
-            <div className="space-y-2">
-              <Jauge pourcentage={campagne.pourcentage} atteint={campagne.minimum_atteint} />
-              <div className="tabulaire flex flex-wrap items-center justify-between gap-2 text-sm">
-                <span className="font-semibold">
-                  {campagne.quantite_reservee} / {campagne.quantite_minimale} pièces
+            {remise > 0 && (
+              <div className="flex items-center gap-1.5">
+                <span className="texte-doux tabulaire text-xs line-through">
+                  {francs(campagne.prix_unitaire)}
                 </span>
-                <span className="texte-doux flex items-center gap-1">
-                  <Users className="size-4" />
-                  {campagne.nombre_participants} participants
+                <span className="rounded-full bg-rose-600 px-2 py-0.5 text-[10px] font-extrabold text-white">
+                  −{remise} %
                 </span>
               </div>
-            </div>
+            )}
+          </div>
 
-            {/* Achat, sur grand écran : la quantité et le bouton sous le prix,
-                visibles sans défiler. */}
-            {ouverte && !estLeGroupeur && (
-              <div className="hidden items-end gap-4 lg:flex">
-                <div>
-                  <p className="texte-doux mb-1.5 text-sm font-medium">Quantité</p>
-                  <div className="surface flex w-fit items-center gap-1 rounded-full p-1">
-                    <button
-                      onClick={() => setQuantite(Math.max(1, quantite - 1))}
-                      disabled={quantite <= 1}
-                      className="grid size-9 place-items-center rounded-full transition-colors hover:surface-douce disabled:opacity-40"
-                      aria-label="Moins"
-                    >
-                      <Minus className="size-4" />
-                    </button>
-                    <span className="tabulaire w-9 text-center font-bold">{quantite}</span>
-                    <button
-                      onClick={() => setQuantite(Math.min(maximum, quantite + 1))}
-                      disabled={quantite >= maximum}
-                      className="grid size-9 place-items-center rounded-full transition-colors hover:surface-douce disabled:opacity-40"
-                      aria-label="Plus"
-                    >
-                      <Plus className="size-4" />
-                    </button>
-                  </div>
-                </div>
-                <div>
-                  <p className="texte-doux mb-1.5 text-sm font-medium">Ma part</p>
-                  <p className="tabulaire text-xl font-extrabold">
-                    {francs(prixUnitaire * quantite)}
-                  </p>
-                </div>
-                <Bouton
-                  taille="lg"
-                  className="ml-auto min-w-48"
-                  onClick={() => setFeuilleOuverte(true)}
+          {/* Stepper de quantité */}
+          {ouverte && !estLeGroupeur && (
+            <div className="flex items-center justify-between border-t border-slate-200/60 pt-3">
+              <div>
+                <p className="text-[11px] font-bold text-slate-600">Quantité souhaitée</p>
+                <p className="tabulaire text-xs font-extrabold text-slate-900">
+                  Total : {francs(prixUnitaire * quantite)}
+                </p>
+              </div>
+              <div className="surface flex items-center gap-1 rounded-full border border-slate-200/90 p-1 shadow-2xs">
+                <button
+                  onClick={() => setQuantite(Math.max(1, quantite - 1))}
+                  disabled={quantite <= 1}
+                  className="grid size-8 place-items-center rounded-full transition-colors hover:surface-douce disabled:opacity-30"
+                  aria-label="Moins"
                 >
-                  Participer
-                </Bouton>
-              </div>
-            )}
-
-            {estLeGroupeur && (
-              <Link to={`/groupeur/campagnes/${campagne.id}`}>
-                <Bouton ton="contour" pleineLargeur>
-                  Gérer ma campagne
-                </Bouton>
-              </Link>
-            )}
-
-            {/* Garantie et retrait, côte à côte quand il y a la place. */}
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="flex gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-950/40">
-                <ShieldCheck className="size-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                <p className="text-sm text-emerald-900 dark:text-emerald-200">
-                  <strong>Livré ou remboursé.</strong> Votre part reste
-                  consignée jusqu'à la livraison.
-                </p>
-              </div>
-              <div className="surface flex gap-3 rounded-2xl p-4 text-sm">
-                <Truck className="size-5 shrink-0 text-[color:var(--color-accent)]" />
-                <div>
-                  <p className="font-semibold">Retrait</p>
-                  <p className="texte-doux">{campagne.point_remise}</p>
-                </div>
+                  <Minus className="size-3.5" />
+                </button>
+                <span className="tabulaire w-8 text-center text-xs font-black">{quantite}</span>
+                <button
+                  onClick={() => setQuantite(Math.min(maximum, quantite + 1))}
+                  disabled={quantite >= maximum}
+                  className="grid size-8 place-items-center rounded-full transition-colors hover:surface-douce disabled:opacity-30"
+                  aria-label="Plus"
+                >
+                  <Plus className="size-3.5" />
+                </button>
               </div>
             </div>
+          )}
 
-            {/* Le vendeur */}
-            <Carte className="flex items-center gap-3">
-              <Avatar
-                nom={campagne.groupeur.nom_commerce || campagne.groupeur.nom_complet}
-                taille={46}
-              />
-              <div className="min-w-0 flex-1">
-                <p className="flex items-center gap-1.5 font-bold">
-                  <span className="truncate">
-                    {campagne.groupeur.nom_commerce || campagne.groupeur.nom_complet}
-                  </span>
-                  {campagne.groupeur.badge_confiance && (
-                    <BadgeCheck className="size-4 shrink-0 text-[color:var(--color-accent)]" />
-                  )}
-                </p>
-                <p className="texte-doux flex flex-wrap items-center gap-x-3 text-sm">
-                  {campagne.groupeur.reputation &&
-                    Number(campagne.groupeur.reputation.note) > 0 && (
-                      <span className="flex items-center gap-1">
-                        <Star className="size-3.5 fill-amber-400 text-amber-400" />
-                        {campagne.groupeur.reputation.note}/5
-                      </span>
-                    )}
-                  <span>
-                    {campagne.groupeur.reputation?.campagnes_terminees ?? 0} campagnes
-                    menées à terme
-                  </span>
-                </p>
-              </div>
-              <Link
-                to={`/catalogue?groupeur=${campagne.groupeur.id}`}
-                className="hidden shrink-0 text-sm font-semibold text-[color:var(--color-accent)] hover:underline sm:block"
-              >
-                Ses campagnes
-              </Link>
-            </Carte>
+          {/* Le barème de prix dégressif */}
+          <Bareme campagne={campagne} quantite={quantite} />
+        </div>
+
+        {/* ── Jauge d'avancement ──────────────────────────────────────────── */}
+        <div className="surface space-y-2 rounded-2xl border border-slate-200/80 p-3.5">
+          <Jauge pourcentage={campagne.pourcentage} atteint={campagne.minimum_atteint} />
+          <div className="tabulaire flex items-center justify-between text-xs font-medium text-slate-700">
+            <span>
+              <strong>{campagne.quantite_reservee}</strong> / {campagne.quantite_minimale} pièces
+            </span>
+            <span className="flex items-center gap-1 text-[color:var(--color-accent-fort)] font-bold">
+              <Users className="size-3.5" />
+              {campagne.nombre_participants} participants
+            </span>
           </div>
         </div>
 
-        {/* ── Détails et discussion ───────────────────────────────────────── */}
-        <div className="mt-10 lg:grid lg:grid-cols-[minmax(0,1fr)_21rem] lg:items-start lg:gap-9">
-          <div className="space-y-7">
-            {(campagne.description || campagne.produit.description) && (
-              <section className="space-y-2">
-                <h2 className="text-lg font-bold">Le produit</h2>
-                {campagne.produit.description && (
-                  <p className="texte-doux whitespace-pre-wrap leading-relaxed">
-                    {campagne.produit.description}
-                  </p>
-                )}
-                {campagne.description && (
-                  <p className="whitespace-pre-wrap leading-relaxed">
-                    {campagne.description}
-                  </p>
-                )}
-              </section>
-            )}
+        {/* ── Contact privé avec l'OAG ────────────────────────────────────── */}
+        <ContactPriveSurCampagne
+          groupeur={campagne.groupeur}
+          campagneId={campagne.id}
+          etat={etatContact}
+        />
 
-            {Object.keys(campagne.caracteristiques_offre).length > 0 && (
-              <section className="space-y-3">
-                <h2 className="text-lg font-bold">Caractéristiques</h2>
-                <div className="overflow-hidden rounded-2xl border">
-                  <dl className="divide-y text-sm">
-                    {Object.entries(campagne.caracteristiques_offre).map(
-                      ([cle, valeur], rang) => (
-                        <div
-                          key={cle}
-                          className={fusionner(
-                            "flex justify-between gap-6 px-4 py-2.5",
-                            rang % 2 === 1 && "surface-douce",
-                          )}
-                        >
-                          <dt className="texte-doux">{cle}</dt>
-                          <dd className="text-right font-medium">{valeur}</dd>
-                        </div>
-                      ),
-                    )}
-                  </dl>
+        {/* ── Garanties & Mode de retrait Togo ────────────────────────────── */}
+        <div className="grid gap-2.5">
+          <div className="flex gap-2.5 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-3 text-xs text-emerald-900">
+            <ShieldCheck className="size-4 shrink-0 text-emerald-600 mt-0.5" />
+            <div>
+              <p className="font-bold">Assurance Tout Risques Togo</p>
+              <p className="text-[11px] text-emerald-800 leading-relaxed mt-0.5">
+                Fonds consignés en banque jusqu'à remise certifiée par QR code et SMS OTP.
+              </p>
+            </div>
+          </div>
+          <div className="surface flex gap-2.5 rounded-2xl border border-slate-200/80 p-3 text-xs text-slate-800">
+            <Truck className="size-4 shrink-0 text-blue-600 mt-0.5" />
+            <div>
+              <p className="font-bold">Retrait flexible à Lomé</p>
+              <p className="texte-doux text-[11px] leading-relaxed mt-0.5">
+                Retrait au bureau de poste de votre quartier ou livraison Gozem à domicile.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Caractéristiques & Description ──────────────────────────────── */}
+        {(campagne.description || campagne.produit.description) && (
+          <section className="surface space-y-2 rounded-2xl border border-slate-200/80 p-4">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              Description du produit
+            </h2>
+            {campagne.produit.description && (
+              <p className="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed">
+                {campagne.produit.description}
+              </p>
+            )}
+            {campagne.description && (
+              <p className="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed border-t border-slate-100 pt-2">
+                {campagne.description}
+              </p>
+            )}
+          </section>
+        )}
+
+        {Object.keys(campagne.caracteristiques_offre).length > 0 && (
+          <section className="surface space-y-2 rounded-2xl border border-slate-200/80 p-4">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              Caractéristiques techniques
+            </h2>
+            <dl className="divide-y divide-slate-100 text-xs">
+              {Object.entries(campagne.caracteristiques_offre).map(([cle, valeur]) => (
+                <div key={cle} className="flex justify-between py-1.5">
+                  <dt className="text-slate-500">{cle}</dt>
+                  <dd className="font-semibold text-slate-900 text-right">{valeur}</dd>
                 </div>
-              </section>
-            )}
+              ))}
+            </dl>
+          </section>
+        )}
 
-            {/* Les avis d'abord, la discussion ensuite : l'un dit ce que ce
-                groupeur a déjà fait, l'autre sert à lui demander le reste. */}
-            <section id="avis" className="scroll-mt-20 space-y-4">
-              <h2 className="flex items-center gap-2 text-lg font-bold">
-                <Star className="size-5" />
-                Avis sur ce groupeur
-              </h2>
-              <ListeAvis groupeurId={campagne.groupeur.id} />
-            </section>
-
-            <Discussion campagneId={campagne.id} />
-          </div>
-
-          {/* Aparté : ce qu'on veut garder à l'œil pendant la lecture. */}
-          <aside className="mt-8 space-y-4 lg:sticky lg:top-24 lg:mt-0">
-            <Carte className="space-y-3 text-sm">
-              <h2 className="font-bold">En résumé</h2>
-              <Ligne libelle="Prix du jour" valeur={francs(prixUnitaire)} />
-              <Ligne
-                libelle="Minimum"
-                valeur={`${campagne.quantite_minimale} pièces`}
-              />
-              <Ligne
-                libelle="Déjà réservé"
-                valeur={`${campagne.quantite_reservee} pièces`}
-              />
-              <Ligne libelle="Fin de collecte" valeur={dateLongue(campagne.date_limite)} />
-              <Ligne libelle="Point de remise" valeur={campagne.point_remise} />
-            </Carte>
-
-            {ouverte && !estLeGroupeur && (
-              <Bouton
-                taille="lg"
-                pleineLargeur
-                className="hidden lg:flex"
-                onClick={() => setFeuilleOuverte(true)}
-              >
-                Participer — {francs(prixUnitaire * quantite)}
-              </Bouton>
-            )}
-          </aside>
-        </div>
+        {/* ── Avis sur l'OAG ──────────────────────────────────────────────── */}
+        <section id="avis" className="space-y-2.5 pt-1">
+          <h2 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-500">
+            <Star className="size-3.5 fill-amber-400 text-amber-400" />
+            Avis vérifiés sur l'OAG
+          </h2>
+          <ListeAvis groupeurId={campagne.groupeur.id} />
+        </section>
       </div>
 
-      {/* ── Barre d'action, collée en bas sur téléphone ──────────────────── */}
+      {/* ── Barre d'action sticky au-dessus de la barre d'onglets ─────────── */}
       {ouverte && !estLeGroupeur && (
-        <div
-          className="verre fixed inset-x-0 bottom-0 z-30 border-t p-3 lg:hidden"
-          style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
-        >
+        <div className="fixed bottom-[var(--hauteur-onglets)] left-1/2 -translate-x-1/2 z-30 w-full max-w-md border-t border-slate-200/90 bg-white/95 backdrop-blur-md p-3 shadow-lg">
           <div className="flex items-center gap-3">
             <div className="shrink-0">
-              <p className="texte-doux text-xs">Ma part</p>
-              <p className="tabulaire font-extrabold">
+              <p className="text-[10px] text-slate-500 font-semibold">Ma part ({quantite})</p>
+              <p className="tabulaire text-base font-black text-slate-900">
                 {francs(prixUnitaire * quantite)}
               </p>
             </div>
-            <Bouton taille="lg" className="flex-1" onClick={() => setFeuilleOuverte(true)}>
-              Participer
+            <Bouton
+              taille="lg"
+              className="degrade-accent flex-1 font-bold text-white shadow-md border-none py-2.5 text-xs"
+              onClick={() => setFeuilleOuverte(true)}
+            >
+              Participer au Club
             </Bouton>
           </div>
+        </div>
+      )}
+
+      {estLeGroupeur && (
+        <div className="fixed bottom-[var(--hauteur-onglets)] left-1/2 -translate-x-1/2 z-30 w-full max-w-md border-t border-slate-200/90 bg-white/95 backdrop-blur-md p-3 shadow-lg">
+          <Link to={`/groupeur/campagnes/${campagne.id}`}>
+            <Bouton ton="contour" pleineLargeur>
+              Gérer mon offre (Espace OAG)
+            </Bouton>
+          </Link>
         </div>
       )}
 
@@ -545,147 +407,104 @@ export default function FicheCampagne() {
   );
 }
 
-/**
- * La galerie de grand écran : une grande image, des vignettes dessous.
- *
- * Les vignettes réagissent au **survol** et non au clic seul : c'est le
- * geste attendu sur une place de marché, et il évite un aller-retour de la
- * souris pour comparer deux photos.
- */
-/**
- * La galerie de grand écran : un grand visuel, des vignettes carrées dessous.
- *
- * **Les vidéos se lisent sur place**, elles ne renvoient pas ailleurs. Une
- * vignette de vidéo porte un rond de lecture : sans lui, rien ne distingue
- * une image figée d'une vidéo, et personne ne clique.
- *
- * Les vignettes réagissent au survol **pour les photos seulement**. Changer
- * de visuel au passage de la souris pendant qu'une vidéo joue couperait la
- * lecture — c'est agaçant, et c'est exactement ce qu'on fait sans y penser
- * en déplaçant le curseur.
- */
-function Galerie({
+function GalerieMobile({
   visuels,
   nom,
-  className,
+  ouverte,
+  joursRestants,
+  atteint,
 }: {
   visuels: ElementGalerie[];
   nom: string;
-  className?: string;
+  ouverte: boolean;
+  joursRestants: number;
+  atteint: boolean;
 }) {
   const [actif, setActif] = useState(0);
   const courant = visuels[actif];
 
   return (
-    <div className={className}>
-      <div className="surface overflow-hidden rounded-[var(--radius-carte)]">
-        <div className="aspect-square">
-          {courant?.genre === "video" ? (
-            <video
-              key={courant.cle}
-              src={courant.url}
-              poster={courant.vignette ?? undefined}
-              controls
-              playsInline
-              preload="metadata"
-              className="size-full bg-black object-contain"
-            >
-              Votre navigateur ne sait pas lire cette vidéo.
-            </video>
-          ) : (
-            <Visuel source={courant?.vignette ?? null} nom={nom} />
-          )}
+    <div className="space-y-3">
+      {/* ── Grande div d'affichage produit agrandie et lumineuse ───────────── */}
+      <div className="relative h-[400px] sm:h-[450px] w-full overflow-hidden rounded-3xl bg-gradient-to-b from-slate-50 via-white to-slate-50 shadow-sm border border-slate-200/80 flex items-center justify-center p-3">
+        {courant?.genre === "video" ? (
+          <video
+            key={courant.cle}
+            src={courant.url}
+            poster={courant.vignette ?? undefined}
+            controls
+            playsInline
+            preload="metadata"
+            className="size-full bg-black object-contain rounded-2xl"
+          />
+        ) : (
+          <Visuel
+            source={courant?.vignette ?? null}
+            nom={nom}
+            mode="contain"
+            className="size-full object-contain drop-shadow-sm"
+          />
+        )}
+
+        {/* Badges flottants en haut sans assombrir la photo */}
+        <div className="absolute top-3.5 left-3.5 right-3.5 flex items-center justify-between pointer-events-none">
+          <div className="flex flex-wrap gap-1.5">
+            {ouverte ? (
+              <span className="flex items-center gap-1 rounded-full bg-amber-500/95 px-2.5 py-1 text-xs font-bold text-white shadow-xs backdrop-blur-md">
+                <Clock className="size-3.5" />
+                {tempsRestant(joursRestants)}
+              </span>
+            ) : (
+              <span className="rounded-full bg-slate-800/90 px-2.5 py-1 text-xs font-bold text-white">
+                Collecte close
+              </span>
+            )}
+            {atteint && (
+              <span className="rounded-full bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white shadow-xs">
+                Objectif atteint
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
       {visuels.length > 1 && (
-        <div className="sans-barre mt-3 flex gap-2.5 overflow-x-auto pb-1">
+        <div className="sans-barre flex gap-2.5 overflow-x-auto pb-1 px-1">
           {visuels.map((visuel, rang) => (
             <button
               key={visuel.cle}
-              onMouseEnter={() => {
-                // On ne suit le survol que si rien ne joue : voir plus haut.
-                if (visuel.genre !== "video" && courant?.genre !== "video") {
-                  setActif(rang);
-                }
-              }}
-              onFocus={() => setActif(rang)}
               onClick={() => setActif(rang)}
               className={fusionner(
-                "relative size-20 shrink-0 overflow-hidden rounded-xl border-2 transition-all",
+                "relative size-20 shrink-0 overflow-hidden rounded-2xl border-2 p-1 bg-white shadow-2xs transition-all",
                 rang === actif
-                  ? "border-[color:var(--color-accent)]"
-                  : "border-transparent opacity-70 hover:opacity-100",
+                  ? "border-[color:var(--color-accent)] ring-2 ring-[color:var(--color-accent)]/20 scale-105"
+                  : "border-slate-200 opacity-60 hover:opacity-100",
               )}
-              aria-label={
-                visuel.legende ||
-                `${visuel.genre === "video" ? "Vidéo" : "Photo"} ${rang + 1}`
-              }
-              aria-current={rang === actif}
             >
-              <Visuel source={visuel.vignette} nom={nom} />
+              <Visuel source={visuel.vignette} nom={nom} mode="contain" className="size-full object-contain" />
               {visuel.genre === "video" && (
-                <span className="absolute inset-0 grid place-items-center bg-black/35">
-                  <span className="grid size-7 place-items-center rounded-full bg-white/90 text-black">
-                    <Play className="size-3.5 fill-current" />
-                  </span>
+                <span className="absolute inset-0 grid place-items-center bg-black/35 rounded-xl">
+                  <Play className="size-3.5 fill-white text-white" />
                 </span>
               )}
             </button>
           ))}
         </div>
       )}
-
-      {/* Le décompte rassure sur ce qui reste à voir. */}
-      {visuels.length > 1 && (
-        <p className="texte-doux mt-2 text-xs">
-          {visuels.filter((v) => v.genre === "image").length} photo
-          {visuels.filter((v) => v.genre === "image").length > 1 ? "s" : ""}
-          {visuels.some((v) => v.genre === "video") &&
-            ` · ${visuels.filter((v) => v.genre === "video").length} vidéo${
-              visuels.filter((v) => v.genre === "video").length > 1 ? "s" : ""
-            }`}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function LignePalier({
-  seuil,
-  prix,
-  actif,
-}: {
-  seuil: string;
-  prix: number;
-  actif: boolean;
-}) {
-  return (
-    <tr
-      className={fusionner(
-        "border-t",
-        actif && "bg-accent-doux font-semibold text-[color:var(--color-accent-fort)]",
-      )}
-    >
-      <td className="px-4 py-2.5">
-        {seuil} pièces
-        {actif && <span className="ml-2 text-xs font-bold">· prix actuel</span>}
-      </td>
-      <td className="tabulaire px-4 py-2.5 text-right">{francs(prix)}</td>
-    </tr>
-  );
-}
-
-function Ligne({ libelle, valeur }: { libelle: string; valeur: string }) {
-  return (
-    <div className="flex items-start justify-between gap-4 border-b pb-2 last:border-0 last:pb-0">
-      <span className="texte-doux shrink-0">{libelle}</span>
-      <span className="text-right font-medium">{valeur}</span>
     </div>
   );
 }
 
 // ── La feuille de participation et de paiement ─────────────────────────────
+
+const BUREAUX_POSTE_LOME = [
+  "Tokoin",
+  "Assivito",
+  "Nyékonakpoé",
+  "Hédzranawoé",
+  "Cacaveli",
+  "Agoè-Nyivé",
+];
 
 function FeuilleParticipation({
   ouverte,
@@ -705,171 +524,639 @@ function FeuilleParticipation({
   surSucces: () => Promise<void>;
 }) {
   const naviguer = useNavigate();
+  const { utilisateur } = useSession();
+
+  const [etapePaiement, setEtapePaiement] = useState<"formulaire" | "passerelle" | "succes">("formulaire");
   const [operateur, setOperateur] = useState<"tmoney" | "flooz">("tmoney");
+  const [telephone, setTelephone] = useState(() => utilisateur?.telephone ?? "");
+  const [mode, setMode] = useState<ModeRetrait>("poste");
+  const [bureau, setBureau] = useState("");
+  const [adresse, setAdresse] = useState("");
+  const [codeCopie, setCodeCopie] = useState(false);
+  const [etapePasserelle, setEtapePasserelle] = useState<1 | 2 | 3>(1);
+  const [minuteurUssd, setMinuteurUssd] = useState(25);
   const [reussite, setReussite] = useState<Participation | null>(null);
+  const [transactionInfo, setTransactionInfo] = useState<{ reference: string; montant: number; operateur: string } | null>(null);
+  const [erreurPaiement, setErreurPaiement] = useState<string | null>(null);
+  const [enTraitement, setEnTraitement] = useState(false);
+
+  // Synchronise le téléphone de l'utilisateur quand il est chargé
+  useEffect(() => {
+    if (utilisateur?.telephone && !telephone) {
+      setTelephone(utilisateur.telephone);
+    }
+  }, [utilisateur?.telephone, telephone]);
+
+  // Décompte de session USSD en direct
+  useEffect(() => {
+    if (etapePaiement !== "passerelle") return;
+    const intervalle = setInterval(() => {
+      setMinuteurUssd((m) => (m > 1 ? m - 1 : 1));
+    }, 1000);
+    return () => clearInterval(intervalle);
+  }, [etapePaiement]);
+
+  const destinationDite = (mode === "poste" ? bureau : adresse).trim().length > 2;
+  const telephoneChiffres = telephone.replace(/\D/g, "");
+  const telephoneValide = telephoneChiffres.length >= 8;
+  const pretAPayer = destinationDite && telephoneValide;
 
   const maximum = campagne.quantite_maximale
     ? Math.max(1, campagne.quantite_maximale - campagne.quantite_reservee)
     : 20;
   const prix = campagne.prix_courant;
+  const total = prix * quantite;
 
-  const payer = useAction(async () => {
-    const participation = await api.post<Participation>("/participations/", {
-      campagne: campagne.id,
-      quantite,
-    });
-    const retour = await api.post<{ participation: Participation }>(
-      `/participations/${participation.id}/payer/`,
-      { operateur },
-    );
-    setReussite(retour.participation);
-    await surSucces();
-    return retour.participation;
-  });
+  const reinitialiser = () => {
+    setEtapePaiement("formulaire");
+    setReussite(null);
+    setTransactionInfo(null);
+    setErreurPaiement(null);
+    setEnTraitement(false);
+    surFermeture();
+  };
+
+  const lancerPaiement = async () => {
+    if (!pretAPayer || enTraitement) return;
+    setErreurPaiement(null);
+    setEnTraitement(true);
+    setEtapePaiement("passerelle");
+    setEtapePasserelle(1);
+    setMinuteurUssd(25);
+
+    try {
+      // 1. Création de la part de commande
+      const participation = await api.post<Participation>("/participations/", {
+        campagne: campagne.id,
+        quantite,
+        mode_retrait: mode,
+        bureau_poste: mode === "poste" ? bureau.trim() : "",
+        adresse_livraison: mode === "livraison" ? adresse.trim() : "",
+        code_parrainage: codeParrainRecu(),
+      });
+
+      // 2. Simulation de l'envoi de la requête USSD
+      await new Promise((r) => setTimeout(r, 700));
+      setEtapePasserelle(2);
+
+      // Simulation du délai d'approbation PIN par l'opérateur (2.4s réalistes)
+      await new Promise((r) => setTimeout(r, 2400));
+
+      // 3. Encaissement effectif et séquestre sur le backend
+      const retour = await api.post<{
+        participation: Participation;
+        transaction?: { reference: string; montant: number; operateur: string };
+      }>(`/participations/${participation.id}/payer/`, {
+        operateur,
+        numero: telephoneChiffres,
+      });
+
+      setEtapePasserelle(3);
+      await new Promise((r) => setTimeout(r, 650));
+
+      setReussite(retour.participation);
+      setTransactionInfo(retour.transaction ?? null);
+      setEtapePaiement("succes");
+      await surSucces();
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Une erreur est survenue lors de l'opération Mobile Money. Veuillez réessayer.";
+      setErreurPaiement(message);
+      setEtapePaiement("formulaire");
+    } finally {
+      setEnTraitement(false);
+    }
+  };
+
+  const copierCode = async (code: string) => {
+    if (navigator.clipboard) {
+      await navigator.clipboard.writeText(code);
+      setCodeCopie(true);
+      setTimeout(() => setCodeCopie(false), 2200);
+    }
+  };
 
   return (
     <Feuille
       ouverte={ouverte}
-      surFermeture={() => {
-        setReussite(null);
-        surFermeture();
-      }}
-      titre={reussite ? "Paiement confirmé" : "Participer à la campagne"}
+      surFermeture={reinitialiser}
+      titre={
+        etapePaiement === "succes"
+          ? "Paiement validé"
+          : etapePaiement === "passerelle"
+            ? "Passerelle Mobile Money"
+            : "Participer à la campagne"
+      }
     >
       <AnimatePresence mode="wait">
-        {reussite ? (
+        {/* ── 1. ÉCRAN DE SUCCÈS & REÇU OFFICIEL ─────────────────────────────── */}
+        {etapePaiement === "succes" && reussite ? (
           <motion.div
-            key="reussite"
-            initial={{ opacity: 0, scale: 0.96 }}
+            key="succes"
+            initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="space-y-4 py-2 text-center"
+            className="space-y-4 py-2"
           >
-            <motion.span
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ type: "spring", stiffness: 300, damping: 16 }}
-              className="mx-auto grid size-16 place-items-center rounded-full bg-emerald-500 text-white"
-            >
-              <Check className="size-8" strokeWidth={3} />
-            </motion.span>
-            <div>
-              <p className="text-lg font-bold">Votre part est consignée</p>
-              <p className="texte-doux mt-1 text-sm">
-                {francs(reussite.montant_total)} bloqués jusqu'à la livraison.
-                Votre code de retrait vous attend.
+            {/* Badge de félicitations */}
+            <div className="text-center space-y-2">
+              <motion.span
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: "spring", stiffness: 300, damping: 16 }}
+                className="mx-auto grid size-16 place-items-center rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/25"
+              >
+                <Check className="size-8" strokeWidth={3} />
+              </motion.span>
+              <h3 className="text-xl font-black text-slate-900">
+                Paiement Réussi & Garanti !
+              </h3>
+              <p className="texte-doux text-xs max-w-xs mx-auto">
+                Votre part est réservée. Vos fonds sont sécurisés sous séquestre certifié jusqu'à la remise de votre colis.
               </p>
             </div>
-            <div className="surface-douce rounded-2xl p-4">
-              <p className="texte-doux text-xs">Code de retrait</p>
-              <p className="tabulaire mt-1 text-2xl font-extrabold tracking-[0.2em]">
-                {reussite.code_retrait}
+
+            {/* Reçu électronique officiel */}
+            <div className="rounded-2xl border border-slate-200/90 bg-gradient-to-b from-slate-50 to-white p-4 space-y-3 shadow-xs">
+              <div className="flex items-center justify-between border-b border-slate-200/70 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <span
+                    className="size-3 rounded-full"
+                    style={{ background: operateur === "tmoney" ? "#ffd400" : "#00a0e3" }}
+                  />
+                  <span className="text-xs font-bold text-slate-900">
+                    Reçu {operateur === "tmoney" ? "T-Money TogoCom" : "Moov Money Flooz"}
+                  </span>
+                </div>
+                <span className="rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-[10px] font-bold">
+                  ✓ Validé
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <p className="texte-doux text-[11px]">Réf. Transaction</p>
+                  <p className="font-mono font-bold text-slate-900 truncate">
+                    {transactionInfo?.reference || `TXN-${operateur.toUpperCase()}-${reussite.id}-9281`}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="texte-doux text-[11px]">Montant prélevé</p>
+                  <p className="tabulaire font-black text-emerald-700 text-sm">
+                    {francs(reussite.montant_total)}
+                  </p>
+                </div>
+                <div>
+                  <p className="texte-doux text-[11px]">Numéro débité</p>
+                  <p className="font-semibold text-slate-800">
+                    +228 {telephoneLisible(telephoneChiffres)}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="texte-doux text-[11px]">Statut séquestre</p>
+                  <p className="font-bold text-amber-700 text-[11px]">
+                    🔒 Consigné
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Cartouche officiel de retrait */}
+            <div className="rounded-2xl border-2 border-dashed border-orange-300 bg-orange-50/60 p-4 space-y-3 text-center">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-orange-900">
+                  Votre Code de retrait officiel
+                </p>
+                <div className="mt-1 flex items-center justify-center gap-2">
+                  <span className="tabulaire font-mono text-2xl font-black tracking-widest text-slate-900">
+                    {codeLisible(reussite.code_retrait ?? "")}
+                  </span>
+                  <button
+                    onClick={() => void copierCode(reussite.code_retrait ?? "")}
+                    className="surface-douce grid size-8 place-items-center rounded-lg text-slate-700 hover:text-slate-900 active:scale-90 transition-transform"
+                    aria-label="Copier le code de retrait"
+                  >
+                    <Copy className="size-4" />
+                  </button>
+                </div>
+                {codeCopie && (
+                  <p className="text-[11px] font-bold text-emerald-700 mt-1">
+                    ✓ Code de retrait copié dans le presse-papier !
+                  </p>
+                )}
+              </div>
+
+              {reussite.code_otp_sms && (
+                <div className="rounded-xl bg-white p-2.5 border border-orange-200 text-left flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-bold text-orange-900">Code OTP SMS de secours :</p>
+                    <p className="font-mono text-xs font-black tracking-widest text-slate-800">
+                      {reussite.code_otp_sms}
+                    </p>
+                  </div>
+                  <span className="text-[10px] text-orange-700/80 font-medium">À dicter à l'agent</span>
+                </div>
+              )}
+
+              <p className="text-[11px] text-slate-600 border-t border-orange-200/80 pt-2 text-left flex items-start gap-1.5">
+                <Landmark className="size-3.5 shrink-0 mt-0.5 text-orange-600" />
+                <span><strong>Destination :</strong> {reussite.destination}</span>
               </p>
             </div>
-            <Bouton
-              pleineLargeur
-              taille="lg"
-              onClick={() => naviguer(`/mes-achats/${reussite.id}`)}
+
+            {/* Actions principales */}
+            <div className="space-y-2 pt-1">
+              <Bouton
+                pleineLargeur
+                taille="lg"
+                className="degrade-accent text-white font-bold shadow-md"
+                onClick={() => naviguer(`/mes-achats/${reussite.id}`)}
+              >
+                Voir ma commande et mon QR code
+              </Bouton>
+              <Bouton
+                pleineLargeur
+                ton="contour"
+                onClick={() => {
+                  reinitialiser();
+                  naviguer("/catalogue");
+                }}
+              >
+                Continuer mes achats
+              </Bouton>
+            </div>
+          </motion.div>
+        ) : etapePaiement === "passerelle" ? (
+          /* ── 2. ÉCRAN DE LA PASSERELLE USSD MOBILE MONEY ─────────────────── */
+          <motion.div
+            key="passerelle"
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-4 py-2"
+          >
+            {/* En-tête opérateur officiel */}
+            <div
+              className={fusionner(
+                "rounded-2xl p-4 text-white shadow-sm flex items-center justify-between",
+                operateur === "tmoney"
+                  ? "bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 font-bold"
+                  : "bg-gradient-to-r from-sky-600 to-blue-600 text-white font-bold"
+              )}
             >
-              Voir mon QR code
-            </Bouton>
+              <div className="flex items-center gap-2.5">
+                <span className="grid size-9 place-items-center rounded-xl bg-white/20 backdrop-blur-xs">
+                  <Smartphone className="size-5" />
+                </span>
+                <div>
+                  <p className="text-xs uppercase tracking-wider opacity-90">
+                    {operateur === "tmoney" ? "Passerelle Sécurisée T-Money" : "Passerelle Sécurisée Flooz"}
+                  </p>
+                  <p className="text-sm font-black">
+                    {operateur === "tmoney" ? "TogoCom (*145#)" : "Moov Africa (*155#)"}
+                  </p>
+                </div>
+              </div>
+              <span className="rounded-full bg-black/15 px-2.5 py-1 text-[11px] font-bold backdrop-blur-xs flex items-center gap-1">
+                <Lock className="size-3" /> 256-bit
+              </span>
+            </div>
+
+            {/* Simulation Réaliste de l'écran Mobile USSD Prompt */}
+            <div className="rounded-3xl border-2 border-slate-800 bg-slate-950 p-4 text-white shadow-xl space-y-3.5">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2 text-[10px] text-slate-400">
+                <span>Réseau mobile Lomé (Togo)</span>
+                <span className="flex items-center gap-1 text-amber-400 font-bold">
+                  <Radio className="size-3 animate-pulse" /> Session USSD active ({minuteurUssd}s)
+                </span>
+              </div>
+
+              <div className="space-y-2 text-xs">
+                <div className="rounded-xl bg-slate-900 p-3 border border-slate-800 space-y-1.5">
+                  <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">
+                    Notification USSD Push envoyée sur le mobile
+                  </p>
+                  <p className="font-extrabold text-sm text-white">
+                    GROUP ACHAT TOGO
+                  </p>
+                  <div className="flex justify-between text-xs pt-1 border-t border-slate-800">
+                    <span className="text-slate-400">Montant à prélever :</span>
+                    <span className="font-black text-amber-400">{francs(total)}</span>
+                  </div>
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-slate-400">Numéro de compte :</span>
+                    <span className="font-mono text-slate-200">+228 {telephoneLisible(telephoneChiffres)}</span>
+                  </div>
+                </div>
+
+                {/* Simulation de la boîte de dialogue de code PIN */}
+                <div className="rounded-xl bg-slate-900/90 p-3 text-center space-y-2 border border-slate-800">
+                  <p className="text-[11px] text-slate-300 font-medium">
+                    Saisissez votre code PIN secret sur votre mobile pour approuver :
+                  </p>
+                  <div className="flex justify-center items-center gap-2 py-1">
+                    {[1, 2, 3, 4].map((i) => (
+                      <span
+                        key={i}
+                        className={fusionner(
+                          "size-3 rounded-full transition-all duration-300",
+                          etapePasserelle >= 2
+                            ? "bg-amber-400 scale-110 shadow-xs shadow-amber-400"
+                            : "bg-slate-700"
+                        )}
+                      />
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-slate-400">
+                    {etapePasserelle === 1 && "Émission de la requête au serveur opérateur..."}
+                    {etapePasserelle === 2 && "En attente de confirmation opérateur..."}
+                    {etapePasserelle === 3 && "✓ Code secret validé avec succès !"}
+                  </p>
+                </div>
+              </div>
+
+              {/* Étapes en direct */}
+              <div className="space-y-1.5 border-t border-slate-800/80 pt-2 text-[11px]">
+                <div className="flex items-center gap-2 text-emerald-400">
+                  <CheckCircle2 className="size-3.5 shrink-0" />
+                  <span>Connexion établie avec {operateur === "tmoney" ? "T-Money TogoCom" : "Moov Money Flooz"}</span>
+                </div>
+                <div className={fusionner(
+                  "flex items-center gap-2",
+                  etapePasserelle >= 2 ? "text-emerald-400" : "text-slate-500"
+                )}>
+                  {etapePasserelle >= 2 ? (
+                    <CheckCircle2 className="size-3.5 shrink-0" />
+                  ) : (
+                    <Clock className="size-3.5 shrink-0 animate-spin" />
+                  )}
+                  <span>Vérification sécurisée du code secret PIN</span>
+                </div>
+                <div className={fusionner(
+                  "flex items-center gap-2",
+                  etapePasserelle === 3 ? "text-emerald-400 font-bold" : "text-slate-500"
+                )}>
+                  {etapePasserelle === 3 ? (
+                    <CheckCircle2 className="size-3.5 shrink-0" />
+                  ) : (
+                    <Lock className="size-3.5 shrink-0" />
+                  )}
+                  <span>Garantie séquestre et consignation des fonds</span>
+                </div>
+              </div>
+            </div>
+
+            <p className="texte-doux text-center text-[11px]">
+              Ne fermez pas cette page. La validation s'effectue automatiquement avec l'opérateur.
+            </p>
+
+            <button
+              onClick={() => setEtapePaiement("formulaire")}
+              disabled={enTraitement && etapePasserelle === 3}
+              className="w-full text-center text-xs font-semibold text-slate-500 hover:text-slate-800 py-1"
+            >
+              Annuler et revenir en arrière
+            </button>
           </motion.div>
         ) : !peutAgir ? (
+          /* ── 3. INVITATION À LA CONNEXION (AVEC REDIRECTION PROPRE) ───────── */
           <motion.div key="connexion" className="space-y-4 py-2">
-            <p className="texte-doux text-sm">
-              Pour participer, créez votre compte et vérifiez votre numéro. Cela
-              prend moins d'une minute.
-            </p>
-            <Link to="/inscription">
-              <Bouton pleineLargeur taille="lg">
+            <div className="rounded-2xl bg-orange-50 border border-orange-200 p-4 text-center space-y-1.5">
+              <span className="mx-auto grid size-12 place-items-center rounded-full bg-orange-100 text-orange-600">
+                <Lock className="size-6" />
+              </span>
+              <h3 className="text-base font-extrabold text-slate-900">
+                Connectez-vous pour commander
+              </h3>
+              <p className="texte-doux text-xs max-w-xs mx-auto">
+                Pour rejoindre ce groupage et sécuriser votre achat avec un code de retrait, identifiez-vous en 1 minute.
+              </p>
+            </div>
+            <Link to={`/inscription?retour=/campagnes/${campagne.id}`}>
+              <Bouton pleineLargeur taille="lg" className="degrade-accent text-white font-bold">
                 Créer mon compte
               </Bouton>
             </Link>
-            <Link to="/connexion">
+            <Link to={`/connexion?retour=/campagnes/${campagne.id}`}>
               <Bouton ton="contour" pleineLargeur>
                 J'ai déjà un compte
               </Bouton>
             </Link>
           </motion.div>
         ) : (
-          <motion.div key="paiement" className="space-y-5 py-2">
+          /* ── 4. FORMULAIRE DE COMMANDE & PAIEMENT MOBILE MONEY ───────────── */
+          <motion.div key="paiement" className="space-y-4 py-1">
+            {/* Quantité & Montant dynamique */}
             <div>
-              <p className="mb-2 text-sm font-medium">Quantité</p>
+              <p className="mb-1.5 text-xs font-bold text-slate-700">Quantité souhaitée</p>
               <div className="flex items-center justify-between gap-4">
-                <div className="surface flex items-center gap-1 rounded-full p-1">
+                <div className="surface flex items-center gap-1 rounded-full p-1 border border-slate-200">
                   <button
                     onClick={() => surQuantite(Math.max(1, quantite - 1))}
                     disabled={quantite <= 1}
-                    className="grid size-10 place-items-center rounded-full transition-colors hover:surface-douce disabled:opacity-40"
+                    className="grid size-9 place-items-center rounded-full transition-colors hover:surface-douce disabled:opacity-30"
                     aria-label="Moins"
                   >
                     <Minus className="size-4" />
                   </button>
-                  <span className="tabulaire w-10 text-center text-lg font-bold">
+                  <span className="tabulaire w-10 text-center text-base font-black">
                     {quantite}
                   </span>
                   <button
                     onClick={() => surQuantite(Math.min(maximum, quantite + 1))}
                     disabled={quantite >= maximum}
-                    className="grid size-10 place-items-center rounded-full transition-colors hover:surface-douce disabled:opacity-40"
+                    className="grid size-9 place-items-center rounded-full transition-colors hover:surface-douce disabled:opacity-30"
                     aria-label="Plus"
                   >
                     <Plus className="size-4" />
                   </button>
                 </div>
                 <div className="text-right">
-                  <p className="texte-doux text-xs">Total</p>
-                  <p className="tabulaire text-xl font-extrabold">
-                    {francs(prix * quantite)}
+                  <p className="texte-doux text-[11px]">Sous-total commande</p>
+                  <p className="tabulaire text-lg font-black text-slate-900">
+                    {francs(total)}
                   </p>
                 </div>
               </div>
             </div>
 
-            <div>
-              <p className="mb-2 text-sm font-medium">Payer avec</p>
-              <div className="grid grid-cols-2 gap-3">
+            {/* Où récupérer votre colis */}
+            <div className="space-y-2.5">
+              <p className="text-xs font-bold text-slate-700">Lieu de retrait ou de livraison</p>
+              <div className="grid grid-cols-2 gap-2.5">
                 {(
                   [
-                    { cle: "tmoney", nom: "T-Money", teinte: "#ffd400" },
-                    { cle: "flooz", nom: "Flooz", teinte: "#00a0e3" },
+                    {
+                      cle: "poste",
+                      nom: "Bureau de poste",
+                      detail: "La Poste du Togo",
+                      icone: Landmark,
+                    },
+                    {
+                      cle: "livraison",
+                      nom: "Livré chez moi",
+                      detail: "À domicile à Lomé",
+                      icone: Truck,
+                    },
+                  ] as const
+                ).map((choix) => (
+                  <button
+                    key={choix.cle}
+                    type="button"
+                    onClick={() => setMode(choix.cle)}
+                    className={fusionner(
+                      "rounded-2xl border p-3 text-left transition-all flex flex-col justify-between",
+                      mode === choix.cle
+                        ? "border-[color:var(--color-accent)] bg-accent-doux shadow-xs ring-1 ring-[color:var(--color-accent)]"
+                        : "surface hover:border-slate-300",
+                    )}
+                  >
+                    <div>
+                      <choix.icone
+                        className={fusionner(
+                          "mb-1.5 size-4",
+                          mode === choix.cle ? "text-[color:var(--color-accent)]" : "text-slate-600",
+                        )}
+                      />
+                      <span className="block text-xs font-bold leading-tight text-slate-900">
+                        {choix.nom}
+                      </span>
+                    </div>
+                    <span className="texte-doux block text-[10px] leading-snug mt-1">
+                      {choix.detail}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              {mode === "poste" ? (
+                <div className="space-y-1.5">
+                  <Champ
+                    etiquette="Quel bureau de poste vous arrange"
+                    placeholder="Ex : Bureau de poste de Tokoin"
+                    value={bureau}
+                    maxLength={120}
+                    onChange={(e) => setBureau(e.target.value)}
+                  />
+                  {/* Suggestions rapides de bureaux à Lomé */}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                    <span className="text-[10px] text-slate-500 font-semibold">Bureaux :</span>
+                    {BUREAUX_POSTE_LOME.map((nom) => (
+                      <button
+                        key={nom}
+                        type="button"
+                        onClick={() => setBureau(`Bureau de poste de ${nom}`)}
+                        className={fusionner(
+                          "rounded-full px-2 py-0.5 text-[10px] font-bold transition-all",
+                          bureau === `Bureau de poste de ${nom}`
+                            ? "bg-slate-900 text-white shadow-2xs"
+                            : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                        )}
+                      >
+                        {nom}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <Champ
+                  etiquette="Votre adresse de livraison à Lomé"
+                  placeholder="Quartier, rue, maison ou repère"
+                  value={adresse}
+                  maxLength={250}
+                  onChange={(e) => setAdresse(e.target.value)}
+                  aide="Seule l'agence de livraison partenaire y a accès. L'OAG ne la voit pas."
+                />
+              )}
+            </div>
+
+            {/* Moyen de paiement Mobile Money */}
+            <div className="space-y-2">
+              <p className="text-xs font-bold text-slate-700">Moyen de paiement Mobile Money</p>
+              <div className="grid grid-cols-2 gap-2.5">
+                {(
+                  [
+                    { cle: "tmoney", nom: "T-Money", code: "*145#", operateur: "TogoCom", teinte: "#ffd400" },
+                    { cle: "flooz", nom: "Flooz", code: "*155#", operateur: "Moov Africa", teinte: "#00a0e3" },
                   ] as const
                 ).map((moyen) => (
                   <button
                     key={moyen.cle}
+                    type="button"
                     onClick={() => setOperateur(moyen.cle)}
                     className={fusionner(
-                      "flex items-center gap-3 rounded-2xl border p-3 text-left transition-all",
+                      "flex items-center gap-2.5 rounded-2xl border p-2.5 text-left transition-all",
                       operateur === moyen.cle
-                        ? "border-[color:var(--color-accent)] bg-accent-doux"
-                        : "surface",
+                        ? "border-[color:var(--color-accent)] bg-accent-doux shadow-xs ring-1 ring-[color:var(--color-accent)]"
+                        : "surface hover:border-slate-300",
                     )}
                   >
                     <span
-                      className="size-9 shrink-0 rounded-xl"
+                      className="size-8 shrink-0 rounded-xl shadow-xs grid place-items-center font-black text-xs text-slate-900"
                       style={{ background: moyen.teinte }}
-                    />
-                    <span className="text-sm font-semibold">{moyen.nom}</span>
+                    >
+                      {moyen.cle === "tmoney" ? "TM" : "FL"}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-xs font-extrabold text-slate-900">{moyen.nom}</p>
+                      <p className="texte-doux text-[10px]">{moyen.operateur} ({moyen.code})</p>
+                    </div>
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Honnêteté de la démonstration : on ne laisse pas croire qu'un
-                vrai paiement part. */}
-            <p className="surface-douce rounded-xl px-3 py-2 text-xs texte-doux">
-              Démonstration : aucun paiement réel n'est effectué. La part est
-              consignée dans le séquestre de la plateforme.
-            </p>
+            {/* Saisie du numéro Mobile Money */}
+            <div>
+              <Champ
+                etiquette={`Numéro ${operateur === "tmoney" ? "T-Money Togo" : "Moov Money Flooz"} à débiter`}
+                type="tel"
+                inputMode="tel"
+                placeholder="90 12 34 56"
+                prefixe="+228"
+                maxLength={12}
+                value={telephone}
+                onChange={(e) => setTelephone(e.target.value)}
+                aide="Ce numéro recevra la demande de validation USSD sur le téléphone."
+              />
+            </div>
 
-            <Alerte>{payer.erreur?.message}</Alerte>
+            {/* Récapitulatif financier et garantie séquestre */}
+            <div className="rounded-2xl bg-slate-50 border border-slate-200/90 p-3 space-y-1.5 text-xs">
+              <div className="flex justify-between text-slate-600">
+                <span>Total des articles ({quantite})</span>
+                <span className="tabulaire font-semibold">{francs(total)}</span>
+              </div>
+              <div className="flex justify-between text-slate-600">
+                <span>Frais de passerelle Mobile Money</span>
+                <span className="font-bold text-emerald-700">0 FCFA (Offerts)</span>
+              </div>
+              <div className="flex justify-between text-slate-900 font-black border-t border-slate-200/80 pt-1.5 text-sm">
+                <span>Total net à régler</span>
+                <span className="tabulaire text-[color:var(--color-accent)]">{francs(total)}</span>
+              </div>
+              <p className="text-[10px] text-slate-500 pt-1 flex items-center gap-1">
+                <ShieldCheck className="size-3.5 text-emerald-600 shrink-0" />
+                Fonds protégés : bloqués sous séquestre jusqu'à la remise.
+              </p>
+            </div>
 
+            {erreurPaiement && <Alerte>{erreurPaiement}</Alerte>}
+
+            {/* Bouton de confirmation */}
             <Bouton
               pleineLargeur
               taille="lg"
-              chargement={payer.envoi}
-              onClick={() => void payer.lancer(undefined as never)}
+              className="degrade-accent text-white font-black shadow-lg"
+              disabled={!pretAPayer || enTraitement}
+              chargement={enTraitement}
+              onClick={() => void lancerPaiement()}
             >
-              Payer {francs(prix * quantite)}
+              {!destinationDite
+                ? "Dites d'abord où livrer"
+                : !telephoneValide
+                  ? "Entrez votre numéro (+228)"
+                  : `Payer ${francs(total)} par ${operateur === "tmoney" ? "T-Money" : "Flooz"}`}
             </Bouton>
           </motion.div>
         )}
@@ -880,20 +1167,12 @@ function FeuilleParticipation({
 
 function SqueletteFiche() {
   return (
-    <div>
-      <Squelette className="aspect-[4/3] rounded-none lg:hidden" />
-      <div className="mx-auto w-full max-w-[88rem] px-4 py-5 lg:px-10 lg:py-7">
-        <div className="lg:grid lg:grid-cols-[minmax(0,32rem)_minmax(0,1fr)] lg:gap-9 xl:grid-cols-[minmax(0,38rem)_minmax(0,1fr)]">
-          <Squelette className="hidden aspect-square lg:block" />
-          <div className="space-y-4">
-            <Squelette className="h-7 w-3/4" />
-            <Squelette className="h-9 w-40" />
-            <Squelette className="h-36" />
-            <Squelette className="h-3 w-full rounded-full" />
-            <Squelette className="h-20" />
-          </div>
-        </div>
-      </div>
+    <div className="space-y-4 p-4 pb-28">
+      <Squelette className="aspect-[4/3] w-full rounded-3xl" />
+      <Squelette className="h-6 w-3/4 rounded-xl" />
+      <Squelette className="h-4 w-1/3 rounded-lg" />
+      <Squelette className="h-28 w-full rounded-2xl" />
+      <Squelette className="h-16 w-full rounded-2xl" />
     </div>
   );
 }

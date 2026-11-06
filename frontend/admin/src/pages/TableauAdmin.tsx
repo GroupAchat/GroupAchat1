@@ -4,6 +4,8 @@ import {
   Banknote,
   FileCheck2,
   Landmark,
+  Megaphone,
+  ScanEye,
   TrendingUp,
   Users,
   Vault,
@@ -77,8 +79,10 @@ export default function TableauAdmin() {
           animate={{ opacity: 1, y: 0 }}
           className="lg:col-span-2"
         >
-          <Carte className="relative overflow-hidden border-transparent text-white">
-            <span className="degrade-accent absolute inset-0 -z-10" />
+          {/* Le dégradé sur la carte elle-même : en calque `-z-10`, il
+              passait sous le fond blanc de `.surface` et la carte restait
+              blanche, texte blanc compris. */}
+          <Carte className="degrade-accent relative overflow-hidden border-transparent text-white">
             <span className="absolute -right-12 -top-16 size-56 rounded-full bg-white/12 blur-3xl" />
             <Vault className="size-6" />
             <p className="mt-4 text-sm text-white/80">Détenu en séquestre</p>
@@ -108,12 +112,23 @@ export default function TableauAdmin() {
           </Carte>
         </motion.div>
 
+        {/* Le detail ne dit plus « 1 500 FCFA par decaissement » : le
+            forfait a laisse place a la commission par grade, et un libelle
+            perime se lit comme un chiffre faux. */}
         <Tuile
           icone={TrendingUp}
-          libelle="Frais encaissés"
+          libelle="Commission sur les groupages"
           valeur={francs(donnees.revenus.frais_encaisses)}
-          detail="1 500 FCFA par décaissement"
+          detail="3,5 % en Bronze, 2,5 % en Argent, 1,3 % en Or"
           index={1}
+        />
+
+        <Tuile
+          icone={Megaphone}
+          libelle="Droit de publier"
+          valeur={francs(donnees.revenus.publications)}
+          detail="abonnements et packs vendus"
+          index={2}
         />
       </section>
 
@@ -122,7 +137,7 @@ export default function TableauAdmin() {
           icone={FileCheck2}
           libelle="Dossiers KYC à vérifier"
           valeur={String(donnees.a_traiter.dossiers_kyc)}
-          detail={`${donnees.comptes.groupeurs_valides} groupeurs validés`}
+          detail={`${donnees.comptes.groupeurs_valides} OAG validés`}
           index={0}
         />
         <Tuile
@@ -132,11 +147,20 @@ export default function TableauAdmin() {
           detail="à libérer du séquestre"
           index={1}
         />
+        {/* La file de relecture : elle bloque la vitrine de l'OAG, donc sa
+            collecte. La laisser dormir coute un groupage. */}
+        <Tuile
+          icone={ScanEye}
+          libelle="Groupages à vérifier"
+          valeur={String(donnees.a_traiter.campagnes_a_verifier)}
+          detail="avant mise au catalogue"
+          index={2}
+        />
         <Tuile
           icone={Users}
           libelle="Comptes"
           valeur={String(donnees.comptes.acheteurs + donnees.comptes.groupeurs)}
-          detail={`${donnees.comptes.acheteurs} acheteurs · ${donnees.comptes.groupeurs} groupeurs`}
+          detail={`${donnees.comptes.acheteurs} acheteurs · ${donnees.comptes.groupeurs} OAG`}
           index={3}
         />
       </section>

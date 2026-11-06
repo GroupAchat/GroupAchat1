@@ -1,9 +1,15 @@
 # -*- coding: utf-8 -*-
-"""Espace communautaire et notifications.
+"""Espace communautaire, Contact Privé et notifications.
 
 Les demandes de produit renversent le sens habituel : ce ne sont plus les
-groupeurs qui proposent, ce sont les acheteurs qui réclament. Le compteur
-d'intérêt sert de signal aux groupeurs en quête d'une campagne à lancer.
+OAG qui proposent, ce sont les acheteurs qui réclament. Le compteur
+d'intérêt sert de signal aux OAG en quête d'une campagne à lancer.
+
+⚠️ **Il n'existe aucune discussion publique.** Le fil ouvert sous une
+campagne a été retiré : il laissait convenir d'un arrangement direct à la vue
+de tous, et hors de la plateforme ni le séquestre ni l'assurance ne jouent.
+Le seul échange possible passe par le Contact Privé, payant, et c'est lui qui
+ouvre l'identité de l'OAG — voir `contact_prive.py`.
 """
 
 from __future__ import annotations
@@ -100,120 +106,6 @@ class InteretDemande(models.Model):
         return f"{self.utilisateur.nom_complet} → {self.demande.titre}"
 
 
-class Commentaire(models.Model):
-    """Message public laissé sous une campagne.
-
-    Le fil est **lisible par tout le monde, sans compte** : c'est lui qui
-    rassure l'acheteur hésitant, et le cacher derrière une inscription le
-    priverait de sa raison d'être. Écrire, en revanche, demande un numéro
-    vérifié — sinon le fil se remplit de faux avis en une nuit.
-
-    Un seul niveau de réponse. Au-delà, un fil devient illisible sur un écran
-    de téléphone, et l'affichage demanderait une récursion dont le produit n'a
-    pas besoin.
-    """
-
-    campagne = models.ForeignKey(
-        Campagne,
-        on_delete=models.CASCADE,
-        related_name="commentaires",
-        verbose_name="campagne",
-    )
-    auteur = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="commentaires",
-        verbose_name="auteur",
-    )
-    texte = models.TextField("message", max_length=1000)
-    reponse_a = models.ForeignKey(
-        "self",
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name="reponses",
-        verbose_name="en réponse à",
-    )
-
-    # Dénormalisé, comme les intérêts : le fil se trie par popularité et
-    # compter les « j'aime » ligne par ligne coûterait une jointure par
-    # commentaire.
-    nombre_jaime = models.PositiveIntegerField("j'aime", default=0)
-
-    cree_le = models.DateTimeField("publié le", default=timezone.now)
-    modifie_le = models.DateTimeField("modifié le", null=True, blank=True)
-
-    # Modération : on masque plutôt que de supprimer, pour garder une trace
-    # en cas de contestation — un commentaire effacé ne se prouve pas.
-    masque_le = models.DateTimeField("masqué le", null=True, blank=True)
-    masque_par = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="commentaires_masques",
-        verbose_name="masqué par",
-    )
-    motif_masquage = models.CharField("motif du masquage", max_length=200, blank=True)
-
-    class Meta:
-        verbose_name = "commentaire"
-        verbose_name_plural = "commentaires"
-        ordering = ["-cree_le"]
-        indexes = [
-            models.Index(fields=["campagne", "masque_le", "-cree_le"]),
-            models.Index(fields=["reponse_a", "cree_le"]),
-        ]
-        constraints = [
-            models.CheckConstraint(
-                condition=~models.Q(reponse_a=models.F("id")),
-                name="commentaire_pas_reponse_a_lui_meme",
-            )
-        ]
-
-    def __str__(self) -> str:
-        return f"{self.auteur.nom_complet} sur « {self.campagne.titre} »"
-
-    @property
-    def est_visible(self) -> bool:
-        return self.masque_le is None
-
-    @property
-    def est_du_groupeur(self) -> bool:
-        """Sert à distinguer la réponse du vendeur dans le fil."""
-        return self.auteur_id == self.campagne.groupeur_id
-
-
-class JaimeCommentaire(models.Model):
-    """Le « j'aime » d'un utilisateur sur un commentaire."""
-
-    commentaire = models.ForeignKey(
-        Commentaire,
-        on_delete=models.CASCADE,
-        related_name="jaime",
-        verbose_name="commentaire",
-    )
-    utilisateur = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="commentaires_aimes",
-        verbose_name="utilisateur",
-    )
-    cree_le = models.DateTimeField("aimé le", default=timezone.now)
-
-    class Meta:
-        verbose_name = "j'aime"
-        verbose_name_plural = "j'aime"
-        constraints = [
-            models.UniqueConstraint(
-                fields=["commentaire", "utilisateur"], name="un_seul_jaime_par_personne"
-            )
-        ]
-
-    def __str__(self) -> str:
-        return f"{self.utilisateur.nom_complet} aime #{self.commentaire_id}"
-
-
 class Notification(models.Model):
     """Message adressé à un utilisateur à une étape qui le concerne.
 
@@ -239,14 +131,16 @@ class Notification(models.Model):
         )
         CAMPAGNE_MAINTENUE = (
             "campagne_maintenue",
-            "Le groupeur maintient la commande",
+            "L'OAG maintient la commande",
         )
         REMBOURSEMENT = "remboursement", "Remboursement effectué"
         KYC_DECIDE = "kyc_decide", "Décision sur votre dossier"
         RELANCE_RETRAIT = "relance_retrait", "Rappel : colis à retirer"
-        NOUVEAU_COMMENTAIRE = "nouveau_commentaire", "Nouveau message sur votre campagne"
         NOUVEL_AVIS = "nouvel_avis", "Un acheteur vous a noté"
-        REPONSE_COMMENTAIRE = "reponse_commentaire", "Réponse à votre message"
+        # Le fil public n'existe plus ; ce qui le remplace est privé.
+        MESSAGE_PRIVE = "message_prive", "Nouveau message privé"
+        CONTACT_PRIVE = "contact_prive", "Contact Privé"
+        SYSTEME = "systeme", "Information"
 
     destinataire = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -281,3 +175,21 @@ class Notification(models.Model):
 
     def __str__(self) -> str:
         return f"{self.titre} → {self.destinataire.telephone}"
+
+
+# Déclarés dans un module à part — ils forment un sujet à eux seuls — mais
+# réexportés ici, parce que c'est `models` que Django inspecte.
+from groupachat.echanges.contact_prive import (  # noqa: E402
+    AbonnementContactPrive,
+    Conversation,
+    Message,
+)
+
+__all__ = [
+    "DemandeProduit",
+    "InteretDemande",
+    "Notification",
+    "AbonnementContactPrive",
+    "Conversation",
+    "Message",
+]

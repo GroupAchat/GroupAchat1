@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { BadgeCheck, Star } from "lucide-react";
+import { BadgeCheck, MessageSquare, Star } from "lucide-react";
 import { useState } from "react";
 
 import type { Avis, Page, Participation } from "@commun/api/types";
@@ -19,7 +19,7 @@ import { api, useAction, useRequete } from "@commun/outils/requetes";
  * Les avis : ce qui remplace l'arbitrage.
  *
  * Group Achat met en relation, elle ne tranche pas les désaccords sur la
- * marchandise. Un acheteur mécontent en parle au groupeur sous la campagne
+ * marchandise. Un acheteur mécontent en parle à l'OAG sous la campagne
  * et le note ici ; c'est sa réputation qui en porte la trace, visible par
  * tous les acheteurs suivants.
  */
@@ -102,7 +102,7 @@ const LIBELLES = [
   "Décevant",
   "Correct",
   "Bien",
-  "Excellent groupeur",
+  "Excellent OAG",
 ];
 
 /**
@@ -171,7 +171,7 @@ export function FormulaireAvis({
           {existant ? "Modifier votre avis" : "Comment s'est passé ce groupage ?"}
         </p>
         <p className="texte-doux text-sm">
-          Votre note est publique et compte dans la réputation du groupeur.
+          Votre note est publique et compte dans la réputation de l'OAG.
         </p>
       </div>
 
@@ -219,7 +219,7 @@ export function FormulaireAvis({
 }
 
 /**
- * Les avis reçus par le groupeur connecté, avec son droit de réponse.
+ * Les avis reçus par l'OAG connecté, avec son droit de réponse.
  *
  * Il ne peut ni les supprimer ni les contester auprès de la plateforme — il
  * n'y a personne à saisir. Ce qu'il peut, c'est répondre publiquement une
@@ -271,13 +271,35 @@ export function AvisRecus({ groupeurId }: { groupeurId: number }) {
   );
 }
 
+/**
+ * Le droit de réponse, **replié tant qu'on ne s'en sert pas**.
+ *
+ * Six avis affichaient six grandes zones de saisie ouvertes : la page du
+ * tableau de bord devenait un formulaire, et les campagnes à suivre
+ * passaient sous la ligne de flottaison. On ne répond pas à tous les avis,
+ * et rarement le jour même.
+ */
 function ChampReponse({ avis, surEnvoi }: { avis: Avis; surEnvoi: () => void }) {
   const [texte, setTexte] = useState("");
+  const [ouvert, setOuvert] = useState(false);
   const envoi = useAction(async (contenu: string) => {
     await api.post(`/avis/${avis.id}/repondre/`, { reponse: contenu });
     setTexte("");
     surEnvoi();
   });
+
+  if (!ouvert) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOuvert(true)}
+        className="texte-doux flex items-center gap-1.5 text-sm font-semibold transition-colors hover:text-[color:var(--color-accent)]"
+      >
+        <MessageSquare className="size-3.5" />
+        Répondre
+      </button>
+    );
+  }
 
   return (
     <form
@@ -296,9 +318,19 @@ function ChampReponse({ avis, surEnvoi }: { avis: Avis; surEnvoi: () => void }) 
         placeholder="Expliquez ce qui s'est passé — les prochains acheteurs le liront."
       />
       {envoi.erreur && <p className="text-sm text-red-600">{envoi.erreur.message}</p>}
-      <Bouton type="submit" taille="sm" chargement={envoi.envoi} disabled={!texte.trim()}>
-        Répondre
-      </Bouton>
+      <div className="flex items-center gap-2">
+        <Bouton type="submit" taille="sm" chargement={envoi.envoi} disabled={!texte.trim()}>
+          Répondre
+        </Bouton>
+        <Bouton
+          type="button"
+          taille="sm"
+          ton="fantome"
+          onClick={() => setOuvert(false)}
+        >
+          Annuler
+        </Bouton>
+      </div>
     </form>
   );
 }
@@ -308,7 +340,7 @@ function ReponseGroupeur({ avis }: { avis: Avis }) {
     <div className="bg-accent-doux rounded-2xl px-4 py-3">
       <p className="mb-1 flex items-center gap-1.5 text-xs font-bold">
         <BadgeCheck className="size-3.5" />
-        Réponse du groupeur
+        Réponse de l'OAG
         {avis.repondu_le && (
           <span className="texte-doux font-normal">{depuis(avis.repondu_le)}</span>
         )}
@@ -321,7 +353,7 @@ function ReponseGroupeur({ avis }: { avis: Avis }) {
 }
 
 /**
- * Les avis reçus par un groupeur, sous sa campagne.
+ * Les avis reçus par un OAG, sous sa campagne.
  *
  * On les montre **avant** l'achat, pas après : c'est là qu'ils servent. Un
  * acheteur qui hésite doit pouvoir lire ce que les précédents ont vécu.
@@ -344,7 +376,7 @@ export function ListeAvis({ groupeurId }: { groupeurId: number }) {
       <EtatVide
         icone={<Star className="size-7" />}
         titre="Pas encore d'avis"
-        texte="Ce groupeur n'a pas encore été noté. Les participants pourront le faire à la clôture de la collecte."
+        texte="Cet OAG n'a pas encore été noté. Les participants pourront le faire à la clôture de la collecte."
       />
     );
   }
@@ -358,7 +390,7 @@ export function ListeAvis({ groupeurId }: { groupeurId: number }) {
         <div>
           <Etoiles note={moyenne} taille="md" />
           <p className="texte-doux text-sm">
-            {avis.length} avis d'acheteurs de ce groupeur
+            {avis.length} avis d'acheteurs de cet OAG
           </p>
         </div>
       </div>

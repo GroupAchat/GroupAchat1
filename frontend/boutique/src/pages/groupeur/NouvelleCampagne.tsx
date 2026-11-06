@@ -1,9 +1,15 @@
 import { motion } from "framer-motion";
-import { ArrowLeft, Plus, Trash2, TrendingDown } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import type { Campagne, Categorie, Produit } from "@commun/api/types";
+import {
+  EditeurBareme,
+  aplatirLeBareme,
+  type Chute,
+  type Tranche,
+} from "@/composants/EditeurBareme";
 import {
   EnvoiMedias,
   envoiEnCours,
@@ -15,27 +21,23 @@ import {
   Bouton,
   Carte,
   Champ,
-  fusionner,
   ZoneTexte,
 } from "@commun/composants/ui";
-import { francs } from "@commun/outils/formats";
+import { useSession } from "@commun/contexte/Session";
+import { commissionSur, francs, tauxCommission } from "@commun/outils/formats";
 import { api, useAction, useRequete } from "@commun/outils/requetes";
-
-interface Palier {
-  quantite_min: string;
-  prix_unitaire: string;
-}
 
 /**
  * Création d'une campagne, en deux temps : le produit, puis l'offre.
  *
  * Le produit est créé d'abord parce qu'il vit indépendamment de l'offre —
- * un autre groupeur pourra proposer le même. Les deux écrans tiennent dans
+ * un autre OAG pourra proposer le même. Les deux écrans tiennent dans
  * une seule page : couper en assistant multi-pages ferait perdre la vue
  * d'ensemble sur un formulaire aussi court.
  */
 export default function NouvelleCampagne() {
   const naviguer = useNavigate();
+  const { utilisateur } = useSession();
   const { donnees: rayons } = useRequete<Categorie[]>("/catalogue/categories/");
   const rayonsPlats = (rayons ?? []).flatMap((rayon) => [rayon, ...rayon.sous_categories]);
 
@@ -52,10 +54,11 @@ export default function NouvelleCampagne() {
     quantite_minimale: "",
     quantite_maximale: "",
     date_limite: dansJours(14),
-    point_remise: "",
   });
-  const [paliers, setPaliers] = useState<Palier[]>([]);
+  const [tranches, setTranches] = useState<Tranche[]>([]);
+  const [chutes, setChutes] = useState<Chute[]>([]);
   const [medias, setMedias] = useState<MediaEnAttente[]>([]);
+  const [contratAccepte, setContratAccepte] = useState(false);
 
   const creation = useAction(async () => {
     const fiche = await api.post<Produit>("/groupeur/produits/", {
@@ -80,13 +83,7 @@ export default function NouvelleCampagne() {
       quantite_minimale: Number(offre.quantite_minimale),
       quantite_maximale: offre.quantite_maximale ? Number(offre.quantite_maximale) : null,
       date_limite: new Date(offre.date_limite).toISOString(),
-      point_remise: offre.point_remise,
-      paliers: paliers
-        .filter((palier) => palier.quantite_min && palier.prix_unitaire)
-        .map((palier) => ({
-          quantite_min: Number(palier.quantite_min),
-          prix_unitaire: Number(palier.prix_unitaire),
-        })),
+      paliers: aplatirLeBareme(tranches, chutes),
     });
     naviguer(`/groupeur/campagnes/${campagne.id}`);
     return campagne;
@@ -94,22 +91,22 @@ export default function NouvelleCampagne() {
 
   const prix = Number(offre.prix_unitaire) || 0;
   const minimum = Number(offre.quantite_minimale) || 0;
+  const centiemes = utilisateur?.points.commission_centiemes ?? 350;
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-5 px-4 py-6 lg:py-9">
+    <div className="w-full space-y-4 px-3.5 py-4 pb-24">
       <Link
         to="/groupeur/campagnes"
-        className="texte-doux inline-flex items-center gap-1.5 text-sm font-semibold"
+        className="texte-doux inline-flex items-center gap-1.5 text-xs font-semibold"
       >
         <ArrowLeft className="size-4" />
         Mes campagnes
       </Link>
 
       <header>
-        <h1 className="text-2xl font-extrabold">Nouvelle campagne</h1>
-        <p className="texte-doux text-sm">
-          Elle démarre en brouillon : vous la publierez quand elle vous
-          conviendra.
+        <h1 className="text-xl font-extrabold text-slate-900">Nouvelle offre</h1>
+        <p className="texte-doux text-xs">
+          Elle démarre en brouillon : vous la publierez quand elle vous conviendra.
         </p>
       </header>
 
@@ -208,7 +205,9 @@ export default function NouvelleCampagne() {
               <strong className="text-[color:var(--color-accent)]">
                 {francs(prix * minimum)}
               </strong>{" "}
-              — vous en recevriez {francs(Math.max(0, prix * minimum - 1500))} après frais.
+              — vous en recevriez{" "}
+              {francs(prix * minimum - commissionSur(prix * minimum, centiemes))} après
+              commission ({tauxCommission(centiemes)}).
             </motion.p>
           )}
 
@@ -232,113 +231,50 @@ export default function NouvelleCampagne() {
             />
           </div>
 
-          <Champ
-            etiquette="Point de remise"
-            placeholder="Marché d'Adawlato, Lomé"
-            required
-            value={offre.point_remise}
-            onChange={(e) => setOffre({ ...offre, point_remise: e.target.value })}
-            erreur={creation.erreur?.pourChamp("point_remise")}
-          />
+          {/* Pas de point de remise à saisir : ce n'est pas à l'OAG de
+              décider où va le colis. Chaque acheteur choisit son bureau de
+              poste ou se fait livrer, part par part. */}
+          <p className="texte-doux surface-douce rounded-2xl p-3 text-xs">
+            Vous n'avez pas de point de remise à indiquer : chaque acheteur
+            choisit son bureau de poste ou la livraison à son adresse, et
+            l'agence s'en charge. Les frais de livraison sont réglés à
+            l'agence à la remise — ils ne passent pas par vous.
+          </p>
 
           <ZoneTexte
             etiquette="Conditions de l'offre"
             rows={2}
-            placeholder="Provenance, état, garantie, modalités de remise."
+            placeholder="Provenance, état, garantie, délais."
             value={offre.description}
             onChange={(e) => setOffre({ ...offre, description: e.target.value })}
           />
         </Carte>
 
         <Carte className="space-y-4">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 className="flex items-center gap-2 font-bold">
-                <TrendingDown className="size-4 text-[color:var(--color-accent)]" />
-                3. Paliers dégressifs (facultatif)
-              </h2>
-              <p className="texte-doux text-sm">
-                Plus il y a de participants, moins chacun paie. C'est l'argument
-                qui fait venir du monde.
-              </p>
-            </div>
-            <Bouton
-              type="button"
-              ton="contour"
-              taille="sm"
-              icone={<Plus className="size-4" />}
-              onClick={() =>
-                setPaliers([...paliers, { quantite_min: "", prix_unitaire: "" }])
-              }
-            >
-              Ajouter
-            </Bouton>
-          </div>
-
-          {paliers.map((palier, rang) => (
-            <motion.div
-              key={rang}
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex items-end gap-2"
-            >
-              <input
-                type="number"
-                min={1}
-                placeholder="À partir de"
-                value={palier.quantite_min}
-                onChange={(evenement) =>
-                  setPaliers(
-                    paliers.map((item, index) =>
-                      index === rang
-                        ? { ...item, quantite_min: evenement.target.value }
-                        : item,
-                    ),
-                  )
-                }
-                className="surface h-12 flex-1 rounded-2xl px-4 text-sm outline-none focus:border-[color:var(--color-accent)]"
-                aria-label={`Seuil du palier ${rang + 1}`}
-              />
-              <input
-                type="number"
-                min={1}
-                placeholder="Prix FCFA"
-                value={palier.prix_unitaire}
-                onChange={(evenement) =>
-                  setPaliers(
-                    paliers.map((item, index) =>
-                      index === rang
-                        ? { ...item, prix_unitaire: evenement.target.value }
-                        : item,
-                    ),
-                  )
-                }
-                className={fusionner(
-                  "surface h-12 flex-1 rounded-2xl px-4 text-sm outline-none focus:border-[color:var(--color-accent)]",
-                  prix > 0 &&
-                    Number(palier.prix_unitaire) >= prix &&
-                    "border-red-500",
-                )}
-                aria-label={`Prix du palier ${rang + 1}`}
-              />
-              <button
-                type="button"
-                onClick={() => setPaliers(paliers.filter((_, index) => index !== rang))}
-                className="texte-doux grid size-12 shrink-0 place-items-center rounded-2xl transition-colors hover:text-red-600"
-                aria-label="Supprimer ce palier"
-              >
-                <Trash2 className="size-4" />
-              </button>
-            </motion.div>
-          ))}
-
-          {paliers.length > 0 && (
-            <p className="texte-doux text-xs">
-              Un palier doit être <strong>moins cher</strong> que le prix affiché,
-              sinon le prix monterait avec le nombre de participants.
-            </p>
-          )}
+          <h2 className="font-bold">3. Le barème (facultatif)</h2>
+          <EditeurBareme
+            prixAffiche={prix}
+            tranches={tranches}
+            surTranches={setTranches}
+            chutes={chutes}
+            surChutes={setChutes}
+          />
         </Carte>
+
+        {/* Engagement contractuel Notarié et Charte de déontologie Togo */}
+        <label className="flex items-start gap-3 rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4 text-xs dark:border-slate-800 dark:bg-slate-900/40 cursor-pointer">
+          <input
+            type="checkbox"
+            required
+            checked={contratAccepte}
+            onChange={(e) => setContratAccepte(e.target.checked)}
+            className="mt-0.5 size-4 rounded accent-[color:var(--color-accent)]"
+          />
+          <span className="leading-relaxed text-slate-700 dark:text-slate-300">
+            <strong>Contrat OAG & Charte de Déontologie GROUP ACHAT TOGO</strong> :
+            Je m'engage à honorer la fourniture de la marchandise et certifie accepter les conditions du contrat OAG validé par notaire au Togo. L'acceptation en ligne vaut signature électronique légale (Loi togolaise sur les transactions électroniques).
+          </span>
+        </label>
 
         <Alerte>{creation.erreur?.message}</Alerte>
 
@@ -347,7 +283,7 @@ export default function NouvelleCampagne() {
           pleineLargeur
           taille="lg"
           chargement={creation.envoi}
-          disabled={envoiEnCours(medias)}
+          disabled={envoiEnCours(medias) || !contratAccepte}
         >
           {envoiEnCours(medias) ? "Envoi des photos…" : "Créer la campagne"}
         </Bouton>

@@ -29,7 +29,7 @@ class GroupeurValide(permissions.BasePermission):
     l'espace groupeur n'est pas accessible — pas seulement la publication.
     """
 
-    message = "Votre dossier doit être validé pour accéder à l'espace groupeur."
+    message = "Votre dossier doit être validé pour accéder à l'espace OAG."
 
     def has_permission(self, requete, vue) -> bool:
         return bool(requete.user.is_authenticated and requete.user.est_groupeur_valide)
@@ -87,3 +87,29 @@ class EstAuteurOuLectureSeule(permissions.BasePermission):
             objet, "acheteur_id", None
         )
         return proprietaire == requete.user.id
+
+
+class EstLivreur(permissions.BasePermission):
+    """Réservé aux livreurs partenaires — La Poste, Gozem.
+
+    **C'est le livreur qui scanne, et personne d'autre.** L'OAG remet le lot
+    en bloc à l'agence et ne rencontre jamais ses acheteurs : s'il pouvait
+    valider lui-même un retrait, la preuve de livraison ne prouverait plus
+    rien, puisque celui qui doit livrer signerait sa propre livraison.
+
+    L'équipe garde l'accès : il faut bien pouvoir corriger une remise saisie
+    de travers, et chaque validation porte le nom de son auteur.
+    """
+
+    message = "Réservé aux livreurs partenaires."
+
+    def has_permission(self, requete, vue) -> bool:
+        utilisateur = requete.user
+        return bool(
+            utilisateur.is_authenticated
+            and (
+                utilisateur.role == Utilisateur.Role.LIVREUR
+                or utilisateur.est_equipe
+                or utilisateur.role == Utilisateur.Role.ADMINISTRATEUR
+            )
+        )

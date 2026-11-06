@@ -59,8 +59,11 @@ def campagnes_avec_avancement():
     """
     return (
         Campagne.objects.filter(statut__in=STATUTS_CONSULTABLES)
+        # `groupeur__points` porte le grade, affiché sur chaque vignette :
+        # sans lui ici, lire le grade réveillerait une requête par vignette.
         .select_related("produit", "produit__categorie", "groupeur",
-                        "groupeur__reputation", "groupeur__dossier_kyc")
+                        "groupeur__reputation", "groupeur__dossier_kyc",
+                        "groupeur__points")
         .prefetch_related("produit__medias", "paliers", "medias")
         .annotate(
             total_pieces=Sum("participations__quantite", filter=_PAYEES, default=0),
@@ -175,13 +178,7 @@ class CampagneVueEnsemble(viewsets.ReadOnlyModelViewSet):
         # La fiche s'ouvre quel que soit le sort de la campagne ; seul
         # un brouillon reste privé, et son groupeur a son propre espace.
         if self.action == "retrieve":
-            return campagnes.annotate(
-                nombre_commentaires=Count(
-                    "commentaires",
-                    filter=Q(commentaires__masque_le__isnull=True),
-                    distinct=True,
-                )
-            )
+            return campagnes
 
         # Par défaut on ne montre que ce à quoi on peut encore participer :
         # une liste ouverte sur les campagnes terminées donnerait l'impression

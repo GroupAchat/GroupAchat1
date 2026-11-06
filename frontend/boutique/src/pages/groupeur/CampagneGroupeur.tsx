@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   ArrowLeft,
   BadgeCheck,
@@ -7,11 +7,13 @@ import {
   CircleCheck,
   Megaphone,
   PackageCheck,
-  Phone,
   Rocket,
   Scale,
-  ScanLine,
   Send,
+  Hourglass,
+  ShieldAlert,
+  ShieldCheck,
+  Truck,
   Users,
 } from "lucide-react";
 import { useState } from "react";
@@ -21,22 +23,31 @@ import type { Campagne, Participant } from "@commun/api/types";
 import { PhotosDuLot } from "@/composants/PhotosDuLot";
 import { Feuille } from "@commun/composants/Feuille";
 import { Jauge } from "@/composants/Jauge";
+import { OffrePublication, useDroitDePublier } from "@/composants/DroitDePublier";
 import {
   Alerte,
   Avatar,
   Bouton,
   Carte,
-  Champ,
   Etiquette,
   EtatVide,
   fusionner,
   Squelette,
 } from "@commun/composants/ui";
-import { codeLisible, dateLongue, francs, telephoneLisible } from "@commun/outils/formats";
+import { useSession } from "@commun/contexte/Session";
+import {
+  commissionSur,
+  dateLongue,
+  francs,
+  francsCourt,
+  gradeLisible,
+  tauxCommission,
+  telephoneLisible,
+} from "@commun/outils/formats";
 import { api, useAction, useRequete } from "@commun/outils/requetes";
 
 /**
- * Le pilotage d'une campagne par son groupeur.
+ * Le pilotage d'une campagne par son OAG.
  *
  * C'est ici que se joue ce qui remplace la liste WhatsApp : **qui a payé
  * combien, en temps réel**, et les quelques gestes qui font avancer la
@@ -51,39 +62,44 @@ export default function CampagneGroupeur() {
   const { donnees: participants, recharger: rechargerParticipants } = useRequete<
     Participant[]
   >(`/groupeur/campagnes/${id}/participants/`);
+  // Publier se paie : l'ecran doit savoir ce qu'il reste **avant** d'offrir
+  // le bouton, et quoi proposer si la reserve est vide.
+  const { donnees: droit, recharger: rechargerDroit } = useDroitDePublier();
   const [feuilleRetrait, setFeuilleRetrait] = useState(false);
-  const [feuilleScan, setFeuilleScan] = useState(false);
 
   const tout = async () => {
     await Promise.all([recharger(), rechargerParticipants()]);
   };
 
   const publier = useAction(async () => {
-    await api.post(`/groupeur/campagnes/${id}/publier/`);
+    const retour = await api.post(`/groupeur/campagnes/${id}/publier/`);
     await tout();
+    await rechargerDroit();
+    return retour;
   });
   const cloturer = useAction(async () => {
     await api.post(`/groupeur/campagnes/${id}/cloturer/`);
     await tout();
   });
+  // Sans le préfixe `/api` : le client le pose déjà. Avec, la requête
+  // partait sur `/api/api/...` et les deux boutons de la décision — tenir le
+  // groupage ou y renoncer — ne faisaient rien d'autre qu'un 404 silencieux.
   const maintenir = useAction(async () => {
-    await api.post(`/api/groupeur/campagnes/${id}/maintenir/`);
+    await api.post(`/groupeur/campagnes/${id}/maintenir/`);
     await tout();
   });
   const annuler = useAction(async (motif: string) => {
-    await api.post(`/api/groupeur/campagnes/${id}/annuler/`, { motif });
+    await api.post(`/groupeur/campagnes/${id}/annuler/`, { motif });
     await tout();
   });
-  const miseADisposition = useAction(async (point: string) => {
-    await api.post(`/groupeur/campagnes/${id}/mise-a-disposition/`, {
-      point_remise: point,
-    });
+  const miseADisposition = useAction(async () => {
+    await api.post(`/groupeur/campagnes/${id}/mise-a-disposition/`);
     await tout();
   });
 
   if (chargement) {
     return (
-      <div className="mx-auto w-full max-w-6xl space-y-5 px-4 py-6 lg:px-8 lg:py-9">
+      <div className="w-full space-y-4 px-3.5 py-4 pb-24">
         <Squelette className="h-8 w-48" />
         <Squelette className="h-32" />
         <Squelette className="h-48" />
@@ -104,7 +120,7 @@ export default function CampagneGroupeur() {
     miseADisposition.erreur?.message;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 px-4 py-6">
+    <div className="w-full space-y-4 px-3.5 py-4 pb-24">
       <Link
         to="/groupeur/campagnes"
         className="texte-doux inline-flex items-center gap-1.5 text-sm font-semibold"
@@ -126,8 +142,11 @@ export default function CampagneGroupeur() {
             libelle="pièces"
           />
           <Mesure valeur={String(campagne.nombre_participants)} libelle="participants" />
+          {/* Forme courte : « 1,3 M » tient dans un tiers de 360 pixels, là
+              où « 1 250 000 FCFA » se cassait sur trois lignes. Le montant
+              exact reste juste dessous, dans les détails. */}
           <Mesure
-            valeur={francs(campagne.montant_collecte)}
+            valeur={francsCourt(campagne.montant_collecte)}
             libelle="collecté"
             vedette
           />
@@ -141,15 +160,58 @@ export default function CampagneGroupeur() {
         <h2 className="font-bold">Prochaine étape</h2>
 
         {campagne.statut === "brouillon" && (
+          <>
+            <Etape
+              icone={Rocket}
+              titre="Publier la campagne"
+              texte={
+                droit?.abonnement_actif
+                  ? "Votre abonnement couvre les publications sans compter."
+                  : droit && droit.publications_restantes > 0
+                    ? `Elle consommera une de vos ${droit.publications_restantes} publications.`
+                    : "Elle apparaîtra au catalogue et les acheteurs pourront participer."
+              }
+              action={
+                <Bouton
+                  chargement={publier.envoi}
+                  disabled={droit ? !droit.peut_publier : false}
+                  onClick={() => void publier.lancer(undefined as never)}
+                >
+                  Publier
+                </Bouton>
+              }
+            />
+
+            {/* Le refus ne se contente pas de dire non : il montre les deux
+                formules sur place. Renvoyer l'OAG chercher ailleurs au
+                moment ou il voulait publier, c'est le perdre. */}
+            {droit && !droit.peut_publier && (
+              <div className="border-t pt-3">
+                <p className="mb-3 text-sm font-semibold">
+                  Publier demande un abonnement ou un pack
+                </p>
+                <OffrePublication droit={droit} surAchat={rechargerDroit} />
+              </div>
+            )}
+          </>
+        )}
+
+        {/* La relecture avant vitrine depend du grade : systematique en
+            Bronze, une sur quatre en Argent, jamais en Or. Le dire ici, et
+            non seulement dans une notification, evite de croire a un bug. */}
+        {campagne.statut === "en_verification" && (
           <Etape
-            icone={Rocket}
-            titre="Publier la campagne"
-            texte="Elle apparaîtra au catalogue et les acheteurs pourront participer."
-            action={
-              <Bouton chargement={publier.envoi} onClick={() => void publier.lancer(undefined as never)}>
-                Publier
-              </Bouton>
-            }
+            icone={Hourglass}
+            titre="En vérification"
+            texte="L'équipe relit votre groupage avant qu'il apparaisse au catalogue — en général sous 24 heures. Vous serez prévenu de la décision."
+          />
+        )}
+
+        {campagne.statut === "brouillon" && campagne.motif_annulation && (
+          <Etape
+            icone={ShieldAlert}
+            titre="Groupage à corriger"
+            texte={`${campagne.motif_annulation} Votre publication vous a été rendue : corrigez, puis publiez à nouveau.`}
           />
         )}
 
@@ -207,7 +269,7 @@ export default function CampagneGroupeur() {
           <Etape
             icone={Banknote}
             titre="Retirez vos fonds"
-            texte={`${francs(campagne.montant_collecte)} collectés. Vous recevez tout, moins 1 500 FCFA de frais fixes.`}
+            texte={`${francs(campagne.montant_collecte)} collectés. Vous recevez tout, moins la commission de votre grade.`}
             action={<Bouton onClick={() => setFeuilleRetrait(true)}>Demander le retrait</Bouton>}
           />
         )}
@@ -216,23 +278,29 @@ export default function CampagneGroupeur() {
           <Etape
             icone={Megaphone}
             titre="Annoncez l'arrivée de la marchandise"
-            texte="Tous les participants recevront une notification avec le point de remise et leur code de retrait."
+            texte="Chaque participant recevra sa destination — son bureau de poste ou sa livraison — avec son code de retrait."
             action={
-              <FormulaireDisposition
-                defaut={campagne.point_remise}
-                envoi={miseADisposition.envoi}
-                surEnvoi={(point) => void miseADisposition.lancer(point)}
-              />
+              <Bouton
+                chargement={miseADisposition.envoi}
+                icone={<Send className="size-4" />}
+                onClick={() => void miseADisposition.lancer(undefined as never)}
+              >
+                Prévenir les participants
+              </Bouton>
             }
           />
         )}
 
+        {/* **Vous ne scannez pas.** Le lot est parti chez le partenaire —
+            La Poste, Gozem — et c'est le livreur qui scanne le code de
+            chaque acheteur. Vous l'apprenez ici, colis par colis. Si vous
+            pouviez valider vous-même, celui qui doit livrer signerait sa
+            propre livraison. */}
         {campagne.statut === "distribution" && (
           <Etape
-            icone={ScanLine}
+            icone={Truck}
             titre={`${retires} / ${payes.length} colis remis`}
-            texte="Saisissez ou scannez le code que présente chaque participant."
-            action={<Bouton onClick={() => setFeuilleScan(true)}>Valider un retrait</Bouton>}
+            texte="L'agence partenaire livre et scanne le code de chaque acheteur. Vous êtes prévenu à chaque remise."
           />
         )}
 
@@ -255,69 +323,90 @@ export default function CampagneGroupeur() {
         )}
       </Carte>
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] lg:items-start">
+      <div className="space-y-4">
       {/* ── Suivi nominatif ──────────────────────────────────────────────── */}
-      <section className="space-y-3 lg:order-1">
-        <h2 className="flex items-center gap-2 text-lg font-bold">
-          <Users className="size-5" />
-          Qui a payé
-          <span className="texte-doux text-sm font-normal">({payes.length})</span>
-        </h2>
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-base font-extrabold text-slate-900 dark:text-slate-100">
+            <Users className="size-5 text-[color:var(--color-accent)]" />
+            Liste des acheteurs ayant payé
+            <span className="rounded-full bg-blue-100 dark:bg-blue-950 px-2 py-0.5 text-xs font-bold text-blue-700 dark:text-blue-300">
+              {payes.length}
+            </span>
+          </h2>
+          <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 dark:text-emerald-400 px-2.5 py-0.5 rounded-full">
+            {retires} / {payes.length} colis remis
+          </span>
+        </div>
 
         {payes.length === 0 ? (
           <EtatVide
             icone={<Users className="size-7" />}
             titre="Aucun paiement pour l'instant"
-            texte="Dès qu'un acheteur règle sa part, il apparaît ici — et vous recevez une notification."
+            texte="Dès qu'un acheteur règle sa part, il apparaît ici avec son nom et la quantité commandée."
           />
         ) : (
           <ul className="space-y-2">
-            {payes.map((participant, rang) => (
-              <motion.li
-                key={participant.id}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: Math.min(rang, 8) * 0.04 }}
-              >
-                <Carte className="flex items-center gap-3 !p-3">
-                  <Avatar nom={participant.nom_complet} taille={40} />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-semibold">{participant.nom_complet}</p>
-                    <a
-                      href={`tel:+228${participant.telephone}`}
-                      className="texte-doux tabulaire flex items-center gap-1 text-xs"
-                    >
-                      <Phone className="size-3" />
-                      {telephoneLisible(participant.telephone)}
-                    </a>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <p className="tabulaire font-bold">
-                      {francs(participant.montant_total)}
-                    </p>
-                    <p className="texte-doux tabulaire text-xs">
-                      {participant.quantite} pièce{participant.quantite > 1 ? "s" : ""}
-                    </p>
-                  </div>
-                  {participant.statut === "retiree" ? (
-                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-                      <Check className="size-4" strokeWidth={3} />
-                    </span>
-                  ) : (
-                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-accent-doux text-[color:var(--color-accent)]">
-                      <BadgeCheck className="size-4" />
-                    </span>
-                  )}
-                </Carte>
-              </motion.li>
-            ))}
+            {payes.map((participant, rang) => {
+              const nomAcheteur = participant.nom_complet || participant.nom_utilisateur || "Acheteur";
+              return (
+                <motion.li
+                  key={participant.id}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: Math.min(rang, 8) * 0.04 }}
+                >
+                  <Carte className="flex items-center gap-3.5 !p-3.5 border-slate-200/80 hover:border-[color:var(--color-accent)] transition-colors">
+                    <Avatar nom={nomAcheteur} taille={42} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="truncate font-bold text-sm text-slate-900 dark:text-slate-100">
+                          {nomAcheteur}
+                        </p>
+                        <span className="shrink-0 rounded-full bg-amber-100 dark:bg-amber-950/80 border border-amber-300 dark:border-amber-700/60 px-2 py-0.5 text-[11px] font-extrabold text-amber-900 dark:text-amber-200">
+                          {participant.quantite} {participant.quantite > 1 ? "pièces demandées" : "pièce demandée"}
+                        </span>
+                      </div>
+                      <p className="texte-doux flex items-center gap-1.5 text-xs mt-0.5">
+                        {participant.mode_retrait === "livraison" ? (
+                          <Truck className="size-3.5 text-blue-500 shrink-0" />
+                        ) : (
+                          <ShieldCheck className="size-3.5 text-emerald-500 shrink-0" />
+                        )}
+                        <span className="truncate">
+                          {participant.remis_par
+                            ? `Remis par ${participant.remis_par}`
+                            : participant.destination}
+                        </span>
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="tabulaire font-extrabold text-sm text-slate-900 dark:text-slate-100">
+                        {francs(participant.montant_total)}
+                      </p>
+                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                        Payé · Séquestre
+                      </span>
+                    </div>
+                    {participant.statut === "retiree" ? (
+                      <span className="grid size-8 shrink-0 place-items-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" title="Colis retiré">
+                        <Check className="size-4" strokeWidth={3} />
+                      </span>
+                    ) : (
+                      <span className="grid size-8 shrink-0 place-items-center rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300" title="En attente de retrait">
+                        <BadgeCheck className="size-4" />
+                      </span>
+                    )}
+                  </Carte>
+                </motion.li>
+              );
+            })}
           </ul>
         )}
       </section>
 
-      {/* Les photos du lot et les chiffres de l'offre, gardés sous les yeux
-          pendant qu'on parcourt la liste des participants. */}
-      <div className="space-y-4 lg:sticky lg:top-24">
+      {/* Les photos du lot et les chiffres de l'offre */}
+      <div className="space-y-4">
       <PhotosDuLot campagneId={campagne.id} />
 
       <Carte className="space-y-2 text-sm">
@@ -326,7 +415,7 @@ export default function CampagneGroupeur() {
         <Ligne libelle="Prix courant" valeur={francs(campagne.prix_courant)} />
         <Ligne libelle="Minimum" valeur={`${campagne.quantite_minimale} pièces`} />
         <Ligne libelle="Date limite" valeur={dateLongue(campagne.date_limite)} />
-        <Ligne libelle="Point de remise" valeur={campagne.point_remise} />
+        <Ligne libelle="Retrait" valeur="Au choix de chaque acheteur" />
       </Carte>
       </div>
 
@@ -338,12 +427,6 @@ export default function CampagneGroupeur() {
         campagne={campagne}
         surSucces={tout}
       />
-      <FeuilleScan
-        ouverte={feuilleScan}
-        surFermeture={() => setFeuilleScan(false)}
-        campagneId={campagne.id}
-        surSucces={tout}
-      />
     </div>
   );
 }
@@ -351,6 +434,7 @@ export default function CampagneGroupeur() {
 function etiquetteStatut(statut: string): string {
   const table: Record<string, string> = {
     brouillon: "Brouillon",
+    en_verification: "En vérification",
     minimum_non_atteint: "Minimum non atteint",
     en_cours: "Collecte en cours",
     financee: "Financée",
@@ -373,10 +457,10 @@ function Mesure({
   vedette?: boolean;
 }) {
   return (
-    <div className="surface-douce rounded-2xl py-3">
+    <div className="surface-douce rounded-2xl px-1 py-3">
       <p
         className={fusionner(
-          "text-base font-extrabold",
+          "text-sm font-extrabold sm:text-base",
           vedette && "text-[color:var(--color-accent)]",
         )}
       >
@@ -405,7 +489,9 @@ function Etape({
   icone: typeof Rocket;
   titre: string;
   texte: string;
-  action: React.ReactNode;
+  /** Toutes les etapes n'appellent pas un geste : certaines ne font
+   *  qu'expliquer l'attente. */
+  action?: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -417,36 +503,6 @@ function Etape({
         <p className="texte-doux text-sm leading-relaxed">{texte}</p>
       </div>
       {action && <div className="shrink-0">{action}</div>}
-    </div>
-  );
-}
-
-function FormulaireDisposition({
-  defaut,
-  envoi,
-  surEnvoi,
-}: {
-  defaut: string;
-  envoi: boolean;
-  surEnvoi: (point: string) => void;
-}) {
-  const [point, setPoint] = useState(defaut);
-  return (
-    <div className="flex w-full flex-col gap-2 sm:w-64">
-      <input
-        value={point}
-        onChange={(evenement) => setPoint(evenement.target.value)}
-        placeholder="Point de remise"
-        className="surface h-11 rounded-2xl px-3 text-sm outline-none focus:border-[color:var(--color-accent)]"
-        aria-label="Point de remise"
-      />
-      <Bouton
-        chargement={envoi}
-        icone={<Send className="size-4" />}
-        onClick={() => surEnvoi(point)}
-      >
-        Prévenir les participants
-      </Bouton>
     </div>
   );
 }
@@ -464,6 +520,7 @@ function FeuilleRetrait({
   campagne: Campagne;
   surSucces: () => Promise<void>;
 }) {
+  const { utilisateur } = useSession();
   const [resultat, setResultat] = useState<{
     montant_brut: number;
     frais: number;
@@ -480,7 +537,11 @@ function FeuilleRetrait({
     return retour;
   });
 
-  const frais = 1500;
+  // Le taux suit le grade : 3,5 % en Bronze, 2,5 % en Argent, 1,3 % en Or.
+  // On refait ici le calcul du serveur — même arrondi vers le bas — pour que
+  // l'OAG voie le net avant de confirmer, et non après.
+  const centiemes = utilisateur?.points.commission_centiemes ?? 350;
+  const frais = commissionSur(campagne.montant_collecte, centiemes);
   const net = Math.max(0, campagne.montant_collecte - frais);
 
   return (
@@ -532,8 +593,9 @@ function FeuilleRetrait({
           </div>
 
           <p className="texte-doux text-sm">
-            Les frais sont fixes : 1 500 FCFA par campagne, quel que soit le
-            montant collecté. Aucun abonnement, aucune commission.
+            La commission est de {tauxCommission(centiemes)} du montant
+            collecté, au grade {gradeLisible(utilisateur?.points.grade ?? "bronze")}.
+            Elle baisse à mesure que vous montez en grade.
           </p>
 
           <Alerte>{demande.erreur?.message}</Alerte>
@@ -552,95 +614,3 @@ function FeuilleRetrait({
   );
 }
 
-// ── Validation d'un retrait ────────────────────────────────────────────────
-
-function FeuilleScan({
-  ouverte,
-  surFermeture,
-  campagneId,
-  surSucces,
-}: {
-  ouverte: boolean;
-  surFermeture: () => void;
-  campagneId: number;
-  surSucces: () => Promise<void>;
-}) {
-  const [code, setCode] = useState("");
-  const [valide, setValide] = useState<{ acheteur: string; quantite: number } | null>(
-    null,
-  );
-
-  const valider = useAction(async () => {
-    const retour = await api.post<{ acheteur: string; quantite: number }>(
-      `/groupeur/campagnes/${campagneId}/retrait/`,
-      { code: code.trim() },
-    );
-    setValide(retour);
-    setCode("");
-    await surSucces();
-    return retour;
-  });
-
-  return (
-    <Feuille
-      ouverte={ouverte}
-      surFermeture={() => {
-        setValide(null);
-        surFermeture();
-      }}
-      titre="Valider un retrait"
-    >
-      <div className="space-y-4 py-2">
-        <AnimatePresence>
-          {valide && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              className="flex items-center gap-3 rounded-2xl bg-emerald-50 p-4 text-sm dark:bg-emerald-950/50"
-            >
-              <span className="grid size-10 shrink-0 place-items-center rounded-full bg-emerald-500 text-white">
-                <Check className="size-5" strokeWidth={3} />
-              </span>
-              <div className="text-emerald-900 dark:text-emerald-200">
-                <p className="font-bold">Colis remis à {valide.acheteur}</p>
-                <p>
-                  {valide.quantite} pièce{valide.quantite > 1 ? "s" : ""} —
-                  livraison prouvée, réclamation sans fondement impossible.
-                </p>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <Champ
-          etiquette="Code de retrait"
-          placeholder="A9PE KDXQ"
-          value={code}
-          onChange={(evenement) => setCode(evenement.target.value.toUpperCase())}
-          aide="Saisissez le code dicté par le participant, ou collez le contenu du QR scanné."
-          className="tabulaire tracking-[0.18em]"
-          autoFocus
-        />
-
-        <Alerte>{valider.erreur?.message}</Alerte>
-
-        <Bouton
-          pleineLargeur
-          taille="lg"
-          chargement={valider.envoi}
-          disabled={code.trim().length < 4}
-          onClick={() => void valider.lancer(undefined as never)}
-          icone={<ScanLine className="size-4" />}
-        >
-          Valider le retrait
-        </Bouton>
-
-        <p className="texte-doux text-xs">
-          Un code validé vaut preuve de livraison : il ferme définitivement
-          toute contestation sur cette part. {codeLisible("")}
-        </p>
-      </div>
-    </Feuille>
-  );
-}

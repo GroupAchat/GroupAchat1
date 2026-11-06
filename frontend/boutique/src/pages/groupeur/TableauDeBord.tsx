@@ -2,6 +2,8 @@ import { motion } from "framer-motion";
 import {
   ArrowRight,
   Boxes,
+  FileText,
+  Landmark,
   PackageCheck,
   Plus,
   Star,
@@ -16,6 +18,9 @@ import { AvisRecus } from "@/composants/Avis";
 import { Anneau } from "@/composants/Jauge";
 import { Jauge } from "@/composants/Jauge";
 import { Bouton, Carte, Etiquette, EtatVide, Squelette } from "@commun/composants/ui";
+
+import { BandeauGrade } from "../../composants/BandeauGrade";
+import { CarteDroitDePublier } from "@/composants/DroitDePublier";
 import { Visuel } from "@/composants/Visuel";
 import { useSession } from "@commun/contexte/Session";
 import { francs, tempsRestant } from "@commun/outils/formats";
@@ -23,6 +28,7 @@ import { useRequete } from "@commun/outils/requetes";
 
 const LIBELLES_STATUT: Record<string, { texte: string; ton: "neutre" | "accent" | "succes" | "alerte" }> = {
   brouillon: { texte: "Brouillon", ton: "neutre" },
+  en_verification: { texte: "En vérification", ton: "alerte" },
   en_cours: { texte: "Collecte en cours", ton: "accent" },
   financee: { texte: "Financée", ton: "succes" },
   decaissee: { texte: "Fonds reçus", ton: "succes" },
@@ -32,7 +38,7 @@ const LIBELLES_STATUT: Record<string, { texte: string; ton: "neutre" | "accent" 
   annulee: { texte: "Annulée", ton: "neutre" },
 };
 
-/** Le tableau de bord du groupeur : l'état de son activité en un écran. */
+/** Le tableau de bord de l'OAG : l'état de son activité en un écran. */
 export default function TableauDeBord() {
   const { utilisateur } = useSession();
   const { donnees: bord, chargement } = useRequete<TableauDeBordGroupeur>(
@@ -46,32 +52,81 @@ export default function TableauDeBord() {
   );
 
   return (
-    <div className="mx-auto w-full max-w-[86rem] space-y-6 px-4 py-6 lg:px-8 lg:py-9">
-      <header className="flex flex-wrap items-end justify-between gap-3">
+    <div className="w-full space-y-4 px-3.5 py-4 pb-24">
+      <header className="flex items-center justify-between gap-2">
         <div>
-          <p className="texte-doux text-sm">Espace groupeur</p>
-          <h1 className="text-2xl font-extrabold">
+          <p className="texte-doux text-xs">Espace OAG</p>
+          <h1 className="text-xl font-extrabold text-slate-900">
             Bonjour {utilisateur?.prenom}
           </h1>
         </div>
         <Link to="/groupeur/campagnes/nouvelle">
-          <Bouton icone={<Plus className="size-4" />}>Nouvelle campagne</Bouton>
+          <Bouton taille="sm" icone={<Plus className="size-3.5" />}>
+            Nouvelle offre
+          </Bouton>
         </Link>
       </header>
 
+      {/* Attestation d'historique bancaire certifiée (Prêts bancaires BCEAO / Togo) */}
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+        <Carte className="space-y-3 border-indigo-200/80 bg-gradient-to-r from-indigo-50/70 to-blue-50/50 p-3.5">
+          <div className="flex items-start gap-3">
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-indigo-600 text-white shadow-xs">
+              <Landmark className="size-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-slate-900 leading-tight">
+                Attestation d'historique bancaire certifiée
+              </p>
+              <p className="texte-doux text-xs mt-0.5 leading-snug">
+                Générez votre rapport officiel certifié pour vos dossiers de crédit (Ecobank, Coris, Orabank Togo).
+              </p>
+            </div>
+          </div>
+          <Link to="/groupeur/historique-bancaire" className="block">
+            <Bouton pleineLargeur ton="contour" taille="sm" icone={<FileText className="size-3.5" />}>
+              Générer l'attestation
+            </Bouton>
+          </Link>
+        </Carte>
+      </motion.div>
+
+      {/* Ce qui attend un geste avant les chiffres */}
+      {bord && bord.campagnes.a_distribuer > 0 && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+          <Carte className="flex items-center gap-3 border-[color:var(--color-accent)] p-3.5">
+            <span className="bg-accent-doux grid size-11 place-items-center rounded-xl text-[color:var(--color-accent)] shrink-0">
+              <PackageCheck className="size-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="font-bold text-sm text-slate-900">
+                {bord.campagnes.a_distribuer} campagne
+                {bord.campagnes.a_distribuer > 1 ? "s" : ""} en distribution
+              </p>
+              <p className="texte-doux text-xs mt-0.5">
+                Scannez les codes de retrait de vos participants.
+              </p>
+            </div>
+            <Link to="/groupeur/campagnes" className="shrink-0">
+              <Bouton taille="sm" ton="contour">Voir</Bouton>
+            </Link>
+          </Carte>
+        </motion.div>
+      )}
+
       {chargement || !bord ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2.5">
           {Array.from({ length: 4 }, (_, rang) => (
-            <Squelette key={rang} className="h-28" />
+            <Squelette key={rang} className="h-24 rounded-2xl" />
           ))}
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2.5">
           <Tuile
             icone={Wallet}
-            libelle="Consigné en séquestre"
+            libelle="Consigné séquestre"
             valeur={francs(bord.collecte.montant_consigne)}
-            detail={`${bord.collecte.pieces} pièces vendues`}
+            detail={`${bord.collecte.pieces} pcs vendues`}
             index={0}
             vedette
           />
@@ -86,73 +141,59 @@ export default function TableauDeBord() {
             icone={TrendingUp}
             libelle="Déjà retiré"
             valeur={francs(bord.decaissements.montant_recu)}
-            detail={`${francs(bord.decaissements.frais_payes)} de frais`}
+            detail={`${francs(bord.decaissements.frais_payes)} com.`}
             index={2}
           />
           <Tuile
             icone={Star}
             libelle="Réputation"
             valeur={`${bord.reputation.note}/5`}
-            detail={`${bord.reputation.campagnes_terminees} campagnes menées à terme`}
+            detail={`${bord.reputation.campagnes_terminees} réussies`}
             index={3}
           />
         </div>
       )}
 
-      {bord && bord.campagnes.a_distribuer > 0 && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-          <Carte className="flex flex-wrap items-center gap-4 border-[color:var(--color-accent)]">
-            <span className="grid size-12 place-items-center rounded-2xl bg-accent-doux text-[color:var(--color-accent)]">
-              <PackageCheck className="size-6" />
-            </span>
-            <div className="flex-1">
-              <p className="font-bold">
-                {bord.campagnes.a_distribuer} campagne
-                {bord.campagnes.a_distribuer > 1 ? "s" : ""} en distribution
-              </p>
-              <p className="texte-doux text-sm">
-                Scannez les codes de retrait de vos participants.
-              </p>
-            </div>
-          </Carte>
-        </motion.div>
-      )}
+      <div className="space-y-4">
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-bold text-slate-900">Campagnes à suivre</h2>
+            <Link
+              to="/groupeur/campagnes"
+              className="flex items-center gap-1 text-xs font-semibold text-[color:var(--color-accent)]"
+            >
+              Toutes ({liste.length})
+              <ArrowRight className="size-3.5" />
+            </Link>
+          </div>
 
-      {/* Les avis : le seul recours qu'ont les acheteurs, et le seul levier
-          qu'a le groupeur pour y répondre. */}
-      {utilisateur && <AvisRecus groupeurId={utilisateur.id} />}
+          {aSuivre.length === 0 ? (
+            <EtatVide
+              icone={<Boxes className="size-7" />}
+              titre="Aucune campagne active"
+              texte="Lancez votre premier groupage : photos, prix, minimum de pièces, date limite."
+              action={
+                <Link to="/groupeur/campagnes/nouvelle">
+                  <Bouton taille="sm">Créer une offre</Bouton>
+                </Link>
+              }
+            />
+          ) : (
+            <ul className="space-y-2.5">
+              {aSuivre.map((campagne, rang) => (
+                <LigneCampagne key={campagne.id} campagne={campagne} index={rang} />
+              ))}
+            </ul>
+          )}
+        </section>
 
-      <section className="space-y-3">
-        <div className="flex items-end justify-between">
-          <h2 className="text-lg font-bold">Campagnes à suivre</h2>
-          <Link
-            to="/groupeur/campagnes"
-            className="flex items-center gap-1 text-sm font-semibold text-[color:var(--color-accent)]"
-          >
-            Toutes ({liste.length})
-            <ArrowRight className="size-3.5" />
-          </Link>
+        <div className="space-y-3">
+          <BandeauGrade />
+          <CarteDroitDePublier compact />
         </div>
 
-        {aSuivre.length === 0 ? (
-          <EtatVide
-            icone={<Boxes className="size-7" />}
-            titre="Aucune campagne active"
-            texte="Lancez votre premier groupage : photos, prix, minimum de pièces, date limite."
-            action={
-              <Link to="/groupeur/campagnes/nouvelle">
-                <Bouton>Créer une campagne</Bouton>
-              </Link>
-            }
-          />
-        ) : (
-          <ul className="space-y-3">
-            {aSuivre.map((campagne, rang) => (
-              <LigneCampagne key={campagne.id} campagne={campagne} index={rang} />
-            ))}
-          </ul>
-        )}
-      </section>
+        {utilisateur && <AvisRecus groupeurId={utilisateur.id} />}
+      </div>
     </div>
   );
 }
@@ -174,28 +215,29 @@ function Tuile({
 }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 14 }}
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.07 }}
+      transition={{ delay: index * 0.05 }}
     >
       <Carte
         className={
           vedette
-            ? "relative overflow-hidden border-transparent text-white"
-            : undefined
+            ? "degrade-accent relative overflow-hidden border-transparent text-white !p-3 space-y-1 shadow-xs"
+            : "surface !p-3 space-y-1 border border-slate-200/80 shadow-xs"
         }
       >
-        {vedette && <span className="degrade-accent absolute inset-0 -z-10" />}
-        <Icone className={vedette ? "size-5" : "size-5 text-[color:var(--color-accent)]"} />
+        <div className="flex items-center justify-between">
+          <Icone className={vedette ? "size-4 text-white" : "size-4 text-orange-600"} />
+        </div>
         <p
           className={
-            vedette ? "mt-3 text-sm text-white/80" : "texte-doux mt-3 text-sm"
+            vedette ? "text-[11px] font-medium text-white/80 leading-tight truncate" : "texte-doux text-[11px] font-medium leading-tight truncate"
           }
         >
           {libelle}
         </p>
-        <p className="tabulaire mt-0.5 text-xl font-extrabold">{valeur}</p>
-        <p className={vedette ? "text-xs text-white/70" : "texte-doux text-xs"}>
+        <p className="tabulaire text-base font-black leading-tight truncate">{valeur}</p>
+        <p className={vedette ? "text-[10px] text-white/70 truncate" : "texte-doux text-[10px] truncate"}>
           {detail}
         </p>
       </Carte>
@@ -267,19 +309,43 @@ export function MesCampagnes() {
   const financees = campagnes.filter((c) => c.statut === "financee").length;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-5 px-4 py-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
+    <div className="w-full space-y-4 px-3.5 py-4 pb-24">
+      <header className="flex items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-extrabold">Mes campagnes</h1>
-          <p className="texte-doux text-sm">
-            {campagnes.length} au total
-            {financees > 0 && ` · ${financees} prête(s) à décaisser`}
+          <h1 className="text-xl font-extrabold text-slate-900">Mes offres</h1>
+          <p className="texte-doux text-xs">
+            {campagnes.length} groupage(s)
+            {financees > 0 && ` · ${financees} prêt(s) à décaisser`}
           </p>
         </div>
         <Link to="/groupeur/campagnes/nouvelle">
-          <Bouton icone={<Plus className="size-4" />}>Nouvelle</Bouton>
+          <Bouton taille="sm" icone={<Plus className="size-3.5" />}>Nouvelle</Bouton>
         </Link>
       </header>
+
+      {/* Attestation d'historique bancaire certifiée (Prêts bancaires BCEAO / Togo) */}
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+        <Carte className="space-y-3 border-indigo-200/80 bg-gradient-to-r from-indigo-50/70 to-blue-50/50 p-3.5">
+          <div className="flex items-start gap-3">
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-indigo-600 text-white shadow-xs">
+              <Landmark className="size-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-slate-900 leading-tight">
+                Attestation d'historique bancaire certifiée
+              </p>
+              <p className="texte-doux text-xs mt-0.5 leading-snug">
+                Générez votre rapport officiel certifié pour vos dossiers de crédit (Ecobank, Coris, Orabank Togo).
+              </p>
+            </div>
+          </div>
+          <Link to="/groupeur/historique-bancaire" className="block">
+            <Bouton pleineLargeur ton="contour" taille="sm" icone={<FileText className="size-3.5" />}>
+              Générer l'attestation
+            </Bouton>
+          </Link>
+        </Carte>
+      </motion.div>
 
       {chargement ? (
         <div className="space-y-3">

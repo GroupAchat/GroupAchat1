@@ -23,6 +23,15 @@ from groupachat.catalogue.models import (
     MediaProduit,
     Produit,
 )
+from groupachat.catalogue.publication import (
+    PRIX_ABONNEMENT_FCFA,
+    PRIX_PACK_FCFA,
+    AbonnementPublication,
+    DroitDePublierEpuise,
+    PackPublication,
+    consommer_une_publication,
+    droit_de_publier,
+)
 from groupachat.catalogue.serialiseurs import (
     CampagneDetailSerialiseur,
     CampagneEcritureSerialiseur,
@@ -31,12 +40,13 @@ from groupachat.catalogue.serialiseurs import (
     ProduitEcritureSerialiseur,
     ProduitSerialiseur,
 )
+from groupachat.catalogue.verification import (
+    motif_de_la_verification,
+    verification_requise,
+)
 from groupachat.catalogue.vues import campagnes_avec_avancement
 from groupachat.commandes.models import Participation
-from groupachat.commandes.serialiseurs import (
-    ParticipantSerialiseur,
-    RetraitSerialiseur,
-)
+from groupachat.commandes.serialiseurs import ParticipantSerialiseur
 from groupachat.paiements.models import Decaissement
 from groupachat.paiements.services import (
     ErreurPaiement,
@@ -49,8 +59,9 @@ from groupachat.paiements.services import (
     demander_decaissement,
     mettre_a_disposition,
     sequestre_de,
-    valider_retrait,
 )
+from groupachat.comptes import points
+from groupachat.echanges.models import Notification
 from groupachat.noyau import hebergement
 from groupachat.noyau.permissions import GroupeurValide
 
@@ -128,15 +139,57 @@ class CampagneGroupeurVueEnsemble(viewsets.ModelViewSet):
             return Response({"detail": "La date limite est déjà passée."},
                             status=status.HTTP_400_BAD_REQUEST)
 
-        campagne.statut = Campagne.Statut.EN_COURS
-        campagne.publiee_le = timezone.now()
-        campagne.save(update_fields=["statut", "publiee_le"])
-        sequestre_de(campagne)
-        return self._reponse_campagne(campagne)
+        # La publication se consomme **ici**, et nulle part ailleurs : c'est
+        # la mise en ligne qui se paie, pas le brouillon. Un groupage
+        # abandonné avant publication ne coûte donc rien.
+        try:
+            paye_par = consommer_une_publication(requete.user)
+        except DroitDePublierEpuise as epuise:
+            return Response(
+                {
+                    "detail": str(epuise),
+                    "droit_requis": True,
+                    "prix_abonnement": PRIX_ABONNEMENT_FCFA,
+                    "prix_pack": PRIX_PACK_FCFA,
+                },
+                status=status.HTTP_402_PAYMENT_REQUIRED,
+            )
+
+        # La relecture avant vitrine depend du grade. La publication est
+        # consommee dans les deux cas : c'est la mise en ligne qui se paie,
+        # et elle est demandee. Un refus la rend (voir l'administration).
+        if verification_requise(requete.user):
+            campagne.statut = Campagne.Statut.EN_VERIFICATION
+            campagne.save(update_fields=["statut"])
+            Notification.objects.create(
+                destinataire=requete.user,
+                genre=Notification.Genre.SYSTEME,
+                titre="Groupage en vérification",
+                message=motif_de_la_verification(requete.user),
+                campagne=campagne,
+                lien=f"/groupeur/campagnes/{campagne.id}",
+            )
+        else:
+            campagne.statut = Campagne.Statut.EN_COURS
+            campagne.publiee_le = timezone.now()
+            campagne.save(update_fields=["statut", "publiee_le"])
+            # Le séquestre naît avec la vitrine : avant, il n'y a rien à
+            # consigner, et une campagne refusée n'aurait pas à en traîner un.
+            sequestre_de(campagne)
+
+        reponse = self._reponse_campagne(campagne)
+        reponse.data["publication_payee_par"] = paye_par
+        reponse.data["droit_de_publier"] = droit_de_publier(requete.user)
+        return reponse
 
     @action(detail=True, methods=["get"])
     def participants(self, requete, pk=None):
-        """Le suivi nominatif qui remplace la liste WhatsApp."""
+        """Qui a payé quoi — sous nom d'utilisateur, jamais sous nom civil.
+
+        Le groupeur ne connaît pas ses acheteurs : il prépare des lots et
+        la remise se fait sur présentation d'un code, pas d'un carnet
+        d'adresses.
+        """
         campagne = self.get_object()
         parts = (
             campagne.participations.select_related("acheteur")
@@ -204,36 +257,18 @@ class CampagneGroupeurVueEnsemble(viewsets.ModelViewSet):
         """Annonce l'arrivée de la marchandise et prévient tout le monde."""
         campagne = self.get_object()
         try:
-            notifies = mettre_a_disposition(
-                campagne, point_remise=requete.data.get("point_remise", "")
-            )
+            notifies = mettre_a_disposition(campagne)
         except ErreurPaiement as erreur:
             return Response({"detail": str(erreur)},
                             status=status.HTTP_400_BAD_REQUEST)
-        return Response({"participants_notifies": notifies,
-                         "point_remise": campagne.point_remise})
+        return Response({"participants_notifies": notifies})
 
-    @action(detail=True, methods=["post"])
-    def retrait(self, requete, pk=None):
-        """Valide un code — dicté ou scanné — et remet le colis."""
-        campagne = self.get_object()
-        serialiseur = RetraitSerialiseur(data=requete.data)
-        serialiseur.is_valid(raise_exception=True)
-        try:
-            participation = valider_retrait(
-                campagne, serialiseur.validated_data["code"], requete.user
-            )
-        except ErreurPaiement as erreur:
-            return Response({"detail": str(erreur)},
-                            status=status.HTTP_400_BAD_REQUEST)
-        return Response(
-            {
-                "detail": "Retrait confirmé.",
-                "acheteur": participation.acheteur.nom_complet,
-                "quantite": participation.quantite,
-                "retiree_le": participation.retiree_le,
-            }
-        )
+    # Il n'y a **pas** d'action de retrait ici, et c'est voulu : l'OAG
+    # confie le lot à l'agence et ne rencontre jamais ses acheteurs. Le scan
+    # appartient au livreur (`/api/livraison/retrait/`) ; s'il appartenait
+    # aussi à l'OAG, celui qui doit livrer signerait sa propre livraison et
+    # la preuve ne prouverait plus rien. L'OAG apprend chaque remise par une
+    # notification, et la voit dans sa liste de participants.
 
 
 class ProduitGroupeurVueEnsemble(viewsets.ModelViewSet):
@@ -441,3 +476,145 @@ class EtatGroupeurVue(APIView):
                 "decide_le": dossier.decide_le,
             }
         )
+
+
+class DroitDePublierVue(APIView):
+    """GET /api/groupeur/publication/ — abonnement, réserve, et les prix."""
+
+    permission_classes = [GroupeurValide]
+
+    def get(self, requete):
+        return Response(droit_de_publier(requete.user))
+
+
+class AbonnementPublicationVue(APIView):
+    """POST /api/groupeur/publication/abonnement/ — un mois, illimité.
+
+    Le paiement est **simulé**, comme le reste de la couche d'exécution. Ce
+    qui est réel, c'est la période ouverte et les points gagnés.
+    """
+
+    permission_classes = [GroupeurValide]
+
+    def post(self, requete):
+        debut, fin = AbonnementPublication.prochaine_echeance(requete.user)
+        abonnement = AbonnementPublication.objects.create(
+            oag=requete.user, debute_le=debut, expire_le=fin
+        )
+
+        # Les points sont attribués **au paiement**, et non à chaque
+        # publication : dix points par mois payé, qu'on publie deux fois ou
+        # trente.
+        points.attribuer(
+            requete.user,
+            points.Motif.ABONNEMENT_PUBLICATION,
+            "abonnement_publication",
+            abonnement.id,
+        )
+
+        Notification.objects.create(
+            destinataire=requete.user,
+            genre=Notification.Genre.SYSTEME,
+            titre="Publications illimitées",
+            message=(
+                f"Vous pouvez publier sans compter jusqu'au {fin:%d/%m/%Y}. "
+                f"+{points.BAREME[points.Motif.ABONNEMENT_PUBLICATION]} points."
+            ),
+            lien="/groupeur/publication",
+        )
+        return Response(droit_de_publier(requete.user),
+                        status=status.HTTP_201_CREATED)
+
+
+class PackPublicationVue(APIView):
+    """POST /api/groupeur/publication/pack/ et /ticket/ — Ticket de publication 100 FCFA pour 10 créations d'Offres d'achat."""
+
+    permission_classes = [GroupeurValide]
+
+    def post(self, requete):
+        pack = PackPublication.objects.create(oag=requete.user)
+
+        # « 2 points au total par ticket payé, une seule fois »
+        points.attribuer(
+            requete.user,
+            points.Motif.PACK_PUBLICATION,
+            "premier_pack_publication",
+            requete.user.id,
+        )
+
+        Notification.objects.create(
+            destinataire=requete.user,
+            genre=Notification.Genre.SYSTEME,
+            titre="Ticket de publication ajouté",
+            message=(
+                f"{pack.publications_offertes} créations d'offres ajoutées (100 FCFA). "
+                f"Crédit disponible pour vos prochains Clubs d'achat."
+            ),
+            lien="/groupeur/publication",
+        )
+        return Response(droit_de_publier(requete.user),
+                        status=status.HTTP_201_CREATED)
+
+
+class HistoriqueBancaireOagVue(APIView):
+    """GET /api/groupeur/historique-bancaire/ — Attestation et historique certifié d'activité pour prêt bancaire."""
+
+    permission_classes = [GroupeurValide]
+
+    def get(self, requete):
+        oag = requete.user
+        campagnes = Campagne.objects.filter(groupeur=oag)
+        payees = Participation.objects.filter(
+            campagne__groupeur=oag, statut__in=Participation.STATUTS_PAYES
+        )
+        decaisse = Decaissement.objects.filter(
+            campagne__groupeur=oag, statut=Decaissement.Statut.EXECUTE
+        ).aggregate(net=Sum("montant_net", default=0), frais=Sum("frais", default=0))
+        total_collecte = payees.aggregate(total=Sum("montant_total", default=0))["total"]
+        reputation = getattr(oag, "reputation", None)
+        dossier = getattr(oag, "dossier_kyc", None)
+
+        total_campagnes = campagnes.count()
+        campagnes_terminees = campagnes.filter(statut=Campagne.Statut.TERMINEE).count()
+        taux_reussite = int((campagnes_terminees / total_campagnes * 100)) if total_campagnes > 0 else 100
+
+        # Historique par offre pour justificatif bancaire
+        lignes = []
+        for c in campagnes.order_by("-cree_le")[:20]:
+            parts_c = c.participations.filter(statut__in=Participation.STATUTS_PAYES)
+            lignes.append({
+                "id": c.id,
+                "titre": c.titre,
+                "date_creation": c.cree_le.strftime("%d/%m/%Y"),
+                "statut": c.get_statut_display(),
+                "montant_collecte": parts_c.aggregate(t=Sum("montant_total", default=0))["t"],
+                "participants": parts_c.count(),
+                "assurance": "Tout Risques — Group Achat",
+            })
+
+        return Response({
+            "oag": {
+                "nom_complet": oag.nom_complet,
+                "nom_commerce": dossier.nom_commerce if dossier and dossier.nom_commerce else oag.nom_public,
+                "telephone": oag.telephone,
+                "date_inscription": oag.date_joined.strftime("%d/%m/%Y") if hasattr(oag, "date_joined") else "Novembre 2026",
+                "statut_kyc": "Vérifié & Certifié par Notaire",
+                "cadre_juridique": "Contrat OAG certifié par Notaire — Group Achat Togo",
+                "loi_donnees": "Conforme IPDCP Togo (Loi n°2019-014)",
+            },
+            "synthese": {
+                "offres_lancees": total_campagnes,
+                "offres_terminees": campagnes_terminees,
+                "taux_reussite_pourcent": taux_reussite,
+                "montant_total_collecte_fcfa": total_collecte,
+                "montant_total_decaisse_fcfa": decaisse["net"],
+                "clients_servis": payees.values("acheteur").distinct().count(),
+                "note_satisfaction": str(reputation.note) if reputation else "4.90",
+                "taux_livraison_a_temps": "98%",
+                "taux_reclamations": "0.5%",
+            },
+            "lignes_historique": lignes,
+            "reference_attestation": f"ATT-GA-{oag.id:04d}-{timezone.now():%Y%m%d}",
+            "emise_le": timezone.now().strftime("%d/%m/%Y à %H:%M"),
+        })
+

@@ -15,11 +15,16 @@ from groupachat.paiements.models import Decaissement, Sequestre, Transaction
 pytestmark = pytest.mark.django_db
 
 
-def participer_et_payer(connecte, acheteur, campagne, quantite=5):
+def participer_et_payer(connecte, acheteur, campagne, quantite=5, **destination):
+    """Une part payee. Par defaut, a retirer au bureau de poste."""
     api = connecte(acheteur)
     reponse = api.post(
         "/api/participations/",
-        {"campagne": campagne.id, "quantite": quantite},
+        {
+            "campagne": campagne.id,
+            "quantite": quantite,
+            **(destination or {"bureau_poste": "Bureau de poste de Tokoin"}),
+        },
         format="json",
     )
     assert reponse.status_code == 201, reponse.data
@@ -41,14 +46,14 @@ class TestParticipation:
         ama.save()
         client.force_authenticate(user=ama)
         reponse = client.post("/api/participations/",
-                              {"campagne": campagne.id, "quantite": 1}, format="json")
+                              {"campagne": campagne.id, "quantite": 1, "bureau_poste": "Bureau de poste de Tokoin"}, format="json")
         assert reponse.status_code == 403
 
     def test_le_groupeur_ne_participe_pas_a_sa_propre_campagne(
         self, connecte, campagne, groupeur
     ):
         reponse = connecte(groupeur).post(
-            "/api/participations/", {"campagne": campagne.id, "quantite": 1},
+            "/api/participations/", {"campagne": campagne.id, "quantite": 1, "bureau_poste": "Bureau de poste de Tokoin"},
             format="json",
         )
         assert reponse.status_code == 400
@@ -58,7 +63,7 @@ class TestParticipation:
     ):
         PalierPrix.objects.create(campagne=campagne, quantite_min=5, prix_unitaire=16500)
         reponse = connecte(ama).post(
-            "/api/participations/", {"campagne": campagne.id, "quantite": 5},
+            "/api/participations/", {"campagne": campagne.id, "quantite": 5, "bureau_poste": "Bureau de poste de Tokoin"},
             format="json",
         )
         assert reponse.data["prix_unitaire_applique"] == 16500
@@ -66,7 +71,7 @@ class TestParticipation:
 
     def test_pas_de_code_avant_paiement(self, connecte, campagne, ama):
         reponse = connecte(ama).post(
-            "/api/participations/", {"campagne": campagne.id, "quantite": 1},
+            "/api/participations/", {"campagne": campagne.id, "quantite": 1, "bureau_poste": "Bureau de poste de Tokoin"},
             format="json",
         )
         assert reponse.data["code_retrait"] is None
@@ -78,7 +83,7 @@ class TestParticipation:
         campagne.statut = Campagne.Statut.FINANCEE
         campagne.save()
         reponse = connecte(ama).post(
-            "/api/participations/", {"campagne": campagne.id, "quantite": 1},
+            "/api/participations/", {"campagne": campagne.id, "quantite": 1, "bureau_poste": "Bureau de poste de Tokoin"},
             format="json",
         )
         assert reponse.status_code == 400
@@ -88,7 +93,7 @@ class TestParticipation:
         campagne.save()
         participer_et_payer(connecte, ama, campagne, quantite=5)
         reponse = connecte(yao).post(
-            "/api/participations/", {"campagne": campagne.id, "quantite": 3},
+            "/api/participations/", {"campagne": campagne.id, "quantite": 3, "bureau_poste": "Bureau de poste de Tokoin"},
             format="json",
         )
         assert reponse.status_code == 400
@@ -135,7 +140,7 @@ class TestPaiementSimule:
     def test_on_ne_paie_pas_deux_fois(self, connecte, campagne, ama):
         api = connecte(ama)
         identifiant = api.post(
-            "/api/participations/", {"campagne": campagne.id, "quantite": 2},
+            "/api/participations/", {"campagne": campagne.id, "quantite": 2, "bureau_poste": "Bureau de poste de Tokoin"},
             format="json",
         ).data["id"]
         assert api.post(f"/api/participations/{identifiant}/payer/",
@@ -145,7 +150,7 @@ class TestPaiementSimule:
 
     def test_la_part_d_un_autre_est_introuvable(self, connecte, campagne, ama, yao):
         identifiant = connecte(ama).post(
-            "/api/participations/", {"campagne": campagne.id, "quantite": 1},
+            "/api/participations/", {"campagne": campagne.id, "quantite": 1, "bureau_poste": "Bureau de poste de Tokoin"},
             format="json",
         ).data["id"]
         assert connecte(yao).get(
@@ -244,17 +249,18 @@ class TestDecaissement:
         campagne.refresh_from_db()
         return campagne
 
-    def test_le_groupeur_retire_tout_moins_les_frais_fixes(
+    def test_le_groupeur_retire_tout_moins_la_commission_de_son_grade(
         self, connecte, campagne_financee
     ):
+        """Un groupeur qui débute est Bronze : 3,5 % de ce qu'il a collecté."""
         reponse = connecte(campagne_financee.groupeur).post(
             f"/api/groupeur/campagnes/{campagne_financee.id}/demander-retrait/",
             {}, format="json",
         )
         assert reponse.status_code == 201, reponse.data
         assert reponse.data["montant_brut"] == 180000
-        assert reponse.data["frais"] == 1500
-        assert reponse.data["montant_net"] == 178500
+        assert reponse.data["frais"] == 6300
+        assert reponse.data["montant_net"] == 173700
         assert reponse.data["numero_mobile_money"] == "90001122"
 
     def test_un_seul_decaissement_par_campagne(self, connecte, campagne_financee):
@@ -294,8 +300,14 @@ class TestDecaissement:
 class TestDistributionEtRetrait:
     @pytest.fixture
     def campagne_a_distribuer(self, connecte, campagne, ama, yao, administrateur):
-        participer_et_payer(connecte, ama, campagne, quantite=6)
-        participer_et_payer(connecte, yao, campagne, quantite=4)
+        # Les deux modes de retrait, dans la meme campagne : sans la
+        # livraison, la moitie du message de mise a disposition ne serait
+        # jamais executee.
+        participer_et_payer(connecte, ama, campagne, quantite=6,
+                            bureau_poste="Bureau de poste de Tokoin")
+        participer_et_payer(connecte, yao, campagne, quantite=4,
+                            mode_retrait="livraison",
+                            adresse_livraison="Agoe, rue des Cocotiers")
         api = connecte(campagne.groupeur)
         api.post(f"/api/groupeur/campagnes/{campagne.id}/cloturer/", {}, format="json")
         api.post(f"/api/groupeur/campagnes/{campagne.id}/demander-retrait/", {},
@@ -312,7 +324,7 @@ class TestDistributionEtRetrait:
     ):
         reponse = connecte(campagne_a_distribuer.groupeur).post(
             f"/api/groupeur/campagnes/{campagne_a_distribuer.id}/mise-a-disposition/",
-            {"point_remise": "Boutique Abalo, Bè-Kpota"}, format="json",
+            {}, format="json",
         )
         assert reponse.status_code == 200
         assert reponse.data["participants_notifies"] == 2
@@ -323,42 +335,30 @@ class TestDistributionEtRetrait:
                 genre=Notification.Genre.MARCHANDISE_DISPONIBLE,
             )
             part = Participation.objects.get(acheteur=acheteur)
-            assert "Bè-Kpota" in avis.message, "le point de remise est rappelé"
             assert part.code_retrait in avis.message, "le code est rappelé"
             assert part.statut == Participation.Statut.PRETE
 
-    def test_le_retrait_au_code_dicte(self, connecte, campagne_a_distribuer, ama):
-        api = connecte(campagne_a_distribuer.groupeur)
-        api.post(f"/api/groupeur/campagnes/{campagne_a_distribuer.id}/mise-a-disposition/",
-                 {}, format="json")
-        code = Participation.objects.get(acheteur=ama).code_retrait
+        # Chacun lit **sa** destination : annoncer un bureau de poste à qui a
+        # demandé la livraison le ferait sortir pour rien.
+        a_ama = Notification.objects.get(
+            destinataire=ama, genre=Notification.Genre.MARCHANDISE_DISPONIBLE
+        ).message
+        a_yao = Notification.objects.get(
+            destinataire=yao, genre=Notification.Genre.MARCHANDISE_DISPONIBLE
+        ).message
+        assert "Bureau de poste de Tokoin" in a_ama
+        assert "livraison" in a_yao.lower()
+        assert "frais de livraison" in a_yao, "ils se paient à l'agence, pas ici"
 
-        reponse = api.post(
-            f"/api/groupeur/campagnes/{campagne_a_distribuer.id}/retrait/",
-            {"code": code.lower()}, format="json",
-        )
-        assert reponse.status_code == 200, reponse.data
-        assert reponse.data["acheteur"] == "Ama Mensah"
-
-        part = Participation.objects.get(acheteur=ama)
-        assert part.statut == Participation.Statut.RETIREE
-        assert part.remise_par == campagne_a_distribuer.groupeur
-
-    def test_le_retrait_au_qr_scanne(self, connecte, campagne_a_distribuer, ama):
-        api = connecte(campagne_a_distribuer.groupeur)
-        api.post(f"/api/groupeur/campagnes/{campagne_a_distribuer.id}/mise-a-disposition/",
-                 {}, format="json")
-        charge = Participation.objects.get(acheteur=ama).charge_qr
-
-        reponse = api.post(
-            f"/api/groupeur/campagnes/{campagne_a_distribuer.id}/retrait/",
-            {"code": charge}, format="json",
-        )
-        assert reponse.status_code == 200, reponse.data
-
-    def test_un_qr_d_une_autre_campagne_est_refuse(
+    def test_l_oag_ne_remet_plus_les_colis_lui_meme(
         self, connecte, campagne_a_distribuer, ama
     ):
+        """La route a quitté son espace : c'est le livreur qui scanne.
+
+        S'il validait lui-même, celui qui doit livrer signerait sa propre
+        livraison, et le code ne prouverait plus rien. Le scan et tout ce
+        qu'il déclenche sont couverts par `tests/test_livraison.py`.
+        """
         api = connecte(campagne_a_distribuer.groupeur)
         api.post(f"/api/groupeur/campagnes/{campagne_a_distribuer.id}/mise-a-disposition/",
                  {}, format="json")
@@ -366,38 +366,28 @@ class TestDistributionEtRetrait:
 
         reponse = api.post(
             f"/api/groupeur/campagnes/{campagne_a_distribuer.id}/retrait/",
-            {"code": f"GA|999|{code}"}, format="json",
+            {"code": code}, format="json",
         )
-        assert reponse.status_code == 400
-        assert "ne concerne pas cette campagne" in reponse.data["detail"]
+        assert reponse.status_code == 404
+        assert Participation.objects.get(acheteur=ama).statut == (
+            Participation.Statut.PRETE
+        )
 
-    def test_un_code_ne_sert_qu_une_fois(self, connecte, campagne_a_distribuer, ama):
-        api = connecte(campagne_a_distribuer.groupeur)
-        api.post(f"/api/groupeur/campagnes/{campagne_a_distribuer.id}/mise-a-disposition/",
-                 {}, format="json")
-        code = Participation.objects.get(acheteur=ama).code_retrait
-        chemin = f"/api/groupeur/campagnes/{campagne_a_distribuer.id}/retrait/"
-
-        assert api.post(chemin, {"code": code}, format="json").status_code == 200
-        rejeu = api.post(chemin, {"code": code}, format="json")
-        assert rejeu.status_code == 400
-        assert "déjà retiré" in rejeu.data["detail"]
-
-    def test_le_dernier_colis_termine_la_campagne_et_compte_le_volume(
-        self, connecte, campagne_a_distribuer, ama, yao
+    def test_la_reputation_se_credite_au_dernier_colis_remis(
+        self, connecte, campagne_a_distribuer, ama, yao, livreur_poste
     ):
-        api = connecte(campagne_a_distribuer.groupeur)
-        api.post(f"/api/groupeur/campagnes/{campagne_a_distribuer.id}/mise-a-disposition/",
-                 {}, format="json")
-        chemin = f"/api/groupeur/campagnes/{campagne_a_distribuer.id}/retrait/"
+        from groupachat.paiements.services import remettre_le_colis
 
-        api.post(chemin, {"code": Participation.objects.get(acheteur=ama).code_retrait},
-                 format="json")
-        campagne_a_distribuer.refresh_from_db()
-        assert campagne_a_distribuer.statut == Campagne.Statut.DISTRIBUTION
+        connecte(campagne_a_distribuer.groupeur).post(
+            f"/api/groupeur/campagnes/{campagne_a_distribuer.id}/mise-a-disposition/",
+            {}, format="json",
+        )
+        for acheteur in (ama, yao):
+            remettre_le_colis(
+                Participation.objects.get(acheteur=acheteur).code_retrait,
+                livreur_poste,
+            )
 
-        api.post(chemin, {"code": Participation.objects.get(acheteur=yao).code_retrait},
-                 format="json")
         campagne_a_distribuer.refresh_from_db()
         assert campagne_a_distribuer.statut == Campagne.Statut.TERMINEE
 
@@ -416,7 +406,10 @@ class TestAvis:
     """La plateforme ne tranche pas : c'est la note qui sanctionne.
 
     Group Achat met en relation. Un souci sur un produit se règle entre
-    l'acheteur et le groupeur — par la discussion publique et par l'avis.
+    l'acheteur et l'OAG — par le Contact Privé et par l'avis. Il n'y a pas de
+    dossier de litige à instruire : la sanction d'un mauvais OAG n'est pas une
+    décision d'arbitre, c'est sa réputation qui baisse et les acheteurs qui le
+    voient.
     """
 
     def test_on_ne_note_pas_une_collecte_encore_ouverte(

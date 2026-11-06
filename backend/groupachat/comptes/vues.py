@@ -24,6 +24,7 @@ from groupachat.comptes.serialiseurs import (
     UtilisateurSerialiseur,
     VerificationSerialiseur,
 )
+from groupachat.comptes import parrainage
 from groupachat.comptes.services import envoyer_code
 from groupachat.noyau.limitation import (
     LimiteConnexion,
@@ -241,7 +242,9 @@ class DossierKYCVue(APIView):
             return Response(
                 {"detail": "Aucun dossier déposé."}, status=status.HTTP_404_NOT_FOUND
             )
-        return Response(DossierKYCSerialiseur(dossier).data)
+        return Response(
+            DossierKYCSerialiseur(dossier, context={"request": requete}).data
+        )
 
     @transaction.atomic
     def post(self, requete):
@@ -252,7 +255,13 @@ class DossierKYCVue(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
 
-        serialiseur = DossierKYCSerialiseur(dossier, data=requete.data)
+        # Le contexte porte la requête, et le sérialiseur en a besoin pour
+        # deux choses : construire les adresses protégées des pièces, et
+        # savoir que le nom d'utilisateur déjà pris est celui du déposant
+        # lui-même quand il corrige un dossier rejeté.
+        serialiseur = DossierKYCSerialiseur(
+            dossier, data=requete.data, context={"request": requete}
+        )
         serialiseur.is_valid(raise_exception=True)
         # Un dossier rejeté est réécrit plutôt que doublonné, et repart à
         # zéro : sans remise à blanc, l'ancien motif de rejet resterait
@@ -275,3 +284,17 @@ class DossierKYCVue(APIView):
         return Response(
             DossierKYCSerialiseur(dossier).data, status=status.HTTP_201_CREATED
         )
+
+
+class ParrainageVue(APIView):
+    """GET /api/comptes/parrainage/ — mon code, mes filleuls, mes points.
+
+    Le code est créé au premier appel : la plupart des comptes ne
+    parraineront jamais, et une colonne remplie pour tout le monde laisse
+    croire que tout le monde a essayé.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, requete):
+        return Response(parrainage.bilan(requete.user))

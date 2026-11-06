@@ -1,5 +1,11 @@
 # -*- coding: utf-8 -*-
-"""Fil de discussion, espace communautaire et cloche de notifications."""
+"""Espace communautaire et cloche de notifications.
+
+Le fil public sous les campagnes a été retiré : il laissait convenir
+d'un arrangement direct à la vue de tous, et hors de la plateforme ni le
+séquestre ni l'assurance ne jouent. Ce qui le remplace est le Contact
+Privé — payant, privé, tracé — dans `vues_contact.py`.
+"""
 
 from __future__ import annotations
 
@@ -12,13 +18,11 @@ from rest_framework.response import Response
 
 from groupachat.catalogue.models import Campagne
 from groupachat.echanges.models import (
-    Commentaire,
     DemandeProduit,
     InteretDemande,
     Notification,
 )
 from groupachat.echanges.serialiseurs import (
-    CommentaireSerialiseur,
     DemandeProduitSerialiseur,
     NotificationSerialiseur,
 )
@@ -26,120 +30,6 @@ from groupachat.noyau.permissions import (
     EstAuteurOuLectureSeule,
     LectureLibreEcritureVerifiee,
 )
-
-
-class CommentaireVueEnsemble(viewsets.ModelViewSet):
-    """/api/campagnes/<campagne>/commentaires/ — le fil public d'une campagne.
-
-    Lisible par tout le monde, y compris sans compte : c'est ce fil qui
-    rassure l'acheteur hésitant. Écrire demande un numéro vérifié.
-    """
-
-    serializer_class = CommentaireSerialiseur
-    permission_classes = [LectureLibreEcritureVerifiee, EstAuteurOuLectureSeule]
-
-    # Aimer le message d'un autre est le but : cette action échappe à la
-    # règle d'auteur, qui ne vaut que pour la modification du message.
-    actions_ouvertes = ("jaime",)
-
-    @property
-    def campagne_id(self):
-        return self.kwargs["campagne_pk"]
-
-    def get_queryset(self):
-        return (
-            Commentaire.objects.filter(
-                campagne_id=self.campagne_id,
-                masque_le__isnull=True,
-                reponse_a__isnull=True,
-            )
-            .select_related("auteur", "campagne")
-            .prefetch_related(
-                Prefetch(
-                    "reponses",
-                    queryset=Commentaire.objects.filter(
-                        masque_le__isnull=True
-                    ).select_related("auteur"),
-                )
-            )
-        )
-
-    def get_serializer_context(self):
-        contexte = super().get_serializer_context()
-        # Les « j'aime » du lecteur sont chargés en une fois : sans ça, le fil
-        # poserait une requête par message pour savoir s'il l'a déjà aimé.
-        if self.request.user.is_authenticated:
-            contexte["commentaires_aimes"] = set(
-                self.request.user.commentaires_aimes.filter(
-                    commentaire__campagne_id=self.campagne_id
-                ).values_list("commentaire_id", flat=True)
-            )
-        return contexte
-
-    def perform_create(self, serialiseur):
-        campagne = Campagne.objects.get(pk=self.campagne_id)
-        commentaire = serialiseur.save(
-            auteur=self.request.user, campagne=campagne
-        )
-        self._notifier(campagne, commentaire)
-
-    def _notifier(self, campagne, commentaire) -> None:
-        if commentaire.reponse_a_id and commentaire.reponse_a.auteur_id != commentaire.auteur_id:
-            Notification.objects.create(
-                destinataire=commentaire.reponse_a.auteur,
-                genre=Notification.Genre.REPONSE_COMMENTAIRE,
-                titre="Réponse à votre message",
-                message=commentaire.texte[:160],
-                campagne=campagne,
-                lien=f"/campagnes/{campagne.id}",
-            )
-        elif campagne.groupeur_id != commentaire.auteur_id:
-            Notification.objects.create(
-                destinataire=campagne.groupeur,
-                genre=Notification.Genre.NOUVEAU_COMMENTAIRE,
-                titre="Nouveau message sur votre campagne",
-                message=commentaire.texte[:160],
-                campagne=campagne,
-                lien=f"/groupeur/campagnes/{campagne.id}",
-            )
-
-    def perform_update(self, serialiseur):
-        serialiseur.save(modifie_le=timezone.now())
-
-    def perform_destroy(self, commentaire):
-        # L'auteur efface son propre message : là, c'est bien un masquage
-        # aussi, pour que le fil garde sa cohérence (une réponse orpheline
-        # n'aurait plus de sens) et la trace en cas de litige.
-        commentaire.masque_le = timezone.now()
-        commentaire.masque_par = self.request.user
-        commentaire.motif_masquage = "Retiré par son auteur"
-        commentaire.save(update_fields=["masque_le", "masque_par", "motif_masquage"])
-
-    @action(detail=True, methods=["post"])
-    def jaime(self, requete, pk=None, campagne_pk=None):
-        """Aime un message, ou retire son « j'aime »."""
-        commentaire = self.get_object()
-        try:
-            with transaction.atomic():
-                InteretCommentaire = commentaire.jaime.model
-                InteretCommentaire.objects.create(
-                    commentaire=commentaire, utilisateur=requete.user
-                )
-                Commentaire.objects.filter(pk=commentaire.pk).update(
-                    nombre_jaime=F("nombre_jaime") + 1
-                )
-            aime = True
-        except IntegrityError:
-            # Déjà aimé : le même geste retire le « j'aime ».
-            commentaire.jaime.filter(utilisateur=requete.user).delete()
-            Commentaire.objects.filter(pk=commentaire.pk, nombre_jaime__gt=0).update(
-                nombre_jaime=F("nombre_jaime") - 1
-            )
-            aime = False
-
-        commentaire.refresh_from_db()
-        return Response({"jaime_par_moi": aime,
-                         "nombre_jaime": commentaire.nombre_jaime})
 
 
 class DemandeProduitVueEnsemble(viewsets.ModelViewSet):

@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   LogOut,
   MessageSquareWarning,
+  ScanEye,
   ShieldCheck,
 } from "lucide-react";
 import { useState } from "react";
@@ -22,6 +23,7 @@ import { Alerte, Avatar, Bouton, Carte, Champ, fusionner } from "@commun/composa
 import { FournisseurSession, useSession } from "@commun/contexte/Session";
 import Decaissements, { Moderation } from "@/pages/Decaissements";
 import Dossiers from "@/pages/Dossiers";
+import Verification from "@/pages/Verification";
 import TableauAdmin from "@/pages/TableauAdmin";
 import { api, useAction } from "@commun/outils/requetes";
 
@@ -36,6 +38,7 @@ import { api, useAction } from "@commun/outils/requetes";
 const ENTREES = [
   { vers: "/", libelle: "Supervision", icone: LayoutDashboard, exact: true },
   { vers: "/dossiers", libelle: "Dossiers KYC", icone: FileCheck2 },
+  { vers: "/verification", libelle: "Groupages à vérifier", icone: ScanEye },
   { vers: "/decaissements", libelle: "Décaissements", icone: Banknote },
   { vers: "/moderation", libelle: "Modération", icone: MessageSquareWarning },
 ];
@@ -106,6 +109,7 @@ function Pages() {
       <Routes location={emplacement}>
         <Route path="/" element={<TableauAdmin />} />
         <Route path="/dossiers" element={<Dossiers />} />
+        <Route path="/verification" element={<Verification />} />
         <Route path="/decaissements" element={<Decaissements />} />
         <Route path="/moderation" element={<Moderation />} />
         <Route
@@ -192,7 +196,7 @@ function ConnexionAdmin() {
 function Coque() {
   const { utilisateur, chargement } = useSession();
 
-  // La teinte de l'administration est le bleu, comme l'espace groupeur : on
+  // La teinte de l'administration est le bleu, comme l'espace OAG : on
   // la pose ici plutôt que d'attendre la session, pour que l'écran de
   // connexion lui-même soit déjà dans le bon univers.
   document.documentElement.dataset.profil = "administrateur";

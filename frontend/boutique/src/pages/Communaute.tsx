@@ -25,7 +25,7 @@ import { api, useAction, useRequete } from "@commun/outils/requetes";
  * L'espace communautaire : ce que les acheteurs réclament.
  *
  * Le catalogue habituel va du vendeur vers l'acheteur ; ici c'est l'inverse.
- * Le compteur « moi aussi » sert de signal aux groupeurs en quête d'une
+ * Le compteur « moi aussi » sert de signal aux OAG en quête d'une
  * campagne à lancer.
  */
 export default function Communaute() {
@@ -43,7 +43,7 @@ export default function Communaute() {
         <div>
           <h1 className="text-2xl font-extrabold">Demandes</h1>
           <p className="texte-doux text-sm">
-            Vous cherchez un produit ? Dites-le. Les groupeurs lisent cette page.
+            Vous cherchez un produit ? Dites-le. Les OAG lisent cette page.
           </p>
         </div>
         {peutAgir && (
@@ -62,7 +62,7 @@ export default function Communaute() {
         <EtatVide
           icone={<Lightbulb className="size-7" />}
           titre="Aucune demande en cours"
-          texte="Soyez le premier à réclamer un produit : plus vous serez nombreux à le vouloir, plus un groupeur a de raisons de le lancer."
+          texte="Soyez le premier à réclamer un produit : plus vous serez nombreux à le vouloir, plus un OAG a de raisons de le lancer."
           action={
             peutAgir ? (
               <Bouton onClick={() => setFeuille(true)}>Publier une demande</Bouton>

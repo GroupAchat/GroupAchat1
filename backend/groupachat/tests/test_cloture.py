@@ -28,7 +28,7 @@ def participer(connecte, acheteur, campagne, quantite):
     api = connecte(acheteur)
     part = api.post(
         "/api/participations/",
-        {"campagne": campagne.id, "quantite": quantite},
+        {"campagne": campagne.id, "quantite": quantite, "bureau_poste": "Bureau de poste de Tokoin"},
         format="json",
     ).data
     api.post(f"/api/participations/{part['id']}/payer/", {}, format="json")
@@ -98,7 +98,13 @@ class TestArgentNonRendu:
                 genre=Notification.Genre.GROUPAGE_NON_ABOUTI,
             )
             assert "n'a pas abouti" in avis.titre.lower() or "abouti" in avis.titre
-            assert "reste consignée" in avis.message
+            # Ce que le participant doit comprendre : son argent n'est pas
+            # perdu, mais il n'est pas revenu non plus — le groupeur peut
+            # encore maintenir. Le mot « consigné » a quitté les textes
+            # destinés aux acheteurs : il ne dit rien à qui ne connaît pas
+            # le séquestre.
+            assert "n'est pas renvoyé" in avis.message
+            assert "maintenir la commande" in avis.message
 
     def test_le_groupeur_est_invite_a_trancher(self, manquee):
         avis = Notification.objects.get(
@@ -140,7 +146,8 @@ class TestDecisionDuGroupeur:
             f"/api/groupeur/campagnes/{manquee.id}/demander-retrait/", {}, format="json"
         )
         assert retrait.status_code == 201, retrait.data
-        assert retrait.data["frais"] == 1500
+        # 3,5 % des 90 000 collectés : le groupeur est Bronze.
+        assert retrait.data["frais"] == 3150
 
     def test_il_peut_annuler_et_tout_le_monde_est_rembourse(
         self, connecte, manquee, ama, yao
@@ -244,17 +251,31 @@ class TestCatalogueEtHistorique:
         reponse = connecte(ama).get(f"/api/catalogue/campagnes/{manquee.id}/")
         assert reponse.status_code == 200, "sa propre commande ne doit pas disparaître"
         assert reponse.data["produit"]["nom"]
-        assert reponse.data["point_remise"]
+        assert reponse.data["titre"]
 
-    def test_le_fil_de_discussion_reste_lisible(self, connecte, manquee, ama):
-        connecte(ama).post(
-            f"/api/campagnes/{manquee.id}/commentaires/",
-            {"texte": "Et pour la suite ?"},
+    def test_le_lien_avec_l_oag_survit_au_groupage_manque(
+        self, connecte, manquee, ama
+    ):
+        """Un groupage qui échoue ne doit pas couper la conversation.
+
+        C'est le moment où l'acheteur a le plus besoin d'écrire : il veut
+        savoir ce qu'il advient de son argent. Le fil public qui portait cette
+        règle a disparu ; c'est le Contact Privé qui la porte désormais.
+        """
+        api = connecte(ama)
+        api.post("/api/contact-prive/souscrire/", {}, format="json")
+
+        reponse = api.post(
+            "/api/conversations/ouvrir/",
+            {
+                "groupeur": manquee.groupeur_id,
+                "campagne": manquee.id,
+                "texte": "Et pour la suite ?",
+            },
             format="json",
         )
-        reponse = connecte(ama).get(f"/api/campagnes/{manquee.id}/commentaires/")
-        assert reponse.status_code == 200
-        assert reponse.data["count"] >= 1
+        assert reponse.status_code == 201, reponse.data
+        assert len(connecte(ama).get("/api/conversations/").data) == 1
 
     def test_une_campagne_annulee_reste_consultable(self, connecte, manquee, ama):
         connecte(manquee.groupeur).post(

@@ -86,7 +86,6 @@ def campagne(groupeur, produit) -> Campagne:
         produit=produit, groupeur=groupeur, titre="Riz Délice — arrivage de novembre",
         prix_unitaire=18000, quantite_minimale=10,
         date_limite=timezone.now() + timedelta(days=10),
-        point_remise="Marché d'Adawlato, Lomé",
         statut=Campagne.Statut.EN_COURS, publiee_le=timezone.now(),
     )
 
@@ -100,3 +99,13 @@ def connecte(client):
         return client
 
     return _connecter
+
+
+@pytest.fixture
+def livreur_poste() -> Utilisateur:
+    """Un livreur partenaire : c'est lui, et lui seul, qui remet les colis."""
+    return Utilisateur.objects.create_user(
+        "95551122", "mdpSolide2026", nom="Agbeko", prenom="Komlan",
+        role=Utilisateur.Role.LIVREUR, telephone_verifie=True,
+        transporteur=Utilisateur.Transporteur.POSTE,
+    )

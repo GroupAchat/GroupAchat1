@@ -2,30 +2,18 @@ import { LOGOS } from "@commun/composants/logos";
 import { fusionner } from "@commun/composants/ui";
 
 /**
- * Le logo : l'emblème, puis le nom.
- *
- * **Le nom est écrit en HTML, pas lu dans le fichier SVG**, et c'est
- * volontaire. Le verrouillage horizontal fourni dessine « Group Achat » dans
- * un `viewBox` calculé pour une fonte précise : dès que la fonte réelle est
- * un peu plus large — ce qui arrive avec la police de secours, ou simplement
- * avec Outfit chargée par le navigateur — **le dernier caractère sort du
- * cadre et se retrouve coupé**. C'est ce qu'on voyait sur la barre du haut.
- *
- * Composer le nom en texte supprime le problème à la racine : il ne peut
- * plus être rogné, il reste net à toutes les tailles, il se met à l'échelle
- * avec le reste de l'interface, et un lecteur d'écran le lit.
- *
- * L'emblème, lui, vient toujours du fichier `public/logos/marque.svg` : le
- * remplacer change l'icône partout, comme avant.
+ * Le logo Group Achat complet : l'emblème et la typographie de marque.
+ * Utilise directement les fichiers SVG vectoriels du dossier public/logos/
+ * (logo-horizontal.svg en couleur et logo-horizontal-blanc.svg sur fond sombre).
  */
 
 const TAILLES = {
   /** Barres compactes. */
-  compacte: { icone: "size-7", texte: "text-[1.05rem]" },
-  /** La barre du haut : un cran plus petit sur téléphone. */
-  moyenne: { icone: "size-7 sm:size-8", texte: "text-[1.05rem] sm:text-[1.3rem]" },
+  compacte: "h-7",
+  /** La barre du haut : optimisée mobile. */
+  moyenne: "h-8",
   /** Écrans d'entrée, pages de présentation. */
-  grande: { icone: "size-10", texte: "text-[1.75rem]" },
+  grande: "h-11",
 } as const;
 
 export function Marque({
@@ -38,39 +26,17 @@ export function Marque({
   /** « blanc » pour les fonds colorés ou sombres. */
   variante?: "couleur" | "blanc";
 }) {
-  const mesures = TAILLES[taille];
   const blanc = variante === "blanc";
+  const source = blanc ? LOGOS.horizontalBlanc : LOGOS.horizontal;
+  const hauteur = TAILLES[taille];
 
   return (
-    <span
-      className={fusionner("flex select-none items-center gap-2", className)}
-      role="img"
-      aria-label="Group Achat"
-    >
-      <img
-        src={LOGOS.marque}
-        alt=""
-        className={fusionner("shrink-0", mesures.icone)}
-        draggable={false}
-        aria-hidden
-      />
-      {/* `whitespace-nowrap` : sur un écran étroit, « Group » et « Achat »
-          ne doivent jamais passer à la ligne l'un sous l'autre. */}
-      <span
-        className={fusionner(
-          "whitespace-nowrap font-bold leading-none tracking-[-0.01em]",
-          mesures.texte,
-        )}
-        aria-hidden
-      >
-        <span style={{ color: blanc ? "#ffffff" : "var(--color-marine-800)" }}>
-          Group
-        </span>{" "}
-        <span style={{ color: blanc ? "#ffffff" : "var(--color-mangue-500)" }}>
-          Achat
-        </span>
-      </span>
-    </span>
+    <img
+      src={source}
+      alt="Group Achat"
+      className={fusionner("shrink-0 w-auto select-none", hauteur, className)}
+      draggable={false}
+    />
   );
 }
 
@@ -88,8 +54,7 @@ export function Embleme({
       alt=""
       width={taille}
       height={taille}
-      style={{ width: taille, height: taille }}
-      className={fusionner("select-none", className)}
+      className={fusionner("shrink-0 select-none", className)}
       draggable={false}
       aria-hidden
     />

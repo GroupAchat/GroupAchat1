@@ -7,7 +7,31 @@ from django.conf import settings
 from django.contrib.auth import password_validation
 from rest_framework import serializers
 
+from groupachat.comptes import grades, noms
 from groupachat.comptes.models import DossierKYC, Reputation, Utilisateur
+
+
+class PointsSerialiseur(serializers.Serializer):
+    """Les deux compteurs, et ce qu'ils ouvrent.
+
+    `cumules` décide du grade et des accès, `solde` est la monnaie. Les
+    exposer séparément évite qu'une interface présente l'un pour l'autre —
+    « il vous reste 120 points » et « vous avez gagné 120 points » ne veulent
+    pas dire la même chose.
+    """
+
+    cumules = serializers.IntegerField(read_only=True)
+    solde = serializers.IntegerField(read_only=True)
+    grade = serializers.CharField(read_only=True)
+    commission_centiemes = serializers.IntegerField(read_only=True)
+    prochain_palier = serializers.SerializerMethodField()
+
+    def get_prochain_palier(self, compteur) -> dict | None:
+        suite = grades.prochain_palier(compteur.cumules)
+        if suite is None:
+            return None
+        grade, restant = suite
+        return {"grade": grade, "points_restants": restant}
 
 
 class ReputationSerialiseur(serializers.ModelSerializer):
@@ -23,41 +47,56 @@ class ReputationSerialiseur(serializers.ModelSerializer):
 
 
 class GroupeurPublicSerialiseur(serializers.ModelSerializer):
-    """Ce qu'un visiteur voit d'un groupeur sur une fiche campagne.
+    """Ce qu'un acheteur voit d'un groupeur, et rien de plus.
 
-    Ni numéro, ni e-mail, ni pièce d'identité : la confiance se prouve par le
-    badge et la réputation, pas en exposant les coordonnées de quelqu'un.
+    **L'acheteur et le groupeur ne se connaissent pas.** Le groupeur n'existe
+    ici que sous son nom d'utilisateur ; son nom civil, son numéro et
+    l'enseigne de son commerce restent dans son dossier. Seul l'abonnement
+    Contact Privé ouvre le pont, et il passe par une autre vue que celle-ci.
+
+    Ce que l'acheteur reçoit à la place, c'est de quoi décider : depuis quand
+    le groupeur est là, s'il est vérifié, combien de groupages il a menés à
+    terme et ce que les autres en ont dit. Aucun de ces éléments ne s'achète.
+
+    L'enseigne a été retirée volontairement : la donner permettrait à
+    l'acheteur de se rendre à la boutique et de court-circuiter la plateforme
+    dès la deuxième commande — là où ni le séquestre ni l'assurance ne jouent.
     """
 
-    nom_complet = serializers.CharField(read_only=True)
+    nom_utilisateur = serializers.CharField(source="nom_public", read_only=True)
     badge_confiance = serializers.BooleanField(
         source="est_groupeur_valide", read_only=True
     )
     reputation = ReputationSerialiseur(read_only=True)
-    nom_commerce = serializers.SerializerMethodField()
+    grade = serializers.SerializerMethodField()
 
     class Meta:
         model = Utilisateur
         fields = [
             "id",
-            "nom_complet",
+            "nom_utilisateur",
             "badge_confiance",
+            "grade",
             "reputation",
-            "nom_commerce",
             "date_inscription",
         ]
 
-    def get_nom_commerce(self, groupeur) -> str:
-        dossier = getattr(groupeur, "dossier_kyc", None)
-        return dossier.nom_commerce if dossier else ""
+    def get_grade(self, groupeur) -> str:
+        """Le grade se voit : c'est un des rares repères dont dispose
+        l'acheteur, puisqu'il ne connaît pas son vendeur. Le solde de points,
+        lui, ne regarde personne d'autre que son titulaire."""
+        compteur = getattr(groupeur, "points", None)
+        return compteur.grade if compteur else grades.Grade.NOUVEAU
 
 
 class UtilisateurSerialiseur(serializers.ModelSerializer):
     """Le compte tel que son titulaire le voit."""
 
     nom_complet = serializers.CharField(read_only=True)
+    nom_public = serializers.CharField(read_only=True)
     est_groupeur_valide = serializers.BooleanField(read_only=True)
     statut_kyc = serializers.SerializerMethodField()
+    points = serializers.SerializerMethodField()
 
     class Meta:
         model = Utilisateur
@@ -67,19 +106,40 @@ class UtilisateurSerialiseur(serializers.ModelSerializer):
             "nom",
             "prenom",
             "nom_complet",
+            "nom_utilisateur",
+            "nom_public",
             "email",
             "role",
             "telephone_verifie",
             "est_groupeur_valide",
             "statut_kyc",
+            "points",
             "est_equipe",
             "date_inscription",
         ]
-        read_only_fields = ["telephone", "role", "telephone_verifie", "est_equipe"]
+        # Le nom d'utilisateur ne se modifie pas depuis le profil : la note,
+        # les avis et les groupages y sont attachés, et le laisser changer
+        # offrirait un moyen simple d'effacer un mauvais historique. Seul un
+        # administrateur peut le faire, et le changement laisse une trace.
+        read_only_fields = [
+            "telephone",
+            "role",
+            "telephone_verifie",
+            "est_equipe",
+            "nom_utilisateur",
+        ]
 
     def get_statut_kyc(self, utilisateur) -> str | None:
         dossier = getattr(utilisateur, "dossier_kyc", None)
         return dossier.statut if dossier else None
+
+    def get_points(self, utilisateur) -> dict:
+        # `get_or_create` plutôt qu'un défaut vide : un compte qui n'a jamais
+        # rien gagné a quand même un compteur, et l'interface n'a pas à
+        # distinguer « zéro point » de « pas encore de compteur ».
+        from groupachat.comptes.points import compteur_de
+
+        return PointsSerialiseur(compteur_de(utilisateur)).data
 
 
 class InscriptionSerialiseur(serializers.Serializer):
@@ -93,6 +153,12 @@ class InscriptionSerialiseur(serializers.Serializer):
     role = serializers.ChoiceField(
         choices=[Utilisateur.Role.ACHETEUR, Utilisateur.Role.GROUPEUR],
         default=Utilisateur.Role.ACHETEUR,
+    )
+    # Obligatoire pour un groupeur — c'est sous ce nom qu'il existera pour
+    # tout le monde —, facultatif pour un acheteur, qui retombe alors sur son
+    # prénom et une initiale.
+    nom_utilisateur = serializers.CharField(
+        max_length=noms.LONGUEUR_MAX, required=False, allow_blank=True
     )
 
     def validate_telephone(self, valeur: str) -> str:
@@ -111,6 +177,31 @@ class InscriptionSerialiseur(serializers.Serializer):
         password_validation.validate_password(valeur)
         return valeur
 
+    def validate_nom_utilisateur(self, valeur: str) -> str:
+        valeur = (valeur or "").strip()
+        if not valeur:
+            return ""
+        noms.valider(valeur)
+        # On compare les formes normalisées, sinon « faya02 » passerait à
+        # côté de « Faya-02 » et aucun acheteur ne les distinguerait.
+        if Utilisateur.objects.filter(
+            nom_utilisateur_repere=noms.normaliser(valeur)
+        ).exists():
+            raise serializers.ValidationError("Ce nom d'utilisateur est déjà pris.")
+        return valeur
+
+    def validate(self, donnees):
+        if donnees["role"] == Utilisateur.Role.GROUPEUR and not donnees.get(
+            "nom_utilisateur"
+        ):
+            raise serializers.ValidationError(
+                {
+                    "nom_utilisateur": "Un groupeur choisit le nom sous lequel "
+                    "les acheteurs le connaîtront."
+                }
+            )
+        return donnees
+
     def create(self, donnees_validees) -> Utilisateur:
         return Utilisateur.objects.create_user(
             telephone=donnees_validees["telephone"],
@@ -118,6 +209,7 @@ class InscriptionSerialiseur(serializers.Serializer):
             nom=donnees_validees["nom"],
             prenom=donnees_validees["prenom"],
             email=donnees_validees.get("email", ""),
+            nom_utilisateur=donnees_validees.get("nom_utilisateur") or None,
             role=donnees_validees["role"],
         )
 
@@ -145,6 +237,15 @@ class DossierKYCSerialiseur(serializers.ModelSerializer):
     # Déclaré à la main : repris du modèle, il hériterait de son max_length=8
     # et refuserait « +228 90 00 11 22 » avant même la normalisation.
     numero_mobile_money = serializers.CharField(max_length=20)
+
+    # Le nom sous lequel les acheteurs connaîtront ce groupeur. Demandé ici
+    # et non à l'inscription : on s'inscrit d'abord comme acheteur, et c'est
+    # le dépôt du dossier qui fait devenir groupeur. Il est **obligatoire**,
+    # parce qu'un groupeur sans nom choisi retomberait sur son prénom et
+    # l'initiale de son nom — soit exactement l'identité qu'on protège.
+    nom_utilisateur = serializers.CharField(
+        max_length=noms.LONGUEUR_MAX, write_only=True, required=False, allow_blank=True
+    )
 
     # ⚠️ **En écriture seule.** Rendus tels quels, ces champs donneraient
     # l'URL du fichier sous « /medias/kyc/… », lisible par quiconque la
@@ -183,6 +284,7 @@ class DossierKYCSerialiseur(serializers.ModelSerializer):
             "lien_verso",
             "numero_mobile_money",
             "nom_commerce",
+            "nom_utilisateur",
             "statut",
             "motif_rejet",
             "depose_le",
@@ -218,6 +320,62 @@ class DossierKYCSerialiseur(serializers.ModelSerializer):
                 "Numéro invalide : huit chiffres attendus."
             )
         return numero
+
+    def validate_nom_utilisateur(self, valeur: str) -> str:
+        valeur = (valeur or "").strip()
+        if not valeur:
+            return ""
+        noms.valider(valeur)
+        # On compare les formes normalisées : « faya02 » et « Faya-02 » sont
+        # le même nom pour un acheteur, la base doit en dire autant.
+        deja_pris = Utilisateur.objects.filter(
+            nom_utilisateur_repere=noms.normaliser(valeur)
+        )
+        demandeur = self.context.get("request")
+        if demandeur is not None and demandeur.user.is_authenticated:
+            deja_pris = deja_pris.exclude(pk=demandeur.user.pk)
+        if deja_pris.exists():
+            raise serializers.ValidationError("Ce nom d'utilisateur est déjà pris.")
+        return valeur
+
+    def validate(self, donnees):
+        demandeur = self.context.get("request")
+        porteur = demandeur.user if demandeur is not None else None
+        if not donnees.get("nom_utilisateur") and not (
+            porteur and porteur.nom_utilisateur
+        ):
+            raise serializers.ValidationError(
+                {
+                    "nom_utilisateur": "Choisissez le nom sous lequel les "
+                    "acheteurs vous connaîtront. Ils ne verront rien d'autre."
+                }
+            )
+        return donnees
+
+    def create(self, donnees_validees):
+        # Le nom vit sur le compte, pas sur le dossier : il sert partout,
+        # bien au-delà du KYC.
+        choisi = donnees_validees.pop("nom_utilisateur", "")
+        dossier = super().create(donnees_validees)
+        if choisi:
+            dossier.utilisateur.nom_utilisateur = choisi
+            dossier.utilisateur.save(
+                update_fields=["nom_utilisateur", "nom_utilisateur_repere"]
+            )
+        return dossier
+
+    def update(self, instance, donnees_validees):
+        choisi = donnees_validees.pop("nom_utilisateur", "")
+        dossier = super().update(instance, donnees_validees)
+        # Un dossier en correction peut encore changer de nom : rien n'est
+        # encore publié sous celui-ci. Après validation, seul un
+        # administrateur le peut.
+        if choisi and dossier.statut != DossierKYC.Statut.VALIDE:
+            dossier.utilisateur.nom_utilisateur = choisi
+            dossier.utilisateur.save(
+                update_fields=["nom_utilisateur", "nom_utilisateur_repere"]
+            )
+        return dossier
 
 
 class DecisionKYCSerialiseur(serializers.Serializer):

@@ -22,26 +22,32 @@ from django.db import transaction
 from django.utils import timezone
 
 from groupachat.catalogue.models import (
+    AbonnementPublication,
     Campagne,
     Categorie,
     EtatDemonstration,
     MediaProduit,
     MediaCampagne,
+    PackPublication,
     PalierPrix,
     Produit,
 )
 from groupachat.commandes.models import Avis, Participation
+from groupachat.comptes import parrainage, points
+from groupachat.comptes.parrainage import Parrainage
 from groupachat.comptes.models import (
     CodeVerification,
     DossierKYC,
+    MouvementPoints,
     Reputation,
     Utilisateur,
 )
 from groupachat.echanges.models import (
-    Commentaire,
     DemandeProduit,
     InteretDemande,
-    JaimeCommentaire,
+    AbonnementContactPrive,
+    Conversation,
+    Message,
     Notification,
 )
 from groupachat.paiements.models import Decaissement, Sequestre, Transaction
@@ -51,14 +57,14 @@ from groupachat.paiements.services import (
     encaisser,
     executer_decaissement,
     mettre_a_disposition,
-    valider_retrait,
+    remettre_le_colis,
 )
 
 # ⚠️ **À incrémenter dès qu'on touche au jeu de données.** C'est ce numéro,
 # et lui seul, qui décide si un redéploiement remet la démonstration à plat.
 # Laissé inchangé, les nouveautés n'apparaîtraient jamais sur un serveur déjà
 # démarré une fois.
-VERSION_DEMO = "5"
+VERSION_DEMO = "14"
 
 MOT_DE_PASSE = "demo2026Groupe"
 
@@ -69,12 +75,15 @@ RAYONS = [
     ("Mode", "vetement", []),
 ]
 
+# Le quatrième élément est le nom d'utilisateur choisi, vide quand l'acheteur
+# n'en a pas voulu : la démonstration doit montrer les deux cas, parce que le
+# repli « Prénom I. » est le plus fréquent et qu'on doit le voir à l'écran.
 ACHETEURS = [
-    ("91002233", "Ama", "Mensah"),
-    ("92003344", "Yao", "Dossou"),
-    ("93004455", "Akouvi", "Adjo"),
-    ("94005566", "Kodjo", "Agbeko"),
-    ("95006677", "Afi", "Lawson"),
+    ("91002233", "Ama", "Mensah", "AmaK"),
+    ("92003344", "Yao", "Dossou", ""),
+    ("93004455", "Akouvi", "Adjo", "Kouvi228"),
+    ("94005566", "Kodjo", "Agbeko", ""),
+    ("95006677", "Afi", "Lawson", "Afi-L"),
 ]
 
 
@@ -137,11 +146,15 @@ class Command(BaseCommand):
         self._campagne_terminee(valide, rayons, acheteurs, admin)
         self._campagne_annulee(valide, rayons, acheteurs)
         self._brouillon(valide, rayons)
+        self._en_verification(concurrent, rayons)
         self._offre_concurrente(concurrent, acheteurs)
         self._demandes(acheteurs, rayons)
         self._discussions(valide, concurrent, acheteurs, admin)
         self._avis(acheteurs)
         self._notifications_lues(acheteurs)
+        self._grades(valide, concurrent)
+        self._droit_de_publier(valide, concurrent)
+        self._parrainages(acheteurs)
 
         EtatDemonstration.objects.create(version=VERSION_DEMO)
         self._resumer(valide, en_attente, admin)
@@ -158,8 +171,10 @@ class Command(BaseCommand):
         de panne qui ne se voit qu'au déploiement suivant.
         """
         enchainement = (
+            Parrainage,
             Avis, Transaction, Decaissement, Sequestre,
-            Notification, JaimeCommentaire, Commentaire,
+            Notification, Message, Conversation, AbonnementContactPrive,
+            AbonnementPublication, PackPublication,
             InteretDemande, DemandeProduit,
             Participation, PalierPrix, MediaCampagne, Campagne,
             MediaProduit, Produit,
@@ -202,6 +217,7 @@ class Command(BaseCommand):
     def _groupeurs(self) -> tuple[Utilisateur, Utilisateur]:
         valide = Utilisateur.objects.create_user(
             "90001122", MOT_DE_PASSE, nom="Abalo", prenom="Koffi",
+            nom_utilisateur="Faya-02",
             role=Utilisateur.Role.GROUPEUR, telephone_verifie=True,
         )
         DossierKYC.objects.create(
@@ -216,6 +232,7 @@ class Command(BaseCommand):
         # présenter ce que voit un groupeur dont le dossier n'est pas tranché.
         en_attente = Utilisateur.objects.create_user(
             "90009988", MOT_DE_PASSE, nom="Doe", prenom="Afi",
+            nom_utilisateur="Doumega",
             role=Utilisateur.Role.GROUPEUR, telephone_verifie=True,
         )
         DossierKYC.objects.create(
@@ -234,6 +251,7 @@ class Command(BaseCommand):
         """
         groupeur = Utilisateur.objects.create_user(
             "96004477", MOT_DE_PASSE, nom="Amegan", prenom="Essi",
+            nom_utilisateur="Zogbe",
             role=Utilisateur.Role.GROUPEUR, telephone_verifie=True,
         )
         DossierKYC.objects.create(
@@ -248,17 +266,63 @@ class Command(BaseCommand):
         )
         return groupeur
 
+    def _grades(self, bronze, argent) -> None:
+        """Des groupeurs aux trois grades, pour que le barème se voie.
+
+        Les points sont posés directement sur les compteurs plutôt que gagnés
+        groupage par groupeur : atteindre Or demanderait soixante-dix
+        groupages aboutis, et le jeu de démonstration en compte sept. Ce qu'on
+        veut montrer, c'est la **conséquence** du grade — la commission
+        affichée, la surveillance allégée —, pas le chemin pour y arriver.
+        """
+        cumules_du_bronze = points.compteur_de(bronze).cumules
+        points.attribuer(
+            argent, MouvementPoints.Motif.CORRECTION, "demonstration", 1,
+            points=560 - points.compteur_de(argent).cumules,
+        )
+
+        # Un troisième groupeur, au grade Or : sans lui, la commission à
+        # 1,3 % n'apparaît nulle part et le haut du barème reste abstrait.
+        chevronne = Utilisateur.objects.create_user(
+            "96115588", MOT_DE_PASSE, nom="Kponton", prenom="Dede",
+            nom_utilisateur="Dedali", role=Utilisateur.Role.GROUPEUR,
+            telephone_verifie=True,
+        )
+        DossierKYC.objects.create(
+            utilisateur=chevronne, type_piece=DossierKYC.TypePiece.CNI,
+            numero_piece="CNI-TG-770318", numero_mobile_money="96115588",
+            nom_commerce="Kponton & Fils", statut=DossierKYC.Statut.VALIDE,
+            decide_le=timezone.now() - timedelta(days=400),
+        )
+        Reputation.objects.create(
+            groupeur=chevronne, campagnes_terminees=74, campagnes_annulees=2,
+            avis_recus=0, participants_servis=612, note=0,
+        )
+        points.attribuer(
+            chevronne, MouvementPoints.Motif.CORRECTION, "demonstration", 1,
+            points=940,
+        )
+        # Du solde déjà entamé : c'est ce qui montre que dépenser ses points
+        # ne fait pas perdre son grade.
+        points.depenser(chevronne, 300, "demonstration", 1)
+
+        self.stdout.write(
+            f"  - Grades : Bronze ({cumules_du_bronze} pts), "
+            "Argent (560 pts), Or (940 cumules, 640 de solde)"
+        )
+
     def _dossiers_a_examiner(self) -> None:
         """De quoi remplir la file d'attente de la console d'administration."""
         candidats = [
-            ("97005588", "Komlan", "Sodji", "Sodji Trading",
+            ("97005588", "Komlan", "Sodji", "Sodji Trading", "Kom-Lan",
              DossierKYC.TypePiece.CNI, "CNI-TG-556102"),
-            ("98006699", "Nathalie", "Agbo", "NA Cosmetiques",
+            ("98006699", "Nathalie", "Agbo", "NA Cosmetiques", "NathAgb",
              DossierKYC.TypePiece.PASSEPORT, "TG-P-884411"),
         ]
-        for telephone, prenom, nom, commerce, piece, numero in candidats:
+        for telephone, prenom, nom, commerce, pseudo, piece, numero in candidats:
             compte = Utilisateur.objects.create_user(
                 telephone, MOT_DE_PASSE, nom=nom, prenom=prenom,
+                nom_utilisateur=pseudo,
                 role=Utilisateur.Role.GROUPEUR, telephone_verifie=True,
             )
             DossierKYC.objects.create(
@@ -284,7 +348,6 @@ class Command(BaseCommand):
             description="Meme reference, livraison une semaine plus tot.",
             prix_unitaire=17500, quantite_minimale=30,
             date_limite=timezone.now() + timedelta(days=6),
-            point_remise="Depot Essi, Agoe-Nyive",
             statut=Campagne.Statut.EN_COURS, publiee_le=timezone.now(),
         )
         PalierPrix.objects.create(campagne=campagne, quantite_min=30, prix_unitaire=16000)
@@ -293,69 +356,72 @@ class Command(BaseCommand):
         self.stdout.write("  - Offre concurrente sur le riz (comparateur)")
 
     def _discussions(self, groupeur, concurrent, acheteurs, admin) -> None:
-        """Des fils de discussion vivants, et un message à modérer."""
-        campagnes = list(
-            Campagne.objects.filter(statut=Campagne.Statut.EN_COURS).order_by("id")
-        )
-        if not campagnes:
-            return
+        """Des conversations privées, et un message signalé à modérer.
 
+        Il n'y a **plus de fil public** sous les campagnes : le seul échange
+        possible passe par le Contact Privé, payant. La démonstration doit
+        donc montrer les deux côtés de la barrière — des acheteurs abonnés
+        qui écrivent, et d'autres qui voient l'offre d'abonnement.
+        """
         echanges = [
             ("Est-ce que la garantie couvre la casse a la livraison ?",
              "Oui, tout colis endommage est remplace - vous verifiez au retrait."),
             ("On peut passer recuperer en soiree apres 18 h ?",
              "Le depot reste ouvert jusqu'a 19 h 30 du lundi au samedi."),
-            ("Possible de prendre deux pieces et d'en faire livrer une a Kara ?",
-             "La remise se fait a Lome ; pour Kara je peux indiquer un transporteur."),
             ("La photo correspond bien au modele exact ?",
              "Oui, photo prise sur le lot que j'ai en commande."),
         ]
 
-        for rang, campagne in enumerate(campagnes[: len(echanges)]):
-            question, reponse = echanges[rang]
-            auteur = acheteurs[rang % len(acheteurs)]
-            message = Commentaire.objects.create(
-                campagne=campagne, auteur=auteur, texte=question,
-                cree_le=timezone.now() - timedelta(hours=7 + rang),
+        # Deux acheteurs abonnés sur cinq : assez pour montrer les fils, assez
+        # peu pour que l'écran d'abonnement se voie aussi.
+        abonnes = acheteurs[:2]
+        for acheteur in abonnes:
+            debut_abo, fin_abo = AbonnementContactPrive.prochaine_echeance(acheteur)
+            abonnement = AbonnementContactPrive.objects.create(
+                abonne=acheteur, debute_le=debut_abo, expire_le=fin_abo,
             )
-            Commentaire.objects.create(
-                campagne=campagne, auteur=campagne.groupeur, reponse_a=message,
-                texte=reponse, cree_le=timezone.now() - timedelta(hours=5 + rang),
+            points.attribuer(
+                acheteur, MouvementPoints.Motif.CONTACT_PRIVE,
+                "abonnement_contact_prive", abonnement.id,
             )
-            # Les « j'aime » sont posés un par un plutôt qu'en compteur : le
-            # fil doit savoir qui a déjà aimé, sinon le coeur de chacun est faux.
-            for amateur in acheteurs[: 2 + rang % 3]:
-                if amateur.id != auteur.id:
-                    JaimeCommentaire.objects.create(
-                        commentaire=message, utilisateur=amateur
-                    )
-            message.nombre_jaime = message.jaime.count()
-            message.save(update_fields=["nombre_jaime"])
 
-        avis = Commentaire.objects.create(
-            campagne=campagnes[0], auteur=acheteurs[2],
-            texte="Troisieme commande chez ce groupeur, toujours impeccable.",
-            cree_le=timezone.now() - timedelta(days=1),
+        campagne = Campagne.objects.filter(
+            statut=Campagne.Statut.EN_COURS, groupeur=groupeur
+        ).order_by("id").first()
+
+        for rang, (question, reponse) in enumerate(echanges):
+            acheteur = abonnes[rang % len(abonnes)]
+            destinataire = groupeur if rang % 2 == 0 else concurrent
+            fil, _ = Conversation.objects.get_or_create(
+                acheteur=acheteur, groupeur=destinataire,
+                defaults={"campagne_initiale": campagne},
+            )
+            Message.objects.create(
+                conversation=fil, auteur=acheteur, texte=question,
+                envoye_le=timezone.now() - timedelta(hours=7 + rang),
+            )
+            dernier = Message.objects.create(
+                conversation=fil, auteur=destinataire, texte=reponse,
+                envoye_le=timezone.now() - timedelta(hours=5 + rang),
+            )
+            fil.dernier_message_le = dernier.envoye_le
+            fil.save(update_fields=["dernier_message_le"])
+
+        # Un message signalé, pour que la modération ait de quoi montrer.
+        fil_tendu, _ = Conversation.objects.get_or_create(
+            acheteur=abonnes[0], groupeur=concurrent,
+            defaults={"campagne_initiale": campagne},
         )
-        for amateur in acheteurs[:4]:
-            if amateur.id != avis.auteur_id:
-                JaimeCommentaire.objects.create(commentaire=avis, utilisateur=amateur)
-        avis.nombre_jaime = avis.jaime.count()
-        avis.save(update_fields=["nombre_jaime"])
-
-        # Un message masqué, pour que la modération ait de quoi montrer.
-        Commentaire.objects.create(
-            campagne=campagnes[0], auteur=acheteurs[4],
-            texte="Arnaque totale, ne commandez jamais ici !!!",
-            cree_le=timezone.now() - timedelta(hours=3),
-            masque_le=timezone.now() - timedelta(hours=2),
-            masque_par=admin,
-            motif_masquage="Accusation sans fondement, aucun litige ouvert.",
+        Message.objects.create(
+            conversation=fil_tendu, auteur=abonnes[0],
+            texte="Donne-moi ton numero, on fait l'affaire en direct sans la plateforme.",
+            envoye_le=timezone.now() - timedelta(hours=3),
+            signale_le=timezone.now() - timedelta(hours=2),
         )
 
         self.stdout.write(
-            f"  - Discussions sur {min(len(campagnes), len(echanges))} campagnes "
-            "+ 1 message masque"
+            f"  - {Conversation.objects.count()} conversations privees "
+            f"({len(abonnes)} abonnes) + 1 message signale"
         )
 
     def _avis(self, acheteurs) -> None:
@@ -432,13 +498,33 @@ class Command(BaseCommand):
         restantes = Notification.objects.filter(lue_le__isnull=True).count()
         self.stdout.write(f"  - {restantes} notifications non lues reparties")
 
+    def _livreurs(self):
+        """Les deux partenaires qui portent les colis.
+
+        Memorises sur l'instance : ils servent a plusieurs campagnes, et deux
+        appels ne doivent pas creer deux comptes pour le meme transporteur.
+        """
+        if getattr(self, "_les_livreurs", None) is None:
+            poste = Utilisateur.objects.create_user(
+                "95551122", MOT_DE_PASSE, nom="Agbeko", prenom="Komlan",
+                role=Utilisateur.Role.LIVREUR, telephone_verifie=True,
+                transporteur=Utilisateur.Transporteur.POSTE,
+            )
+            gozem = Utilisateur.objects.create_user(
+                "95552233", MOT_DE_PASSE, nom="Sossou", prenom="Afi",
+                role=Utilisateur.Role.LIVREUR, telephone_verifie=True,
+                transporteur=Utilisateur.Transporteur.GOZEM,
+            )
+            self._les_livreurs = (poste, gozem)
+        return self._les_livreurs
+
     def _acheteurs(self) -> list[Utilisateur]:
         return [
             Utilisateur.objects.create_user(
                 telephone, MOT_DE_PASSE, nom=nom, prenom=prenom,
-                telephone_verifie=True,
+                nom_utilisateur=pseudo or None, telephone_verifie=True,
             )
-            for telephone, prenom, nom in ACHETEURS
+            for telephone, prenom, nom, pseudo in ACHETEURS
         ]
 
     def _campagne(self, groupeur, categorie, nom, marque, prix, minimum,
@@ -455,21 +541,121 @@ class Command(BaseCommand):
             description=extra.pop("conditions", ""),
             prix_unitaire=prix, quantite_minimale=minimum,
             date_limite=timezone.now() + timedelta(days=jours),
-            point_remise=extra.pop("point_remise", "Marché d'Adawlato, Lomé"),
             statut=Campagne.Statut.EN_COURS, publiee_le=timezone.now(),
             **extra,
         )
         return campagne
 
     def _payer(self, campagne, acheteur, quantite) -> Participation:
-        prix = campagne.prix_pour_quantite(campagne.quantite_reservee + quantite)
+        prix = campagne.prix_pour(quantite)
         participation = Participation.objects.create(
             campagne=campagne, acheteur=acheteur, quantite=quantite,
             prix_unitaire_applique=prix, montant_total=prix * quantite,
+            **self._destination(acheteur),
         )
         encaisser(participation, operateur="tmoney", numero=acheteur.telephone)
         participation.refresh_from_db()
         return participation
+
+    # Le choix du retrait suit **l'acheteur**, pas la campagne : il habite au
+    # meme endroit d'un groupage a l'autre. Deux se font livrer, les autres
+    # passent a leur bureau de poste — les deux chemins sont ainsi couverts
+    # partout dans le jeu, y compris dans la campagne en distribution.
+    DESTINATIONS = (
+        {"mode_retrait": Participation.ModeRetrait.POSTE,
+         "bureau_poste": "Bureau de poste de Tokoin"},
+        {"mode_retrait": Participation.ModeRetrait.LIVRAISON,
+         "adresse_livraison": "Agoe-Nyive, rue des Cocotiers, maison bleue"},
+        {"mode_retrait": Participation.ModeRetrait.POSTE,
+         "bureau_poste": "Bureau de poste de Be-Kpota"},
+        {"mode_retrait": Participation.ModeRetrait.LIVRAISON,
+         "adresse_livraison": "Nyekonakpoe, derriere la pharmacie du Port"},
+    )
+
+    def _destination(self, acheteur) -> dict:
+        return self.DESTINATIONS[acheteur.id % len(self.DESTINATIONS)]
+
+    def _en_verification(self, oag, rayons):
+        """Un groupage qui attend la relecture avant la vitrine.
+
+        Sans lui, l'ecran de verification de la console est toujours vide,
+        et la file ne se decouvre qu'en publiant a la main.
+        """
+        produit = Produit.objects.create(
+            categorie=rayons["Électronique"], nom="Chargeur solaire 20 000 mAh",
+            marque="Oraimo", propose_par=oag,
+        )
+        Campagne.objects.create(
+            produit=produit, groupeur=oag,
+            titre="Chargeurs solaires - en attente de relecture",
+            description="Arrivage du port, batterie 20 000 mAh.",
+            prix_unitaire=14000, quantite_minimale=12,
+            date_limite=timezone.now() + timedelta(days=15),
+            statut=Campagne.Statut.EN_VERIFICATION,
+        )
+        self.stdout.write(
+            "  - Groupage en verification (chargeurs) - file de la console"
+        )
+
+    def _parrainages(self, acheteurs):
+        """Un filleul valide, un autre encore en attente.
+
+        Les deux etats doivent se voir : un ecran qui n'affiche que des
+        parrainages aboutis laisse croire qu'un clic suffit.
+        """
+        marraine, filleul_paye, filleul_en_attente = acheteurs[:3]
+        code = parrainage.code_de(marraine)
+
+        # Celui-la a paye : il a deja ses parts dans le jeu de demonstration.
+        paye = Parrainage.objects.create(
+            parrain=marraine, filleul=filleul_paye,
+            campagne=Campagne.objects.filter(
+                statut=Campagne.Statut.TERMINEE
+            ).first(),
+            valide_le=timezone.now() - timedelta(days=3),
+        )
+        points.attribuer(marraine, points.Motif.PARRAINAGE, "parrainage",
+                         paye.id, points=2)
+
+        # Celui-la a commande sans payer : rien n'est credite.
+        Parrainage.objects.create(
+            parrain=marraine, filleul=filleul_en_attente,
+            campagne=Campagne.objects.filter(
+                statut=Campagne.Statut.EN_COURS
+            ).first(),
+        )
+        self.stdout.write(
+            f"  - Parrainage : code {code} ({marraine.nom_public}), "
+            "1 filleul valide, 1 en attente"
+        )
+
+    def _droit_de_publier(self, valide, concurrent):
+        """Les deux formules, chacune sur un OAG.
+
+        L'abonne publie sans compter ; l'autre vit sur ses packs et en a
+        deja consomme. Les deux etats doivent se voir, sinon l'ecran du
+        droit de publier ne se lit que dans un sens.
+        """
+        AbonnementPublication.objects.create(
+            oag=valide,
+            debute_le=timezone.now() - timedelta(days=4),
+            expire_le=timezone.now() + timedelta(days=26),
+            reference_paiement="SIM-DEMO-ABO",
+        )
+        points.attribuer(valide, points.Motif.ABONNEMENT_PUBLICATION,
+                         "abonnement_publication_demo", valide.id)
+
+        PackPublication.objects.create(
+            oag=concurrent, publications_restantes=2,
+            achete_le=timezone.now() - timedelta(days=20),
+            reference_paiement="SIM-DEMO-PACK",
+        )
+        points.attribuer(concurrent, points.Motif.PACK_PUBLICATION,
+                         "premier_pack_publication", concurrent.id)
+        self.stdout.write(
+            "  - Droit de publier : abonnement actif (Faya-02), "
+            "pack entame (2/5) pour le concurrent"
+        )
 
     # ── Les cinq états ──────────────────────────────────────────────────────
 
@@ -484,25 +670,26 @@ class Command(BaseCommand):
             conditions="Sacs neufs, scellés. Remise au marché d'Adawlato.",
             objectif_participants=15,
         )
-        PalierPrix.objects.create(campagne=campagne, quantite_min=20, prix_unitaire=16500)
-        PalierPrix.objects.create(campagne=campagne, quantite_min=50, prix_unitaire=15000)
+        # Le barème des deux axes, en entier : c'est la campagne qu'on
+        # montre quand on explique le produit.
+        #
+        # En lignes, les tranches : un acheteur qui prend six sacs paie moins
+        # cher qu'un acheteur qui en prend un. En colonnes, la chute : à douze
+        # participants, les deux tranches descendent encore — et la
+        # différence est rendue à ceux qui avaient déjà payé.
+        for quantite, participants, prix in (
+            (6, 0, 16500),
+            (1, 12, 17000),
+            (6, 12, 15200),
+        ):
+            PalierPrix.objects.create(
+                campagne=campagne, quantite_min=quantite,
+                participants_min=participants, prix_unitaire=prix,
+            )
 
         for acheteur, quantite in zip(acheteurs, (3, 2, 4, 2)):
             self._payer(campagne, acheteur, quantite)
 
-        question = Commentaire.objects.create(
-            campagne=campagne, auteur=acheteurs[0],
-            texte="Bonjour, c'est bien du riz parfumé et non du riz brisé ?",
-        )
-        Commentaire.objects.create(
-            campagne=campagne, auteur=groupeur, reponse_a=question,
-            texte="Bonjour, oui, riz jasmin parfumé, sacs scellés d'origine.",
-        )
-        Commentaire.objects.create(
-            campagne=campagne, auteur=acheteurs[2],
-            texte="J'ai déjà commandé chez Abalo le mois dernier, tout était nickel.",
-            nombre_jaime=4,
-        )
         self.stdout.write("  • Campagne en collecte (riz) — 11/20 pièces")
 
     def _autres_collectes(self, groupeur, rayons, acheteurs):
@@ -519,7 +706,7 @@ class Command(BaseCommand):
                 "titre": "Écouteurs Oraimo — lot de fin d'année",
                 "description": "Bluetooth 5.3, boîtier de charge, 30 h d'autonomie.",
                 "caracteristiques": {"Autonomie": "30 h", "Bluetooth": "5.3"},
-                "paliers": [(25, 12500), (60, 11000)],
+                "paliers": [(5, 0, 12500), (1, 10, 13000), (5, 10, 11500)],
                 "parts": (4, 3, 2),
             },
             {
@@ -528,7 +715,7 @@ class Command(BaseCommand):
                 "titre": "Matelas Dolidol 160×200 — import direct",
                 "description": "Mousse haute densité, housse déhoussable, garantie 5 ans.",
                 "caracteristiques": {"Dimensions": "160 × 200 cm", "Garantie": "5 ans"},
-                "paliers": [(8, 132000)],
+                "paliers": [(3, 0, 132000)],
                 "parts": (1, 1),
             },
             {
@@ -537,7 +724,7 @@ class Command(BaseCommand):
                 "titre": "Huile Dinor 20 L — arrivage du port",
                 "description": "Huile de tournesol raffinée, bidon scellé de 20 litres.",
                 "caracteristiques": {"Contenance": "20 L", "Type": "Tournesol"},
-                "paliers": [(15, 26000), (40, 24500)],
+                "paliers": [(4, 0, 26000), (1, 15, 26500), (4, 15, 24500)],
                 "parts": (3, 2, 2, 1),
             },
             {
@@ -546,7 +733,7 @@ class Command(BaseCommand):
                 "titre": "Pagnes wax Vlisco — collection de saison",
                 "description": "Six yards, coton 100 %, motifs au choix à la commande.",
                 "caracteristiques": {"Longueur": "6 yards", "Matière": "Coton"},
-                "paliers": [(12, 29000)],
+                "paliers": [(3, 0, 29000)],
                 "parts": (2, 2, 1, 1, 1),
             },
             {
@@ -555,7 +742,7 @@ class Command(BaseCommand):
                 "titre": "Congélateurs Hisense 200 L — groupage de novembre",
                 "description": "Classe A+, 200 litres, garantie constructeur 2 ans.",
                 "caracteristiques": {"Volume": "200 L", "Classe": "A+", "Garantie": "2 ans"},
-                "paliers": [(6, 198000)],
+                "paliers": [(2, 0, 198000)],
                 "parts": (1, 1, 1),
             },
         ]
@@ -567,9 +754,10 @@ class Command(BaseCommand):
                 titre=fiche["titre"], description=fiche["description"],
                 caracteristiques=fiche["caracteristiques"],
             )
-            for seuil, prix in fiche["paliers"]:
+            for quantite, participants, prix in fiche["paliers"]:
                 PalierPrix.objects.create(
-                    campagne=campagne, quantite_min=seuil, prix_unitaire=prix
+                    campagne=campagne, quantite_min=quantite,
+                    participants_min=participants, prix_unitaire=prix,
                 )
             for acheteur, quantite in zip(acheteurs, fiche["parts"]):
                 self._payer(campagne, acheteur, quantite)
@@ -603,7 +791,7 @@ class Command(BaseCommand):
         cloturer(campagne)
         decaissement = demander_decaissement(campagne)
         executer_decaissement(decaissement, admin)
-        mettre_a_disposition(campagne, point_remise="Boutique Abalo, Bè-Kpota")
+        mettre_a_disposition(campagne)
         self.stdout.write(
             "  • Campagne en distribution (ventilateurs) — codes de retrait actifs"
         )
@@ -621,10 +809,17 @@ class Command(BaseCommand):
         cloturer(campagne)
         executer_decaissement(demander_decaissement(campagne), admin)
         mettre_a_disposition(campagne)
-        for participation in parts:
+        # C'est **le livreur** qui remet, jamais l'OAG : il a confié le lot
+        # a l'agence et ne rencontre pas ses acheteurs.
+        poste, gozem = self._livreurs()
+        for rang, participation in enumerate(parts):
             participation.refresh_from_db()
-            valider_retrait(campagne, participation.code_retrait, groupeur)
-        self.stdout.write("  • Campagne terminée (blenders) — tous les colis retirés")
+            remettre_le_colis(
+                participation.code_retrait, poste if rang % 2 == 0 else gozem
+            )
+        self.stdout.write(
+            "  • Campagne terminée (blenders) — colis remis par La Poste et Gozem"
+        )
 
     def _campagne_annulee(self, groupeur, rayons, acheteurs):
         campagne = self._campagne(
@@ -646,7 +841,6 @@ class Command(BaseCommand):
             produit=produit, groupeur=groupeur, titre="Huile Dinor 20 L — à publier",
             prix_unitaire=28000, quantite_minimale=15,
             date_limite=timezone.now() + timedelta(days=20),
-            point_remise="Marché d'Adawlato, Lomé",
             statut=Campagne.Statut.BROUILLON,
         )
         self.stdout.write("  • Brouillon (huile) — prêt à publier en direct")
@@ -661,7 +855,7 @@ class Command(BaseCommand):
             demande = DemandeProduit.objects.create(
                 auteur=acheteurs[index], titre=titre, categorie=categorie,
                 budget_indicatif=budget,
-                description="Si un groupeur peut en importer, je suis preneur.",
+                description="Si un OAG peut en importer, je suis preneur.",
             )
             interesses = acheteurs[: len(acheteurs) - index]
             for acheteur in interesses:
@@ -674,8 +868,11 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS("\nJeu de démonstration chargé.\n"))
         self.stdout.write(f"  Mot de passe commun : {MOT_DE_PASSE}\n")
         self.stdout.write("  Administrateur      : 99000011")
-        self.stdout.write(f"  Groupeur validé     : {valide.telephone} (Abalo Import)")
         self.stdout.write(
-            f"  Groupeur en attente : {en_attente.telephone} (écran de blocage KYC)"
+            f"  OAG validé          : {valide.telephone} ({valide.nom_public})"
+        )
+        self.stdout.write(
+            f"  OAG en attente      : {en_attente.telephone} (écran de blocage KYC)"
         )
         self.stdout.write("  Acheteurs           : " + ", ".join(a[0] for a in ACHETEURS))
+        self.stdout.write("  Livreurs            : 95551122 (La Poste), 95552233 (Gozem)")

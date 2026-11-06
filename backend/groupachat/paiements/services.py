@@ -17,11 +17,12 @@ import secrets
 from datetime import timedelta
 
 from django.conf import settings
-from django.db import transaction
+from django.db import models, transaction
 from django.utils import timezone
 
 from groupachat.catalogue.models import Campagne
 from groupachat.commandes.models import Participation
+from groupachat.comptes import parrainage, points
 from groupachat.echanges.models import Notification
 from groupachat.paiements.models import Decaissement, Sequestre, Transaction
 
@@ -92,11 +93,27 @@ def encaisser(participation: Participation, operateur: str, numero: str) -> Tran
     participation.statut = Participation.Statut.PAYEE
     participation.payee_le = timezone.now()
     participation.attribuer_code_retrait()
-    participation.save(update_fields=["statut", "payee_le", "code_retrait"])
+    participation.save(
+        update_fields=["statut", "payee_le", "code_retrait", "code_otp_sms"]
+    )
 
     sequestre = sequestre_de(campagne)
     sequestre.montant_consigne += participation.montant_total
     sequestre.save(update_fields=["montant_consigne"])
+
+    # Les points de l'acheteur. L'attribution porte la participation : si le
+    # paiement est rejoué, elle ne comptera pas deux fois.
+    points.attribuer(
+        participation.acheteur,
+        points.Motif.ACHAT,
+        "participation",
+        participation.id,
+    )
+
+    # Le parrainage se joue **ici** et nulle part ailleurs : un clic ou une
+    # inscription sans achat ne valent rien, et un paiement refusé n'arrive
+    # jamais jusqu'à cette ligne.
+    parrainage.valider_au_paiement(participation)
 
     _notifier_paiement(campagne, participation)
     return mouvement
@@ -192,6 +209,99 @@ def rembourser(participation: Participation, motif: str = "") -> Transaction | N
 
 
 @transaction.atomic
+def ajuster_les_prix(campagne: Campagne) -> int:
+    """Applique la chute de prix à **tous** les participants, et rend la différence.
+
+    C'est le cœur du mécanisme de partage. Un acheteur n'a de raison de faire
+    venir ses amis que si la baisse le concerne lui aussi : une chute
+    réservée aux derniers arrivés punirait celui qui a commandé le premier,
+    c'est-à-dire exactement celui qu'on veut récompenser. La part déjà payée
+    est donc recalculée au nombre final de participants, et le surplus
+    revient à l'acheteur.
+
+    Le prix ne peut que **descendre** : la tranche choisie par l'acheteur est
+    figée à la commande, et une chute non atteinte reste sans effet. Personne
+    ne se voit jamais réclamer un complément.
+
+    Appelé à la clôture, une fois le compte des participants arrêté. Rendre
+    la différence en cours de collecte n'aurait pas de sens : le nombre peut
+    encore monter, et on rembourserait plusieurs fois la même part.
+
+    Rend le nombre de participations ajustées.
+    """
+    participants = campagne.nombre_participants
+    ajustees = 0
+
+    for participation in campagne.participations.filter(
+        statut__in=Participation.STATUTS_PAYES
+    ).select_related("acheteur"):
+        nouveau = campagne.prix_pour(participation.quantite, participants)
+        if nouveau >= participation.prix_unitaire_applique:
+            continue
+
+        surplus = (participation.prix_unitaire_applique - nouveau) * participation.quantite
+        ancien = participation.prix_unitaire_applique
+        participation.prix_unitaire_applique = nouveau
+        participation.montant_total -= surplus
+        participation.save(update_fields=["prix_unitaire_applique", "montant_total"])
+
+        _rendre_le_surplus(participation, surplus, ancien, nouveau, participants)
+        ajustees += 1
+
+    return ajustees
+
+
+def _rendre_le_surplus(
+    participation: Participation,
+    surplus: int,
+    ancien: int,
+    nouveau: int,
+    participants: int,
+) -> None:
+    """Renvoie la différence et sort la somme du séquestre.
+
+    Un remboursement partiel, et non une annulation : la part reste payée,
+    la commande suit son cours, seule une fraction repart. Le séquestre doit
+    le savoir, faute de quoi le groupeur se verrait décaisser un argent qui
+    n'est plus à lui.
+    """
+    operateur = (
+        Transaction.objects.filter(participation=participation)
+        .values_list("operateur", flat=True)
+        .first()
+        or "tmoney"
+    )
+    _, reference = _executer_paiement(
+        surplus, participation.acheteur.telephone, operateur
+    )
+    Transaction.objects.create(
+        participation=participation,
+        sens=Transaction.Sens.REMBOURSEMENT,
+        montant=surplus,
+        operateur=operateur,
+        numero=participation.acheteur.telephone,
+        reference=reference,
+        statut=Transaction.Statut.CONFIRMEE,
+        confirmee_le=timezone.now(),
+    )
+
+    sequestre = sequestre_de(participation.campagne)
+    sequestre.montant_rembourse += surplus
+    sequestre.save(update_fields=["montant_rembourse"])
+
+    Notification.objects.create(
+        destinataire=participation.acheteur,
+        genre=Notification.Genre.REMBOURSEMENT,
+        titre="Le prix a baissé",
+        message=(
+            f"Vous étiez {participants} participants : la pièce passe de "
+            f"{ancien} à {nouveau} FCFA. {surplus} FCFA vous sont rendus."
+        ),
+        campagne=participation.campagne,
+    )
+
+
+@transaction.atomic
 def cloturer(campagne: Campagne) -> str:
     """Ferme la collecte à la date limite et décide de la suite.
 
@@ -216,6 +326,10 @@ def cloturer(campagne: Campagne) -> str:
     campagne.cloturee_le = timezone.now()
 
     if campagne.minimum_atteint:
+        # Le compte des participants est arrêté : on applique la chute de
+        # prix avant tout le reste, pour que le séquestre et les
+        # notifications parlent des montants définitifs.
+        ajuster_les_prix(campagne)
         campagne.statut = Campagne.Statut.FINANCEE
         sequestre.statut = Sequestre.Statut.BLOQUE
         sequestre.save(update_fields=["statut"])
@@ -225,7 +339,7 @@ def cloturer(campagne: Campagne) -> str:
             Notification.Genre.CAMPAGNE_FINANCEE,
             "Campagne financée",
             f"« {campagne.titre} » a atteint son objectif. "
-            "Le groupeur va s'approvisionner.",
+            "L'OAG va s'approvisionner.",
         )
         Notification.objects.create(
             destinataire=campagne.groupeur,
@@ -250,8 +364,9 @@ def cloturer(campagne: Campagne) -> str:
         "Le groupage n'a pas abouti",
         f"« {campagne.titre} » s'est terminée à {campagne.quantite_reservee} "
         f"pièces sur {campagne.quantite_minimale} — il en manquait {manque}. "
-        "Votre part reste consignée : le groupeur peut encore décider de "
-        "maintenir la commande. Vous serez prévenu de sa décision.",
+        "Votre paiement n'est pas renvoyé pour autant : le groupeur peut "
+        "encore décider de maintenir la commande. Vous serez prévenu de sa "
+        "décision.",
     )
     Notification.objects.create(
         destinataire=campagne.groupeur,
@@ -279,6 +394,9 @@ def maintenir(campagne: Campagne) -> Campagne:
     if campagne.statut != Campagne.Statut.MINIMUM_NON_ATTEINT:
         raise ErreurPaiement("Cette campagne n'attend pas de décision.")
 
+    # Même si le minimum a été manqué, une chute de prix a pu être franchie :
+    # elle est due.
+    ajuster_les_prix(campagne)
     campagne.statut = Campagne.Statut.FINANCEE
     campagne.save(update_fields=["statut"])
 
@@ -416,13 +534,20 @@ def demander_decaissement(campagne: Campagne) -> Decaissement:
         raise ErreurPaiement("Un décaissement a déjà été demandé.")
 
     sequestre = sequestre_de(campagne)
-    frais, net = Decaissement.calculer(sequestre.solde)
+    # Le taux se lit au moment du calcul et se fige dans le décaissement :
+    # un groupeur qui monte en grade la semaine suivante ne fait pas
+    # recalculer un retrait déjà chiffré.
+    compteur = points.compteur_de(campagne.groupeur)
+    taux = compteur.commission_centiemes
+    frais, net = Decaissement.calculer(sequestre.solde, taux)
     dossier = getattr(campagne.groupeur, "dossier_kyc", None)
     return Decaissement.objects.create(
         campagne=campagne,
         montant_brut=sequestre.solde,
         frais=frais,
         montant_net=net,
+        taux_commission=taux,
+        grade_applique=compteur.grade,
         numero_mobile_money=(
             dossier.numero_mobile_money if dossier else campagne.groupeur.telephone
         ),
@@ -482,11 +607,33 @@ def executer_decaissement(decaissement: Decaissement, administrateur) -> Decaiss
 
 
 @transaction.atomic
-def mettre_a_disposition(campagne: Campagne, point_remise: str = "") -> int:
-    """Le groupeur annonce que la marchandise est arrivée.
+def _message_de_disposition(campagne: Campagne, participation) -> str:
+    """Ce que lit l'acheteur quand son lot arrive.
+
+    Le message dit **sa** destination, pas celle de la campagne : lui envoyer
+    « à retirer au bureau de poste » alors qu'il a demandé la livraison le
+    ferait sortir pour rien. Et les frais de livraison sont annoncés ici,
+    parce qu'ils se paient à l'agence et jamais à nous.
+    """
+    if participation.mode_retrait == Participation.ModeRetrait.LIVRAISON:
+        return (
+            f"« {campagne.titre} » part en livraison à votre adresse. "
+            f"Les frais de livraison sont à régler à l'agence à la remise. "
+            f"Gardez votre code : {participation.code_retrait}."
+        )
+    return (
+        f"« {campagne.titre} » est à retirer au {participation.bureau_poste}. "
+        f"Présentez votre code : {participation.code_retrait}."
+    )
+
+
+def mettre_a_disposition(campagne: Campagne) -> int:
+    """L'OAG annonce que la marchandise est arrivée.
 
     C'est le geste qui déclenche la distribution : **tous les participants
-    sont notifiés**, avec le point de remise et le rappel de leur code.
+    sont notifiés**, chacun avec la destination qu'il a lui-même choisie et le
+    rappel de son code. Il n'y a pas de lieu commun à annoncer — l'un passe
+    au bureau de poste de son quartier, l'autre se fait livrer.
     """
     if campagne.statut not in (
         Campagne.Statut.APPROVISIONNEMENT,
@@ -495,11 +642,9 @@ def mettre_a_disposition(campagne: Campagne, point_remise: str = "") -> int:
     ):
         raise ErreurPaiement("Cette campagne n'en est pas à la distribution.")
 
-    if point_remise:
-        campagne.point_remise = point_remise
     campagne.statut = Campagne.Statut.DISTRIBUTION
     campagne.mise_a_disposition_le = timezone.now()
-    campagne.save(update_fields=["statut", "mise_a_disposition_le", "point_remise"])
+    campagne.save(update_fields=["statut", "mise_a_disposition_le"])
 
     participations = campagne.participations.filter(
         statut=Participation.Statut.PAYEE
@@ -512,10 +657,7 @@ def mettre_a_disposition(campagne: Campagne, point_remise: str = "") -> int:
                 destinataire=participation.acheteur,
                 genre=Notification.Genre.MARCHANDISE_DISPONIBLE,
                 titre="Votre produit est arrivé",
-                message=(
-                    f"« {campagne.titre} » est à retirer à {campagne.point_remise}. "
-                    f"Présentez votre code : {participation.code_retrait}."
-                ),
+                message=_message_de_disposition(campagne, participation),
                 campagne=campagne,
                 lien=f"/participations/{participation.id}",
             )
@@ -525,46 +667,90 @@ def mettre_a_disposition(campagne: Campagne, point_remise: str = "") -> int:
     return len(notifications)
 
 
-@transaction.atomic
-def valider_retrait(campagne: Campagne, code: str, agent) -> Participation:
-    """Remet le colis contre présentation du code ou du QR.
+def code_du_scan(saisie: str) -> str:
+    """Le code, qu'il soit dicté ou lu dans un QR.
 
-    Le code est cherché **dans cette campagne seulement** : un code valide
-    d'une autre campagne ne doit pas ouvrir celle-ci.
+    Un QR scanné arrive sous la forme `GA|<campagne>|<code>`. Le code y est
+    lisible à l'œil **à dessein** : un téléphone dont l'appareil photo ne
+    marche pas doit pouvoir le dicter.
     """
-    code = (code or "").strip().upper()
-    # Un QR scanné arrive sous la forme GA|<campagne>|<code>.
-    if code.startswith("GA|"):
-        morceaux = code.split("|")
-        if len(morceaux) != 3 or morceaux[1] != str(campagne.id):
-            raise ErreurPaiement("Ce QR code ne concerne pas cette campagne.")
-        code = morceaux[2]
+    propre = (saisie or "").strip().upper()
+    if propre.startswith("GA|"):
+        morceaux = propre.split("|")
+        if len(morceaux) != 3:
+            raise ErreurPaiement("Ce QR code n'est pas lisible.")
+        return morceaux[2]
+    return propre
 
-    participation = campagne.participations.filter(code_retrait=code).first()
+
+@transaction.atomic
+def remettre_le_colis(saisie: str, livreur) -> Participation:
+    """Le livreur scanne, le colis est remis.
+
+    **Le code est cherché partout, pas dans une campagne.** Un livreur porte
+    dans la même tournée les colis de plusieurs groupages : lui demander de
+    choisir d'abord la campagne, c'est lui demander une information qu'il n'a
+    pas — il a un paquet et un code, rien d'autre. Les codes sont uniques sur
+    toute la plateforme, la recherche directe suffit.
+
+    C'est **l'agence qui remet**, jamais l'OAG : celui-ci confie le lot en
+    bloc et ne rencontre pas ses acheteurs. S'il validait lui-même, la preuve
+    de livraison ne prouverait plus rien — celui qui doit livrer signerait sa
+    propre livraison.
+    """
+    code = code_du_scan(saisie)
+
+    participation = (
+        Participation.objects.select_for_update()
+        .select_related("campagne", "acheteur")
+        .filter(models.Q(code_retrait=code) | models.Q(code_otp_sms=code))
+        .first()
+    )
     if participation is None:
-        raise ErreurPaiement("Code inconnu pour cette campagne.")
+        raise ErreurPaiement("Code inconnu.")
     if participation.statut == Participation.Statut.RETIREE:
         raise ErreurPaiement(
-            f"Colis déjà retiré le {participation.retiree_le:%d/%m/%Y à %H:%M}."
+            f"Colis déjà remis le {participation.retiree_le:%d/%m/%Y à %H:%M}."
         )
     if participation.statut != Participation.Statut.PRETE:
-        raise ErreurPaiement("Cette part n'est pas prête à être retirée.")
+        raise ErreurPaiement("Ce colis n'est pas encore prêt à être remis.")
 
+    campagne = participation.campagne
     participation.statut = Participation.Statut.RETIREE
     participation.retiree_le = timezone.now()
-    participation.remise_par = agent
+    participation.remise_par = livreur
     participation.save(update_fields=["statut", "retiree_le", "remise_par"])
 
+    porteur = livreur.get_transporteur_display() if livreur.transporteur else "l'agence"
     Notification.objects.create(
         destinataire=participation.acheteur,
         genre=Notification.Genre.RETRAIT_CONFIRME,
-        titre="Retrait confirmé",
-        message=f"Vous avez retiré votre part de « {campagne.titre} ». Merci !",
+        titre="Colis remis",
+        message=(
+            f"Votre part de « {campagne.titre} » vous a été remise par "
+            f"{porteur}. Merci !"
+        ),
         campagne=campagne,
+        lien=f"/mes-achats/{participation.id}",
     )
 
-    # Dernier colis remis : la campagne est terminée et la réputation du
-    # groupeur en tient compte.
+    # L'OAG apprend la remise **ici** : c'est le scan du livreur qui lui dit
+    # que telle personne a bien reçu son colis. Sans cette ligne, il devrait
+    # appeler l'agence pour savoir où en est sa distribution.
+    Notification.objects.create(
+        destinataire=campagne.groupeur,
+        genre=Notification.Genre.RETRAIT_CONFIRME,
+        titre="Colis remis à un acheteur",
+        message=(
+            f"{participation.acheteur.nom_public} a reçu sa part de "
+            f"« {campagne.titre} » ({porteur})."
+        ),
+        campagne=campagne,
+        lien=f"/groupeur/campagnes/{campagne.id}",
+    )
+
+    # Dernier colis remis : la campagne est terminée et la réputation de
+    # l'OAG en tient compte.
     if not campagne.participations.filter(statut=Participation.Statut.PRETE).exists():
         campagne.statut = Campagne.Statut.TERMINEE
         campagne.save(update_fields=["statut"])
@@ -590,6 +776,11 @@ def _crediter_reputation(campagne: Campagne) -> None:
         statut=Participation.Statut.RETIREE
     ).count()
     reputation.save(update_fields=["campagnes_terminees", "participants_servis"])
+
+    # **Aucun point pour le groupage abouti.** Le cahier des charges v2 a
+    # tranché : les points récompensent l'acheteur et le parrainage, pas le
+    # volume d'affaires de l'OAG. Le grade reste donc un parcours de fidélité
+    # et d'ancienneté, et non une prime au chiffre.
 
 
 def recalculer_reputation(groupeur) -> None:
@@ -620,4 +811,3 @@ def recalculer_reputation(groupeur) -> None:
     reputation.save()
 
 
-FRAIS_PLATEFORME = settings.FRAIS_PLATEFORME_FCFA

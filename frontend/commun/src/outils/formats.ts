@@ -77,8 +77,8 @@ export function codeLisible(code: string): string {
   return code.replace(/(.{4})(?=.)/g, "$1 ");
 }
 
-export function initiales(nom: string): string {
-  return nom
+export function initiales(nom: string | null | undefined): string {
+  return (nom ?? "")
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2)
@@ -86,9 +86,56 @@ export function initiales(nom: string): string {
     .join("");
 }
 
-/** Une couleur stable par personne, pour les pastilles d'avatar. */
-export function teinteDe(graine: string): string {
+/**
+ * Palette moderne de dégradés élégants pour les avatars de profil.
+ */
+const PALETTE_AVATAR = [
+  "linear-gradient(135deg, #f97316 0%, #ea580c 100%)", // Orange chaleureux Group Achat
+  "linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)", // Bleu royal éclatant
+  "linear-gradient(135deg, #10b981 0%, #059669 100%)", // Émeraude fraîche
+  "linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)", // Violet moderne
+  "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)", // Ambre doré
+  "linear-gradient(135deg, #06b6d4 0%, #0284c7 100%)", // Océan cyan
+  "linear-gradient(135deg, #ec4899 0%, #be185d 100%)", // Framboise
+  "linear-gradient(135deg, #6366f1 0%, #4338ca 100%)", // Indigo profond
+];
+
+export function teinteDe(graine: string | null | undefined): string {
+  if (!graine || graine.trim() === "") return PALETTE_AVATAR[0];
   let somme = 0;
-  for (const caractere of graine) somme = (somme * 31 + caractere.charCodeAt(0)) % 360;
-  return `hsl(${somme} 62% 46%)`;
+  for (let i = 0; i < graine.length; i++) {
+    somme = (somme * 31 + graine.charCodeAt(i)) >>> 0;
+  }
+  return PALETTE_AVATAR[somme % PALETTE_AVATAR.length];
+}
+
+/**
+ * Un taux de commission, depuis les centièmes de pour-cent du serveur.
+ *
+ * L'API travaille en entiers — 350 pour 3,5 % — parce que tous les montants
+ * de l'application sont des francs entiers et qu'un décimal rouvrirait
+ * l'arrondi à chaque calcul. La conversion n'a lieu qu'ici, à l'affichage.
+ */
+export function tauxCommission(centiemes: number): string {
+  const pourcent = centiemes / 100;
+  const texte = Number.isInteger(pourcent)
+    ? String(pourcent)
+    : pourcent.toFixed(1).replace(".", ",");
+  return `${texte} %`;
+}
+
+/** La commission due sur un montant, arrondie comme le serveur : vers le bas. */
+export function commissionSur(montant: number, centiemes: number): number {
+  return Math.floor((Math.max(0, montant) * Math.max(0, centiemes)) / 10000);
+}
+
+const NOMS_DE_GRADE: Record<string, string> = {
+  nouveau: "Nouveau",
+  bronze: "Bronze",
+  argent: "Argent",
+  or: "Or",
+};
+
+export function gradeLisible(grade: string): string {
+  return NOMS_DE_GRADE[grade] ?? "Nouveau";
 }

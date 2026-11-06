@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import { Banknote, Check, EyeOff, MessageSquareWarning, RotateCcw } from "lucide-react";
 import { useState } from "react";
 
-import type { Commentaire, Decaissement, Page } from "@commun/api/types";
+import type { Decaissement, MessagePrive, Page } from "@commun/api/types";
 import {
   Alerte,
   Avatar,
@@ -19,7 +19,7 @@ import { api, useAction, useRequete } from "@commun/outils/requetes";
  * La libération des fonds.
  *
  * L'administrateur détient l'argent des acheteurs ; c'est lui qui le verse au
- * groupeur une fois la campagne financée. Chaque versement est tracé avec son
+ * OAG une fois la campagne financée. Chaque versement est tracé avec son
  * auteur.
  */
 export default function Decaissements() {
@@ -47,7 +47,7 @@ export default function Decaissements() {
       <header>
         <h1 className="text-2xl font-extrabold">Décaissements</h1>
         <p className="texte-doux text-sm">
-          Libérez les fonds du séquestre vers le Mobile Money des groupeurs.
+          Libérez les fonds du séquestre vers le Mobile Money des OAG.
         </p>
       </header>
 
@@ -62,7 +62,7 @@ export default function Decaissements() {
         <EtatVide
           icone={<Banknote className="size-7" />}
           titre="Aucune demande"
-          texte="Les groupeurs demandent leurs fonds une fois leur campagne financée."
+          texte="Les OAG demandent leurs fonds une fois leur campagne financée."
         />
       ) : (
         <>
@@ -154,18 +154,18 @@ function LigneDecaissement({
   );
 }
 
-// ── Modération du fil ──────────────────────────────────────────────────────
+// ── Modération des messages privés ─────────────────────────────────────────
 
 export function Moderation() {
   const [masques, setMasques] = useState(false);
-  const { donnees, chargement, recharger } = useRequete<Page<Commentaire>>(
-    `/admin/commentaires/${masques ? "?masques=1" : ""}`,
+  const { donnees, chargement, recharger } = useRequete<Page<MessagePrive>>(
+    `/admin/messages/${masques ? "?masques=1" : ""}`,
     [masques],
   );
 
   const basculer = useAction(async (entree: { id: number; masquer: boolean }) => {
     await api.post(
-      `/admin/commentaires/${entree.id}/${entree.masquer ? "masquer" : "retablir"}/`,
+      `/admin/messages/${entree.id}/${entree.masquer ? "masquer" : "retablir"}/`,
       entree.masquer ? { motif: "Contraire aux règles de la plateforme" } : {},
     );
     await recharger();
@@ -178,16 +178,18 @@ export function Moderation() {
       <header>
         <h1 className="text-2xl font-extrabold">Modération</h1>
         <p className="texte-doux text-sm">
-          Un message retiré est <strong>masqué, jamais supprimé</strong> : la trace
-          reste en cas de contestation.
+          Les conversations sont privées : seuls les messages{" "}
+          <strong>signalés</strong> remontent ici. Un message retiré est{" "}
+          <strong>masqué, jamais supprimé</strong> — la trace reste en cas de
+          contestation, et sert à instruire le signalement suivant.
         </p>
       </header>
 
       <div className="flex gap-2">
         {(
           [
-            [false, "Fil public"],
-            [true, "Messages masqués"],
+            [false, "Signalés"],
+            [true, "Masqués"],
           ] as const
         ).map(([valeur, libelle]) => (
           <button
@@ -214,11 +216,11 @@ export function Moderation() {
       ) : messages.length === 0 ? (
         <EtatVide
           icone={<MessageSquareWarning className="size-7" />}
-          titre={masques ? "Aucun message masqué" : "Le fil est vide"}
+          titre={masques ? "Aucun message masqué" : "Rien à modérer"}
           texte={
             masques
-              ? "Rien n'a été retiré du fil public."
-              : "Les questions des acheteurs apparaîtront ici."
+              ? "Rien n'a été retiré d'une conversation."
+              : "Les messages signalés par leurs destinataires apparaîtront ici."
           }
         />
       ) : (
@@ -231,11 +233,11 @@ export function Moderation() {
               transition={{ delay: Math.min(rang, 8) * 0.04 }}
             >
               <Carte className="flex gap-3">
-                <Avatar nom={message.auteur.nom_affiche} taille={38} />
+                <Avatar nom={message.auteur_nom} taille={38} />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm">
-                    <strong>{message.auteur.nom_affiche}</strong>{" "}
-                    <span className="texte-doux">· {depuis(message.cree_le)}</span>
+                    <strong>{message.auteur_nom}</strong>{" "}
+                    <span className="texte-doux">· {depuis(message.envoye_le)}</span>
                   </p>
                   <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed">
                     {message.texte}

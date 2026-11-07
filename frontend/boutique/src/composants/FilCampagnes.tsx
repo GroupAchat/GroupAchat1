@@ -181,13 +181,6 @@ function EcranCampagne({
 
   const videoUrl = trouverVideoCampagne(campagne);
 
-  const remise =
-    campagne.prix_courant < campagne.prix_unitaire
-      ? Math.round(
-          ((campagne.prix_unitaire - campagne.prix_courant) / campagne.prix_unitaire) * 100,
-        )
-      : 0;
-
   // Lecture / pause automatique en fonction de la visibilité
   useEffect(() => {
     const video = videoRef.current;
@@ -231,7 +224,7 @@ function EcranCampagne({
       try {
         await navigator.share({
           title: `Group Achat Togo: ${campagne.titre}`,
-          text: `Commandez à plusieurs à ${francs(campagne.prix_courant)} au lieu de ${francs(campagne.prix_unitaire)} sur Group Achat Togo !`,
+          text: `Commandez à plusieurs à ${francs(campagne.prix_unitaire)} sur Group Achat Togo !`,
           url: lien,
         });
         return;
@@ -449,20 +442,11 @@ function EcranCampagne({
           </h2>
 
           {/* Tarification groupée Togo */}
-          <div className="flex items-baseline gap-2.5">
+          <div className="flex items-baseline gap-2">
             <span className="tabulaire text-2xl font-black text-amber-300 drop-shadow">
-              {francs(campagne.prix_courant)}
+              {francs(campagne.prix_unitaire)}
             </span>
-            {remise > 0 && (
-              <>
-                <span className="tabulaire text-xs text-white/60 line-through">
-                  {francs(campagne.prix_unitaire)}
-                </span>
-                <span className="rounded-full bg-rose-600 px-2 py-0.5 text-[11px] font-extrabold text-white shadow-xs">
-                  −{remise} %
-                </span>
-              </>
-            )}
+            <span className="text-xs font-semibold text-white/75">la pièce</span>
           </div>
 
           {/* Jauge de réservation en temps réel */}
@@ -489,7 +473,7 @@ function EcranCampagne({
             >
               <span>Rejoindre le Club</span>
               <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs">
-                {francs(campagne.prix_courant)}
+                {francs(campagne.prix_unitaire)}
               </span>
             </Bouton>
           </motion.div>

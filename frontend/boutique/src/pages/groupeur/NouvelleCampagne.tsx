@@ -5,12 +5,6 @@ import { Link, useNavigate } from "react-router-dom";
 
 import type { Campagne, Categorie, Produit } from "@commun/api/types";
 import {
-  EditeurBareme,
-  aplatirLeBareme,
-  type Chute,
-  type Tranche,
-} from "@/composants/EditeurBareme";
-import {
   EnvoiMedias,
   envoiEnCours,
   mediasPrets,
@@ -55,8 +49,6 @@ export default function NouvelleCampagne() {
     quantite_maximale: "",
     date_limite: dansJours(14),
   });
-  const [tranches, setTranches] = useState<Tranche[]>([]);
-  const [chutes, setChutes] = useState<Chute[]>([]);
   const [medias, setMedias] = useState<MediaEnAttente[]>([]);
   const [contratAccepte, setContratAccepte] = useState(false);
 
@@ -83,7 +75,7 @@ export default function NouvelleCampagne() {
       quantite_minimale: Number(offre.quantite_minimale),
       quantite_maximale: offre.quantite_maximale ? Number(offre.quantite_maximale) : null,
       date_limite: new Date(offre.date_limite).toISOString(),
-      paliers: aplatirLeBareme(tranches, chutes),
+      paliers: [],
     });
     naviguer(`/groupeur/campagnes/${campagne.id}`);
     return campagne;
@@ -247,17 +239,6 @@ export default function NouvelleCampagne() {
             placeholder="Provenance, état, garantie, délais."
             value={offre.description}
             onChange={(e) => setOffre({ ...offre, description: e.target.value })}
-          />
-        </Carte>
-
-        <Carte className="space-y-4">
-          <h2 className="font-bold">3. Le barème (facultatif)</h2>
-          <EditeurBareme
-            prixAffiche={prix}
-            tranches={tranches}
-            surTranches={setTranches}
-            chutes={chutes}
-            surChutes={setChutes}
           />
         </Carte>
 

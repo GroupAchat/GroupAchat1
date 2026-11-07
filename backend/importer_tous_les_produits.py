@@ -372,16 +372,8 @@ def main():
                 publiee_le=timezone.now()
             )
 
-            for qte_min, parts_min, p_unit in cfg["paliers"]:
-                PalierPrix.objects.create(
-                    campagne=campagne,
-                    quantite_min=qte_min,
-                    participants_min=parts_min,
-                    prix_unitaire=p_unit
-                )
-
             for acheteur, quantite in zip(acheteurs, cfg["parts"]):
-                prix = campagne.prix_pour(quantite)
+                prix = campagne.prix_unitaire
                 p = Participation.objects.create(
                     campagne=campagne,
                     acheteur=acheteur,

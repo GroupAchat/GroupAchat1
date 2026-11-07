@@ -129,7 +129,7 @@ def _notifier_paiement(campagne: Campagne, participation: Participation) -> None
             f"Votre code de retrait : {participation.code_retrait}."
         ),
         campagne=campagne,
-        lien=f"/participations/{participation.id}",
+        lien=f"/mes-achats/{participation.id}",
     )
     # Le suivi nominatif en temps réel : c'est ce qui remplace la liste
     # WhatsApp et les captures d'écran.
@@ -659,7 +659,7 @@ def mettre_a_disposition(campagne: Campagne) -> int:
                 titre="Votre produit est arrivé",
                 message=_message_de_disposition(campagne, participation),
                 campagne=campagne,
-                lien=f"/participations/{participation.id}",
+                lien=f"/mes-achats/{participation.id}",
             )
         )
     Notification.objects.bulk_create(notifications)

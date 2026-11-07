@@ -2,7 +2,13 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useEffect } from "react";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 
-import { BarreOnglets, EnTete, EnTeteGroupeur, RetourEnHaut } from "@/composants/Coque";
+import {
+  BarreOnglets,
+  EnTete,
+  EnTeteGroupeur,
+  NotificationCommandeToast,
+  RetourEnHaut,
+} from "@/composants/Coque";
 import { RamasseurDeParrainage } from "@/composants/Parrainage";
 import { FournisseurSession, useSession } from "@commun/contexte/Session";
 import Accueil from "@/pages/Accueil";
@@ -65,6 +71,7 @@ function Pages() {
           <Route path="/communaute" element={<Communaute />} />
           <Route path="/mes-achats" element={<MesAchats />} />
           <Route path="/mes-achats/:id" element={<DetailAchat />} />
+          <Route path="/participations/:id" element={<DetailAchat />} />
           {/* Une seule page pour les trois cas : la liste, un fil, et le
               fil qui n'existe pas encore. C'est la meme mise en page, et
               trois composants en auraient fait trois mises en page. */}
@@ -144,6 +151,7 @@ function Interface() {
 
   return (
     <div className="min-h-screen bg-slate-100/70 flex justify-center antialiased selection:bg-amber-500 selection:text-white">
+      <NotificationCommandeToast />
       <div className="w-full max-w-md min-h-screen bg-[color:var(--fond,#fbfaf8)] shadow-md relative flex flex-col border-x border-slate-200/70">
         {estEspaceGroupeur || estLivraison ? (
           <EnTeteGroupeur livraison={estLivraison} />

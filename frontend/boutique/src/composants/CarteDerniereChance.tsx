@@ -127,7 +127,7 @@ export function CarteDerniereChance({
           <div className="flex items-end justify-between gap-3">
             <div>
               <p className="tabulaire text-lg font-extrabold">
-                {francs(campagne.prix_courant)}
+                {francs(campagne.prix_unitaire)}
               </p>
               <span className="texte-doux flex items-center gap-1 text-xs">
                 <Users className="size-3" />

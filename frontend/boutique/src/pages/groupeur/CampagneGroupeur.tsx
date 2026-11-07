@@ -411,8 +411,7 @@ export default function CampagneGroupeur() {
 
       <Carte className="space-y-2 text-sm">
         <h2 className="font-bold">Détails</h2>
-        <Ligne libelle="Prix affiché" valeur={francs(campagne.prix_unitaire)} />
-        <Ligne libelle="Prix courant" valeur={francs(campagne.prix_courant)} />
+        <Ligne libelle="Prix unitaire" valeur={francs(campagne.prix_unitaire)} />
         <Ligne libelle="Minimum" valeur={`${campagne.quantite_minimale} pièces`} />
         <Ligne libelle="Date limite" valeur={dateLongue(campagne.date_limite)} />
         <Ligne libelle="Retrait" valeur="Au choix de chaque acheteur" />

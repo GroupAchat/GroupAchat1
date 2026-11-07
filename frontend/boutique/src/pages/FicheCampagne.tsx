@@ -30,9 +30,9 @@ import type {
   Participation,
 } from "@commun/api/types";
 import { ListeAvis } from "@/composants/Avis";
-import { Bareme, prixPour } from "@/composants/Bareme";
 import { BoutonPartager, codeParrainRecu } from "@/composants/Parrainage";
 import { ContactPriveSurCampagne } from "@/composants/ContactPrive";
+import { signalerNouvelleCommande } from "@/outils/evenementsCommande";
 import { Feuille } from "@commun/composants/Feuille";
 import { Jauge } from "@/composants/Jauge";
 import {
@@ -99,14 +99,8 @@ export default function FicheCampagne() {
 
   const estLeGroupeur = utilisateur?.id === campagne.groupeur.id;
   const ouverte = campagne.collecte_ouverte;
-  // Le prix suit **la quantité que l'acheteur a sous les yeux**, pas le
-  // volume déjà collecté : c'est lui qui décide de monter dans la tranche
-  // basse, et il doit voir le prix changer pendant qu'il appuie sur « + ».
-  const prixUnitaire = prixPour(campagne, quantite, campagne.nombre_participants);
-  const remise =
-    prixUnitaire < campagne.prix_unitaire
-      ? Math.round(((campagne.prix_unitaire - prixUnitaire) / campagne.prix_unitaire) * 100)
-      : 0;
+  // Prix unitaire fixe du groupage : pas de baisse de prix lorsque la quantité minimale est dépassée.
+  const prixUnitaire = campagne.prix_unitaire;
   const maximum = campagne.quantite_maximale
     ? Math.max(1, campagne.quantite_maximale - campagne.quantite_reservee)
     : 20;
@@ -225,16 +219,9 @@ export default function FicheCampagne() {
               </span>
               <span className="text-xs text-slate-500 font-medium">la pièce</span>
             </div>
-            {remise > 0 && (
-              <div className="flex items-center gap-1.5">
-                <span className="texte-doux tabulaire text-xs line-through">
-                  {francs(campagne.prix_unitaire)}
-                </span>
-                <span className="rounded-full bg-rose-600 px-2 py-0.5 text-[10px] font-extrabold text-white">
-                  −{remise} %
-                </span>
-              </div>
-            )}
+            <span className="rounded-full bg-orange-100 px-2.5 py-0.5 text-[10px] font-bold text-orange-800">
+              Prix groupé fixe
+            </span>
           </div>
 
           {/* Stepper de quantité */}
@@ -267,9 +254,6 @@ export default function FicheCampagne() {
               </div>
             </div>
           )}
-
-          {/* Le barème de prix dégressif */}
-          <Bareme campagne={campagne} quantite={quantite} />
         </div>
 
         {/* ── Jauge d'avancement ──────────────────────────────────────────── */}
@@ -362,20 +346,35 @@ export default function FicheCampagne() {
 
       {/* ── Barre d'action sticky au-dessus de la barre d'onglets ─────────── */}
       {ouverte && !estLeGroupeur && (
-        <div className="fixed bottom-[var(--hauteur-onglets)] left-1/2 -translate-x-1/2 z-30 w-full max-w-md border-t border-slate-200/90 bg-white/95 backdrop-blur-md p-3 shadow-lg">
-          <div className="flex items-center gap-3">
-            <div className="shrink-0">
-              <p className="text-[10px] text-slate-500 font-semibold">Ma part ({quantite})</p>
-              <p className="tabulaire text-base font-black text-slate-900">
-                {francs(prixUnitaire * quantite)}
-              </p>
+        <div className="fixed bottom-[var(--hauteur-onglets)] left-1/2 -translate-x-1/2 z-30 w-full max-w-md border-t border-slate-200/90 bg-white/95 backdrop-blur-md px-3 py-2.5 shadow-lg">
+          <div className="flex items-center gap-2.5">
+            <div className="flex shrink-0 items-center gap-0.5 rounded-full border border-slate-200 bg-slate-50 p-0.5">
+              <button
+                onClick={() => setQuantite(Math.max(1, quantite - 1))}
+                disabled={quantite <= 1}
+                className="grid size-8 place-items-center rounded-full text-slate-700 transition-colors hover:bg-white disabled:opacity-30"
+                aria-label="Diminuer la quantité"
+              >
+                <Minus className="size-3.5" />
+              </button>
+              <span className="tabulaire min-w-6 text-center text-xs font-black text-slate-900">
+                {quantite}
+              </span>
+              <button
+                onClick={() => setQuantite(Math.min(maximum, quantite + 1))}
+                disabled={quantite >= maximum}
+                className="grid size-8 place-items-center rounded-full text-slate-700 transition-colors hover:bg-white disabled:opacity-30"
+                aria-label="Augmenter la quantité"
+              >
+                <Plus className="size-3.5" />
+              </button>
             </div>
             <Bouton
               taille="lg"
               className="degrade-accent flex-1 font-bold text-white shadow-md border-none py-2.5 text-xs"
               onClick={() => setFeuilleOuverte(true)}
             >
-              Participer au Club
+              Commander · {francs(prixUnitaire * quantite)}
             </Bouton>
           </div>
         </div>
@@ -399,7 +398,6 @@ export default function FicheCampagne() {
         surQuantite={setQuantite}
         peutAgir={peutAgir}
         surSucces={async () => {
-          setFeuilleOuverte(false);
           await recharger();
         }}
       />
@@ -564,7 +562,7 @@ function FeuilleParticipation({
   const maximum = campagne.quantite_maximale
     ? Math.max(1, campagne.quantite_maximale - campagne.quantite_reservee)
     : 20;
-  const prix = campagne.prix_courant;
+  const prix = campagne.prix_unitaire;
   const total = prix * quantite;
 
   const reinitialiser = () => {
@@ -617,6 +615,7 @@ function FeuilleParticipation({
       setReussite(retour.participation);
       setTransactionInfo(retour.transaction ?? null);
       setEtapePaiement("succes");
+      signalerNouvelleCommande(retour.participation);
       await surSucces();
     } catch (err: unknown) {
       const message =

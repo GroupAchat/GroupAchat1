@@ -12,6 +12,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 
 import type { Notification, Page } from "@commun/api/types";
+import { EVENEMENT_NOUVELLE_COMMANDE } from "@/outils/evenementsCommande";
 import { Bouton, fusionner, Squelette } from "@commun/composants/ui";
 import { useSession } from "@commun/contexte/Session";
 import { depuis } from "@commun/outils/formats";
@@ -45,6 +46,7 @@ export function Cloche() {
   const emplacement = useLocation();
   const [ouvert, setOuvert] = useState(false);
   const [nonLues, setNonLues] = useState(0);
+  const [pulsation, setPulsation] = useState(0);
   const [avis, setAvis] = useState<Notification[] | null>(null);
   const zone = useRef<HTMLDivElement>(null);
 
@@ -71,10 +73,23 @@ export function Cloche() {
     setOuvert(false);
   }, [compter, emplacement.pathname]);
 
-  // Les messages ne sont chargés qu'à l'ouverture : les précharger ferait
-  // une requête de plus sur chaque page pour un panneau rarement ouvert.
+  // Rafraîchissement instantané dès qu'une commande est validée sur la page courante.
   useEffect(() => {
-    if (!ouvert) return;
+    const surNouvelleCommande = () => {
+      setNonLues((actuel) => actuel + 1);
+      setPulsation((actuel) => actuel + 1);
+      setAvis(null);
+      void compter();
+    };
+    window.addEventListener(EVENEMENT_NOUVELLE_COMMANDE, surNouvelleCommande);
+    return () => {
+      window.removeEventListener(EVENEMENT_NOUVELLE_COMMANDE, surNouvelleCommande);
+    };
+  }, [compter]);
+
+  // Les messages sont chargés à l'ouverture (ou rechargés après invalidation).
+  useEffect(() => {
+    if (!ouvert || avis !== null) return;
     let vivant = true;
     void api
       .get<Page<Notification>>("/notifications/?page_size=12")
@@ -83,7 +98,7 @@ export function Cloche() {
     return () => {
       vivant = false;
     };
-  }, [ouvert]);
+  }, [ouvert, avis]);
 
   useEffect(() => {
     if (!ouvert) return;
@@ -129,7 +144,13 @@ export function Cloche() {
   return (
     <div ref={zone} className="relative shrink-0">
       <button
-        onClick={() => setOuvert((etat) => !etat)}
+        onClick={() => {
+          setOuvert((etat) => {
+            const prochain = !etat;
+            if (prochain) setAvis(null);
+            return prochain;
+          });
+        }}
         className={fusionner(
           "relative grid size-10 place-items-center rounded-full transition-colors",
           ouvert ? "bg-accent-doux text-[color:var(--color-accent)]" : "hover:surface-douce",
@@ -138,19 +159,21 @@ export function Cloche() {
         aria-expanded={ouvert}
       >
         <motion.span
-          // La cloche s'agite une fois quand il y a du neuf : assez pour
-          // attirer l'œil, pas au point de tourner en boucle.
-          animate={nonLues > 0 ? { rotate: [0, -12, 10, -6, 0] } : { rotate: 0 }}
-          transition={{ duration: 0.7, delay: 0.3 }}
+          key={pulsation}
+          // La cloche s'agite quand il y a du neuf ou qu'une commande vient d'être passée.
+          animate={nonLues > 0 ? { rotate: [0, -16, 14, -10, 6, 0] } : { rotate: 0 }}
+          transition={{ duration: 0.7, delay: 0.1 }}
         >
           <Bell className="size-5" />
         </motion.span>
         <AnimatePresence>
           {nonLues > 0 && (
             <motion.span
+              key={nonLues}
               initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
+              animate={{ scale: [1.3, 1] }}
               exit={{ scale: 0 }}
+              transition={{ type: "spring", stiffness: 420, damping: 20 }}
               className="absolute right-0.5 top-0.5 grid min-w-[1.1rem] place-items-center rounded-full bg-[color:var(--color-mangue-500)] px-1 text-[0.62rem] font-bold text-white ring-2 ring-[color:var(--fond-carte)]"
             >
               {nonLues > 9 ? "9+" : nonLues}

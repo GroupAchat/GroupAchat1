@@ -16,12 +16,6 @@ export function CarteCampagne({
   campagne: CampagneResume;
   index?: number;
 }) {
-  const remise =
-    campagne.prix_courant < campagne.prix_unitaire
-      ? Math.round(
-          ((campagne.prix_unitaire - campagne.prix_courant) / campagne.prix_unitaire) * 100,
-        )
-      : 0;
   const urgent = campagne.jours_restants <= 2 && campagne.statut === "en_cours";
 
   return (
@@ -40,11 +34,6 @@ export function CarteCampagne({
           </div>
 
           <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
-            {remise > 0 && (
-              <Etiquette ton="sombre" className="backdrop-blur">
-                −{remise} % atteint
-              </Etiquette>
-            )}
             {urgent && (
               <Etiquette ton="sombre" className="backdrop-blur">
                 <Clock className="size-3" />
@@ -73,13 +62,8 @@ export function CarteCampagne({
           <div className="flex items-end justify-between gap-2">
             <div>
               <p className="tabulaire text-lg font-extrabold text-[color:var(--color-accent)]">
-                {francs(campagne.prix_courant)}
+                {francs(campagne.prix_unitaire)}
               </p>
-              {remise > 0 && (
-                <p className="texte-doux tabulaire text-xs line-through">
-                  {francs(campagne.prix_unitaire)}
-                </p>
-              )}
             </div>
             <span className="texte-doux flex items-center gap-1 text-xs">
               <Users className="size-3.5" />

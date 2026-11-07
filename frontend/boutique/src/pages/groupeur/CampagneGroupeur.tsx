@@ -348,7 +348,7 @@ export default function CampagneGroupeur() {
         ) : (
           <ul className="space-y-2">
             {payes.map((participant, rang) => {
-              const nomAcheteur = participant.nom_complet || participant.nom_utilisateur || "Acheteur";
+              const nomAcheteur = participant.nom_utilisateur || "Acheteur";
               return (
                 <motion.li
                   key={participant.id}

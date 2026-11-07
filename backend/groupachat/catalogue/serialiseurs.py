@@ -79,7 +79,9 @@ class ProduitResumeSerialiseur(serializers.ModelSerializer):
                   "categorie", "categorie_nom", "categorie_slug"]
 
     def get_video(self, produit) -> str | None:
-        v = produit.medias.filter(genre="video").first()
+        # Parcours en Python, pas `filter()` : les médias sont préchargés, et
+        # un `filter()` relancerait une requête par vignette du catalogue.
+        v = next((m for m in produit.medias.all() if m.genre == "video"), None)
         if not v:
             return None
         if v.public_id:

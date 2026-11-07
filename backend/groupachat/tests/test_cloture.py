@@ -146,8 +146,8 @@ class TestDecisionDuGroupeur:
             f"/api/groupeur/campagnes/{manquee.id}/demander-retrait/", {}, format="json"
         )
         assert retrait.status_code == 201, retrait.data
-        # 3,5 % des 90 000 collectés : le groupeur est Bronze.
-        assert retrait.data["frais"] == 3150
+        # 4 % des 90 000 collectés : le groupeur est Nouveau.
+        assert retrait.data["frais"] == 3600
 
     def test_il_peut_annuler_et_tout_le_monde_est_rembourse(
         self, connecte, manquee, ama, yao

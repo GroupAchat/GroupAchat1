@@ -64,7 +64,6 @@ class ParticipantSerialiseur(serializers.ModelSerializer):
     """
 
     nom_utilisateur = serializers.CharField(source="acheteur.nom_public", read_only=True)
-    nom_complet = serializers.CharField(source="acheteur.nom_complet", read_only=True)
     statut_libelle = serializers.CharField(source="get_statut_display", read_only=True)
     # `destination_pour_l_oag` et non `destination` : l'adresse de livraison
     # designe un domicile, et l'OAG ne connait pas ses acheteurs. Un bureau de
@@ -79,7 +78,7 @@ class ParticipantSerialiseur(serializers.ModelSerializer):
 
     class Meta:
         model = Participation
-        fields = ["id", "nom_utilisateur", "nom_complet", "quantite", "montant_total",
+        fields = ["id", "nom_utilisateur", "quantite", "montant_total",
                   "statut", "statut_libelle", "mode_retrait", "destination",
                   "remis_par", "payee_le", "retiree_le"]
         read_only_fields = fields

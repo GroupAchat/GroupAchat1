@@ -252,15 +252,15 @@ class TestDecaissement:
     def test_le_groupeur_retire_tout_moins_la_commission_de_son_grade(
         self, connecte, campagne_financee
     ):
-        """Un groupeur qui débute est Bronze : 3,5 % de ce qu'il a collecté."""
+        """Un groupeur qui débute est Nouveau : 4 % de ce qu'il a collecté."""
         reponse = connecte(campagne_financee.groupeur).post(
             f"/api/groupeur/campagnes/{campagne_financee.id}/demander-retrait/",
             {}, format="json",
         )
         assert reponse.status_code == 201, reponse.data
         assert reponse.data["montant_brut"] == 180000
-        assert reponse.data["frais"] == 6300
-        assert reponse.data["montant_net"] == 173700
+        assert reponse.data["frais"] == 7200
+        assert reponse.data["montant_net"] == 172800
         assert reponse.data["numero_mobile_money"] == "90001122"
 
     def test_un_seul_decaissement_par_campagne(self, connecte, campagne_financee):

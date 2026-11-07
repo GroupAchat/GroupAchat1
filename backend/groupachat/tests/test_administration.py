@@ -6,6 +6,7 @@ from __future__ import annotations
 import pytest
 from django.utils import timezone
 
+from groupachat.catalogue.publication import PRIX_ABONNEMENT_FCFA, PRIX_PACK_FCFA
 from groupachat.comptes.models import DossierKYC, Reputation
 from groupachat.echanges.models import Conversation, Message, Notification
 
@@ -202,7 +203,7 @@ class TestTableauDeBord:
                        {}, format="json")
 
         donnees = admin_api.get("/api/admin/tableau-de-bord/").data
-        assert donnees["revenus"]["frais_encaisses"] == 6300
+        assert donnees["revenus"]["frais_encaisses"] == 7200
         assert donnees["sequestre"]["montant_detenu"] == 0
 
         # Les deux sources de revenu se lisent separement : un tableau qui
@@ -214,5 +215,5 @@ class TestTableauDeBord:
             "/api/groupeur/publication/abonnement/", {}, format="json"
         )
         donnees = connecte(administrateur).get("/api/admin/tableau-de-bord/").data
-        assert donnees["revenus"]["publications"] == 2500
-        assert donnees["revenus"]["total"] == 6300 + 2500
+        assert donnees["revenus"]["publications"] == PRIX_PACK_FCFA + PRIX_ABONNEMENT_FCFA
+        assert donnees["revenus"]["total"] == 7200 + PRIX_PACK_FCFA + PRIX_ABONNEMENT_FCFA

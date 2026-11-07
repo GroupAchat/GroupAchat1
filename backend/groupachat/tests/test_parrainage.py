@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import pytest
 
+from groupachat.comptes import points
 from groupachat.comptes.models import CompteurPoints, Utilisateur
 from groupachat.comptes.parrainage import Parrainage, bilan, code_de
 
@@ -142,11 +143,11 @@ class TestLePaiementValide:
         self, connecte, campagne, ama, yao
     ):
         """Le parrainage s'ajoute, il ne remplace pas : le filleul touche ses
-        dix points d'achat comme n'importe quel acheteur."""
+        cinq points d'achat comme n'importe quel acheteur."""
         avant = cumules(yao)
         reponse = commander(connecte(yao), campagne, code_parrainage=code_de(ama))
         payer(connecte(yao), reponse)
-        assert cumules(yao) == avant + 10
+        assert cumules(yao) == avant + points.BAREME[points.Motif.ACHAT]
 
     def test_un_second_achat_ne_repaie_pas_le_parrain(
         self, connecte, campagne, ama, yao

@@ -314,7 +314,6 @@ export interface Avis {
 export interface Participant {
   id: number;
   nom_utilisateur: string;
-  nom_complet?: string;
   quantite: number;
   montant_total: number;
   statut: StatutParticipation;

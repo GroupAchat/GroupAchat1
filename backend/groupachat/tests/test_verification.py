@@ -14,7 +14,11 @@ import pytest
 from django.utils import timezone
 
 from groupachat.catalogue.models import Campagne
-from groupachat.catalogue.publication import PackPublication, publications_en_reserve
+from groupachat.catalogue.publication import (
+    PUBLICATIONS_PAR_PACK,
+    PackPublication,
+    publications_en_reserve,
+)
 from groupachat.comptes.models import CompteurPoints
 
 pytestmark = pytest.mark.django_db
@@ -208,13 +212,13 @@ class TestLaDecisionDeLAdministration:
         """Elle paie la mise en ligne, et la mise en ligne n'a pas eu lieu."""
         campagne = brouillon()
         publier(connecte(groupeur), campagne)
-        assert publications_en_reserve(groupeur) == 4
+        assert publications_en_reserve(groupeur) == PUBLICATIONS_PAR_PACK - 1
 
         connecte(administrateur).post(
             f"/api/admin/campagnes/{campagne.id}/verification/",
             {"decision": "refuser", "motif": "Prix incoherent."}, format="json",
         )
-        assert publications_en_reserve(groupeur) == 5
+        assert publications_en_reserve(groupeur) == PUBLICATIONS_PAR_PACK
 
     def test_la_validation_ne_rend_rien(
         self, connecte, administrateur, groupeur, brouillon, droit
@@ -225,7 +229,7 @@ class TestLaDecisionDeLAdministration:
             f"/api/admin/campagnes/{campagne.id}/verification/",
             {"decision": "valider"}, format="json",
         )
-        assert publications_en_reserve(groupeur) == 4
+        assert publications_en_reserve(groupeur) == PUBLICATIONS_PAR_PACK - 1
 
     def test_l_oag_est_prevenu_dans_les_deux_cas(
         self, connecte, administrateur, groupeur, brouillon, droit
